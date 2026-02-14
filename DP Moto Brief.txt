@@ -1,0 +1,348 @@
+BLACK EMPEROR–STYLE ARCADE RUNNER (PHASER) — FULL BUILD BRIEF
+Version: Jam v1 (Revised)
+Target: Build entirely with Claude Code inside Visual Studio Code
+Style Goal: Modern indie coin-op cabinet vibe; endless side-scrolling motorcycle runner; score-chasing; fast restarts; simple but brutal.
+
+
+=====================================================================
+1) PRODUCT GOAL (WHAT WE’RE MAKING)
+=====================================================================
+Make a tight, replayable, single-player arcade runner inspired by modern
+indie coin-op cabinets.
+
+
+Core fantasy:
+- A lone biker blasting left → right across a barren highway
+- Obstacles rush in from the right
+- Player weaves up/down to survive
+- Speed is a risk/reward mechanic
+- Runs are short, intense, and restart instantly
+
+
+Success criteria:
+- Average run length: 30–90 seconds
+- Good runs: 2–4 minutes
+- Restart time after death: < 1 second
+- Controls feel physical and skill-based
+- Failure always feels fair and readable
+
+
+Non-goals (important):
+- No procedural road geometry
+- No RPG upgrades or meta progression
+- No complex physics engines
+- No large content pipeline
+
+
+=====================================================================
+2) TECH STACK & PROJECT STRUCTURE
+=====================================================================
+Tech:
+- Phaser
+- JavaScript or TypeScript (project supports either)
+- No build tool required (Vite optional later)
+- Optional Node/Express server for leaderboards
+
+
+Project structure:
+index.html
+assets/ (placeholder art/audio)
+src/
+  main.ts
+  scenes/
+    BootScene.ts
+    GameScene.ts
+    UIScene.ts (optional)
+  systems/
+    InputSystem.ts
+    PlayerSystem.ts
+    RoadSystem.ts
+    ObstacleSystem.ts
+    ProjectileSystem.ts (optional)
+    DifficultySystem.ts
+    ScoreSystem.ts
+    FXSystem.ts
+    AudioSystem.ts
+    LeaderboardSystem.ts (client)
+  util/
+    rng.ts
+    time.ts
+    math.ts
+  config/
+    tuning.ts
+    gameMode.ts
+server/ (optional)
+  index.ts
+
+
+Dev environment:
+- VS Code
+- Claude Code
+
+
+=====================================================================
+3) CORE GAME LOOP (THE ARCADE HEART)
+=====================================================================
+Gameplay loop:
+1. Start run instantly.
+2. Player moves left → right automatically.
+3. Player controls vertical position (up/down) to avoid obstacles.
+4. Road is always straight and the same size.
+5. Obstacles enter from the right and move left.
+6. Some obstacles kill instantly.
+7. Some obstacles slow the player.
+8. Tap Space to increase speed.
+9. If speed is too low and player hits left screen edge → lose.
+10. If speed is too high and player hits right screen edge → lose.
+11. Score increases by distance + speed multipliers.
+12. On death: show score → leaderboard → return to title.
+
+
+Run flow:
+Title / Attract → Start → Run → Death → Leaderboard → Title (repeat)
+
+
+=====================================================================
+4) CONTROLS (MOST IMPORTANT FEEL)
+=====================================================================
+Control goal:
+- Mouse controls vertical position.
+- Space tapping controls speed.
+- Player must balance speed and precision.
+- One hand mouse + one key arcade feel.
+
+
+Input sources:
+- Mouse (primary): controls target Y position
+- Keyboard:
+  - Space: tap rapidly to increase speed
+  - F: katana slash (optional combat)
+  - Enter: start / confirm
+  - Esc: pause (optional)
+
+
+InputSystem responsibilities:
+- getTargetY()
+- getSpeedTap()
+- getAttackPressed()
+
+
+Vertical movement model:
+- Mouse Y maps to a targetY within road bounds.
+- Player follows targetY with inertia and smoothing:
+  - velocityY += (targetY - playerY) * followStrength * dt
+  - velocityY *= verticalFriction
+  - playerY += velocityY * dt
+- Clamp or softly constrain playerY to road bounds.
+
+
+Speed control:
+- Each Space tap adds speed energy.
+- Speed energy decays over time.
+- Current speed = baseSpeed + speedEnergy.
+- Speed directly affects obstacle scroll speed and score rate.
+
+
+Horizontal fail logic:
+- Player has a bounded X range on screen.
+- Too slow → drift left → hit left bound → lose.
+- Too fast → surge right → hit right bound → lose.
+
+
+Katana attack (optional):
+- Press F to slash.
+- Short active window + cooldown.
+- Slash destroys certain obstacles or enemies.
+- Attack is optional and not required to survive v1.
+
+
+=====================================================================
+5) ROAD SYSTEM (FIXED STRAIGHT HIGHWAY)
+=====================================================================
+Road concept:
+- Road never curves.
+- Road never changes width.
+- Road defines the valid vertical play area.
+- Difficulty comes from speed + obstacles, not geometry.
+
+
+RoadSystem responsibilities:
+- Define constant roadTopY and roadBottomY.
+- Provide clamp helpers for PlayerSystem.
+- Render scrolling road visuals.
+- Provide visual speed cues.
+
+
+Coordinate model:
+- World scrolls right → left.
+- Player remains within a horizontal safety band.
+- Road bounds are stable and predictable.
+
+
+Rendering approach:
+- Tiled road texture (TileSprite)
+- Dashed center lines scrolling left
+- Edge lines for readability
+- Optional dust/shoulder visuals
+
+
+Optional lanes:
+- Faint lane guides for spacing reference only.
+- No snapping; movement is continuous.
+
+
+Weekly seed usage:
+- Weekly seed does NOT affect road geometry.
+- Weekly seed affects:
+  - Obstacle spawn patterns
+  - Obstacle type distribution
+  - Cosmetic palette swaps (optional)
+
+
+=====================================================================
+6) OBSTACLE SYSTEM
+=====================================================================
+Obstacle types:
+- Instant-death obstacles (crash)
+- Slowdown obstacles (reduce speed energy)
+- Optional destructible obstacles (katana)
+
+
+Spawn rules:
+- Obstacles spawn off-screen right.
+- Scroll left at speed-derived velocity.
+- Ensure fair reaction time.
+- Never spawn impossible vertical walls.
+
+
+Collision rules:
+- Death obstacles → instant death.
+- Slow obstacles → speed penalty + FX.
+- Destructible obstacles → removed on slash.
+
+
+Object pooling required.
+
+
+=====================================================================
+7) DIFFICULTY SYSTEM
+=====================================================================
+Difficulty comes from:
+- Increasing speed potential
+- Denser obstacle patterns
+- Faster scroll rate
+- Reduced recovery margin
+
+
+Difficulty should ramp smoothly.
+No sudden spikes.
+
+
+=====================================================================
+8) SCORE SYSTEM
+=====================================================================
+Score components:
+- Distance traveled
+- Speed multiplier
+- Optional bonuses:
+  - High-speed survival
+  - Destroyed obstacles
+
+
+Score clarity is critical.
+Players should understand why they scored higher.
+
+
+=====================================================================
+9) WEEKLY SEED & LEADERBOARD
+=====================================================================
+Weekly seed:
+- Derived from ISO week (YYYY-W##).
+- Determines obstacle patterns.
+- Changes weekly at a fixed time.
+
+
+Leaderboard options:
+- v1: localStorage weekly best
+- v1.1: optional global leaderboard
+
+
+Each week is a fresh season.
+
+
+=====================================================================
+10) UI / UX
+=====================================================================
+Screens:
+- Boot / Load
+- Title / Attract
+- Gameplay HUD
+- Death screen
+- Leaderboard
+
+
+UX rules:
+- Instant restart
+- Minimal menus
+- Clear danger feedback (edge warnings, speed meter)
+
+
+=====================================================================
+11) VISUAL STYLE
+=====================================================================
+Style:
+- High contrast
+- Minimal but aggressive
+- Strong motion cues
+- Psychedelic / rock / outlaw vibe
+
+
+Effects:
+- Speed lines
+- Camera shake
+- Screen flashes
+- Dust trails
+
+
+=====================================================================
+12) AUDIO
+=====================================================================
+Audio pillars:
+- Engine loop tied to speed
+- Sharp impact sounds
+- Minimal but punchy music
+
+
+=====================================================================
+13) PERFORMANCE RULES
+=====================================================================
+- Object pooling everywhere
+- No per-frame allocations
+- Deterministic update logic
+- 60 FPS target
+
+
+=====================================================================
+14) MILESTONES (JAM ORDER)
+=====================================================================
+1) Player movement + speed balance
+2) Fixed road + bounds
+3) Obstacle spawning + collisions
+4) Score + restart loop
+5) Juice pass
+6) Weekly seed + local leaderboard
+7) Optional katana
+
+
+=====================================================================
+15) ACCEPTANCE CHECKLIST
+=====================================================================
+- [ ] Mouse movement feels smooth and precise
+- [ ] Speed tapping is readable and risky
+- [ ] Left/right screen deaths feel fair
+- [ ] Obstacles always readable
+- [ ] Restart is instant
+- [ ] Game is fun in under 60 seconds
+
+
+END OF BRIEF

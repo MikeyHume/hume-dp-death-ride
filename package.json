@@ -1,0 +1,18 @@
+{
+    "name": "dp-moto",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc && vite build"
+    },
+    "dependencies": {
+        "@supabase/supabase-js": "^2.95.3",
+        "phaser": "^3.90.0"
+    },
+    "devDependencies": {
+        "typescript": "~5.7.2",
+        "vite": "^6.3.1"
+    }
+}

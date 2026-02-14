@@ -1,0 +1,2080 @@
+import Phaser from 'phaser';
+import { TUNING } from '../config/tuning';
+import { InputSystem } from '../systems/InputSystem';
+import { PlayerSystem } from '../systems/PlayerSystem';
+import { RoadSystem } from '../systems/RoadSystem';
+import { ParallaxSystem } from '../systems/ParallaxSystem';
+import { ObstacleSystem, ObstacleType, LaneWarning } from '../systems/ObstacleSystem';
+import { DifficultySystem } from '../systems/DifficultySystem';
+import { ScoreSystem } from '../systems/ScoreSystem';
+import { FXSystem } from '../systems/FXSystem';
+import { AudioSystem } from '../systems/AudioSystem';
+import { LeaderboardSystem } from '../systems/LeaderboardSystem';
+import { MusicPlayer } from '../systems/MusicPlayer';
+import { PickupSystem } from '../systems/PickupSystem';
+import { RocketSystem } from '../systems/RocketSystem';
+import { getCurrentWeekKey, weekKeyToSeed } from '../util/time';
+import { CRTPipeline } from '../fx/CRTPipeline';
+import { CRT_TUNING } from '../config/crtTuning';
+import { ProfileHud } from '../ui/ProfileHud';
+import { ProfilePopup } from '../ui/ProfilePopup';
+
+enum GameState {
+  TITLE,
+  TUTORIAL,
+  STARTING,
+  PLAYING,
+  DYING,
+  NAME_ENTRY,
+  DEAD,
+}
+
+const NAME_MAX_LENGTH = 10;
+const SKIP_BTN_MARGIN_RIGHT = 60;    // px from right edge of screen
+const SKIP_BTN_MARGIN_BOTTOM = 36;   // px from bottom edge of screen
+
+export class GameScene extends Phaser.Scene {
+  // Systems
+  private inputSystem!: InputSystem;
+  private playerSystem!: PlayerSystem;
+  private parallaxSystem!: ParallaxSystem;
+  private roadSystem!: RoadSystem;
+  private obstacleSystem!: ObstacleSystem;
+  private difficultySystem!: DifficultySystem;
+  private scoreSystem!: ScoreSystem;
+  private fxSystem!: FXSystem;
+  private audioSystem!: AudioSystem;
+  private leaderboardSystem!: LeaderboardSystem;
+  private musicPlayer!: MusicPlayer;
+  private pickupSystem!: PickupSystem;
+  private rocketSystem!: RocketSystem;
+  private profileHud!: ProfileHud;
+  private profilePopup!: ProfilePopup;
+
+  // Weekly seed
+  private weekKey!: string;
+  private weekSeed!: number;
+
+  // State
+  private state: GameState = GameState.TITLE;
+  private elapsed: number = 0;
+  private deadInputDelay: number = 0;
+
+  // Death exposure transition
+  private deathWhiteOverlay!: Phaser.GameObjects.Rectangle;
+  private deathExplosion!: Phaser.GameObjects.Sprite;
+  private dyingPhase: 'ramp' | 'snap' | 'hold' | 'fade' | 'done' = 'done';
+  private dyingTimer: number = 0;
+
+  // Katana slash
+  private slashSprite!: Phaser.GameObjects.Image;
+  private slashActiveTimer: number = 0;
+  private slashCooldownTimer: number = 0;
+  private slashInvincibilityTimer: number = 0;
+  private rocketCooldownTimer: number = 0;
+
+  // Score popups
+  private scorePopups: Phaser.GameObjects.Text[] = [];
+
+  // Lane highlights (collision warning)
+  private laneHighlights: Phaser.GameObjects.Rectangle[] = [];
+
+  // Lane warning indicators (pooled, right-edge preview circles)
+  private warningPool: { circle: Phaser.GameObjects.Arc; preview: Phaser.GameObjects.Sprite; currentKey: string }[] = [];
+  private warningPoolUsed: number = 0;
+
+  // Rage meter
+  private rageAmount: number = 0;
+  private rageTimer: number = 0;       // seconds remaining in rage mode (0 = inactive)
+  private roadSpeedBonus: number = 0;  // permanent speed increase from katana kills
+  private rageZoomProgress: number = 0; // 0 = no zoom, 1 = full zoom (smoothly interpolated)
+
+  // Title loop animation
+  private titleLoopSprite!: Phaser.GameObjects.Sprite;
+
+  // UI layers
+  private hudLabel!: Phaser.GameObjects.Text;
+  private hudHighScore!: Phaser.GameObjects.Text;
+  private titleContainer!: Phaser.GameObjects.Container;
+  private deathContainer!: Phaser.GameObjects.Container;
+  private deathScoreText!: Phaser.GameObjects.Text;
+  private deathTimeText!: Phaser.GameObjects.Text;
+  private deathRankText!: Phaser.GameObjects.Text;
+  private deathBestText!: Phaser.GameObjects.Text;
+  private deathLeaderboardText!: Phaser.GameObjects.Text;
+  private deathRestartText!: Phaser.GameObjects.Text;
+  private deathHighlightText!: Phaser.GameObjects.Text;
+  private highlightRank: number = 0;
+  private nameTitleText!: Phaser.GameObjects.Text;
+  private debugText!: Phaser.GameObjects.Text;
+
+  // Name entry
+  private nameEntryContainer!: Phaser.GameObjects.Container;
+  private nameInputText!: Phaser.GameObjects.Text;
+  private nameEnterBtn!: Phaser.GameObjects.Text;
+  private enteredName: string = '';
+  private pendingScore: number = 0;
+  private pendingRank: number = 0;
+  private nameKeyHandler: ((event: KeyboardEvent) => void) | null = null;
+  private nameConfirmed: boolean = false;
+  private autoSubmitted: boolean = false;
+  private nameSkipConfirmPending: boolean = false;
+  private nameSkipWarning!: Phaser.GameObjects.Text;
+  private emptyNamePrompt!: Phaser.GameObjects.Text;
+  private emptyNameYesBtn!: Phaser.GameObjects.Text;
+  private emptyNameNoBtn!: Phaser.GameObjects.Text;
+  private emptyNameVisible: boolean = false;
+  private anyInputPressed: boolean = false;
+
+  // Play-music overlay (shown once on first load, dismissed on first interaction)
+  private playMusicOverlay!: Phaser.GameObjects.Image;
+  private musicOverlayActive: boolean = true;
+
+  // Countdown (5→1 before gameplay)
+  private countdownSprite!: Phaser.GameObjects.Sprite;
+  private blackOverlay!: Phaser.GameObjects.Rectangle;
+  private countdownIndex: number = 0;
+  private countdownPhaseTimer: number = 0;
+  private countdownPhase: 'animate' | 'delay' | 'fade' | 'grace' | 'done' = 'done';
+  private spawnGraceTimer: number = 0;
+
+  // Tutorial (pre-countdown screens)
+  private tutorialBlank!: Phaser.GameObjects.Image;
+  private tutorialControlsSprite!: Phaser.GameObjects.Sprite;
+  private tutorialObstaclesImage!: Phaser.GameObjects.Image;
+  private tutorialRageSprite!: Phaser.GameObjects.Sprite;
+  private tutorialPhase: 'black_reveal' | 'controls_wait' | 'controls_fade' | 'obstacles_in' | 'obstacles_wait' | 'obstacles_fade' | 'rage_in' | 'rage_wait' | 'rage_black' | 'skip_fade' | 'done' = 'done';
+  private tutorialTimer: number = 0;
+  private tutorialAdvance: boolean = false;
+  private tutorialSkipBtn!: Phaser.GameObjects.Image;
+
+  // CRT post-processing
+  private crtEnabled: boolean = true;
+  private crtDebugVisible: boolean = false;
+  private crtDebugDom!: Phaser.GameObjects.DOMElement;
+  private crtDebugEl!: HTMLPreElement;
+
+  constructor() {
+    super({ key: 'GameScene' });
+  }
+
+  create() {
+    this.elapsed = 0;
+    this.state = GameState.TITLE;
+
+    // Any key or click can start the game from title (except Escape)
+    this.input.keyboard!.on('keydown', (event: KeyboardEvent) => {
+      const k = event.key.toLowerCase();
+      // Forward all keys to profile popup when open
+      if (this.profilePopup?.isOpen()) {
+        this.profilePopup.handleKey(event);
+        return;
+      }
+      if (k === 'escape') {
+        if (this.state === GameState.NAME_ENTRY) {
+          if (this.nameSkipConfirmPending) {
+            // Second Escape — confirmed skip
+            this.returnToTitle();
+          } else {
+            // First Escape — show warning
+            this.nameSkipConfirmPending = true;
+            this.nameSkipWarning.setVisible(true);
+          }
+        } else if (this.state !== GameState.TITLE) {
+          this.returnToTitle();
+        }
+        return;
+      }
+      // O/P are debug keys (CRT toggle/debug) — don't advance game state
+      if (k === 'o' || k === 'p') return;
+      // Any non-Escape key dismisses the skip warning
+      if (this.nameSkipConfirmPending) {
+        this.nameSkipConfirmPending = false;
+        this.nameSkipWarning.setVisible(false);
+      }
+      if (this.state === GameState.TUTORIAL) {
+        this.tutorialAdvance = true;
+      } else if (this.state === GameState.TITLE) {
+        if (this.musicOverlayActive) {
+          this.dismissMusicOverlay();
+        } else {
+          this.anyInputPressed = true;
+        }
+      }
+    });
+    this.input.on('pointerdown', () => {
+      if (this.profilePopup?.isOpen()) return;
+      if (this.state === GameState.TUTORIAL) {
+        this.tutorialAdvance = true;
+      } else if (this.state === GameState.TITLE) {
+        if (this.musicOverlayActive) {
+          this.dismissMusicOverlay();
+        } else {
+          this.anyInputPressed = true;
+        }
+      }
+    });
+
+    // Weekly seed
+    this.weekKey = getCurrentWeekKey();
+    this.weekSeed = weekKeyToSeed(this.weekKey);
+    this.leaderboardSystem = new LeaderboardSystem(this.weekKey);
+
+    // --- Game world ---
+    this.parallaxSystem = new ParallaxSystem(this);
+    this.roadSystem = new RoadSystem(this);
+    this.obstacleSystem = new ObstacleSystem(this, this.weekSeed);
+    this.pickupSystem = new PickupSystem(this);
+    this.rocketSystem = new RocketSystem(this, this.obstacleSystem);
+
+    // Wire obstacle system to spawn pickups behind CRASH obstacles
+    this.obstacleSystem.onPickupSpawn = (x: number, y: number) => {
+      this.pickupSystem.spawn(x, y);
+    };
+
+    // Wire rocket hit: explosion sound + score bonus + popup + camera shake
+    this.rocketSystem.onHit = (_x: number, _y: number) => {
+      this.scoreSystem.addBonus(TUNING.ROCKET_KILL_POINTS);
+      this.spawnScorePopup(TUNING.ROCKET_KILL_POINTS);
+      this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 0.25, TUNING.SHAKE_DEATH_INTENSITY * 0.25);
+    };
+
+    this.difficultySystem = new DifficultySystem();
+    this.inputSystem = new InputSystem(this);
+    this.playerSystem = new PlayerSystem(this, this.inputSystem);
+    this.scoreSystem = new ScoreSystem();
+    this.fxSystem = new FXSystem(this);
+    this.audioSystem = new AudioSystem();
+    this.musicPlayer = new MusicPlayer(this);
+
+    // Wire car-vs-crash explosion sound
+    this.obstacleSystem.onExplosion = () => this.audioSystem.playExplosion();
+
+    // Lane highlight overlays (collision warning — above road, below everything else)
+    const laneH = (TUNING.ROAD_BOTTOM_Y - TUNING.ROAD_TOP_Y) / TUNING.LANE_COUNT;
+    for (let i = 0; i < TUNING.LANE_COUNT; i++) {
+      const laneY = TUNING.ROAD_TOP_Y + laneH * i + laneH / 2;
+      const highlight = this.add.rectangle(
+        TUNING.GAME_WIDTH / 2, laneY,
+        TUNING.GAME_WIDTH, laneH,
+        0xff0000, 0.1
+      ).setDepth(0.5).setVisible(false);
+      this.laneHighlights.push(highlight);
+    }
+
+    // Lane warning circles + preview sprites (pooled, right edge)
+    const warningRadius = laneH / 3;
+    const initialPoolSize = TUNING.LANE_COUNT * 3; // pre-warm enough for multiple per lane
+    for (let i = 0; i < initialPoolSize; i++) {
+      const circle = this.add.circle(0, 0, warningRadius, 0xffffff, 0.8)
+        .setDepth(95).setVisible(false);
+      const preview = this.add.sprite(0, 0, 'obstacle-crash')
+        .setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
+      this.warningPool.push({ circle, preview, currentKey: '' });
+    }
+
+    // Death boundaries
+    const g = this.add.graphics();
+    g.fillStyle(0xff0000);
+    g.fillRect(TUNING.PLAYER_MIN_X, 0, 4, TUNING.GAME_HEIGHT);
+    g.fillRect(TUNING.PLAYER_MAX_X - 4, 0, 4, TUNING.GAME_HEIGHT);
+
+    // --- HUD (visible during PLAYING) ---
+    this.hudLabel = this.add.text(TUNING.GAME_WIDTH / 2, 20, 'WEEKLY HIGH SCORE', {
+      fontSize: '24px',
+      color: '#ffffff',
+      fontFamily: 'Alagard',
+    }).setOrigin(0.5, 0).setDepth(100).setScrollFactor(0).setVisible(false);
+
+    this.hudHighScore = this.add.text(TUNING.GAME_WIDTH / 2, 50, '', {
+      fontSize: '32px',
+      color: '#ffffff',
+      fontFamily: 'Early GameBoy',
+    }).setOrigin(0.5, 0).setDepth(100).setScrollFactor(0).setVisible(false);
+
+    // --- Profile HUD (Phaser-based, upper-left, affected by shaders) ---
+    this.profileHud = new ProfileHud(this);
+
+    // --- Profile Popup (opens on avatar click) ---
+    this.profilePopup = new ProfilePopup(this);
+    this.profileHud.onAvatarClick(() => {
+      this.profilePopup.open(this.profilePopup.getName());
+    });
+    this.profilePopup.onProfileChanged((name, hasAvatar) => {
+      if (hasAvatar) {
+        const key = this.profilePopup.getAvatarTextureKey();
+        if (key) this.profileHud.setAvatarTexture(key);
+      }
+      // Update profile mode display if on title or death screen
+      if (this.state === GameState.TITLE || this.state === GameState.DEAD) {
+        this.profileHud.showProfileMode(name, this.getProfileRankText());
+      }
+    });
+    // Load profile from Supabase early so the HUD is populated before the player sees it
+    this.profilePopup.loadProfile();
+
+    // --- Debug text ---
+    this.debugText = this.add.text(16, 16, '', {
+      fontSize: '16px',
+      color: '#ffffff',
+      fontFamily: 'monospace',
+    }).setDepth(100);
+
+    // --- Title loop animation (fullscreen, behind title text) ---
+    this.titleLoopSprite = this.add.sprite(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
+      'start-loop-00'
+    ).setDepth(199);
+    // Scale to fill screen
+    const frameTex = this.textures.get('start-loop-00');
+    const frameW = frameTex.getSourceImage().width;
+    const frameH = frameTex.getSourceImage().height;
+    this.titleLoopSprite.setDisplaySize(
+      TUNING.GAME_WIDTH,
+      TUNING.GAME_WIDTH * (frameH / frameW) // maintain aspect ratio
+    );
+    // If aspect ratio doesn't fill height, scale to cover
+    if (this.titleLoopSprite.displayHeight < TUNING.GAME_HEIGHT) {
+      this.titleLoopSprite.setDisplaySize(
+        TUNING.GAME_HEIGHT * (frameW / frameH),
+        TUNING.GAME_HEIGHT
+      );
+    }
+    this.titleLoopSprite.play('title-loop');
+
+    // --- Play-music overlay (on top of title, dismissed on first interaction) ---
+    this.playMusicOverlay = this.add.image(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
+      'play-music-overlay'
+    ).setDepth(201);
+    // Scale to fill screen
+    const overlayTex = this.textures.get('play-music-overlay');
+    const overlayW = overlayTex.getSourceImage().width;
+    const overlayH = overlayTex.getSourceImage().height;
+    const scaleX = TUNING.GAME_WIDTH / overlayW;
+    const scaleY = TUNING.GAME_HEIGHT / overlayH;
+    const overlayScale = Math.max(scaleX, scaleY);
+    this.playMusicOverlay.setScale(overlayScale);
+
+    // --- Title screen ---
+    this.titleContainer = this.add.container(0, 0).setDepth(200);
+    const titleText = this.add.text(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 - 60,
+      '', {
+        fontSize: '72px',
+        color: '#ff4400',
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+      }
+    ).setOrigin(0.5);
+    const startText = this.add.text(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 40,
+      '', {
+        fontSize: '28px',
+        color: '#ffffff',
+        fontFamily: 'monospace',
+      }
+    ).setOrigin(0.5);
+    const weekText = this.add.text(
+      TUNING.GAME_WIDTH - 1448, TUNING.GAME_HEIGHT - 850,
+      `WEEK: ${this.weekKey}`, {
+        fontSize: '20px',
+        color: '#ffffff',
+        fontFamily: 'monospace',
+      }
+    ).setOrigin(0.5);
+    this.titleContainer.add([titleText, startText, weekText]);
+
+    // --- Death screen ---
+    this.deathContainer = this.add.container(0, 0).setDepth(200);
+    const deathBg = this.add.rectangle(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
+      TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
+      0x000000, 1
+    );
+    const deathTitle = this.add.text(
+      TUNING.GAME_WIDTH / 2, 120,
+      'wasted', {
+        fontSize: '192px',
+        color: '#ff0000',
+        fontFamily: 'Alagard',
+      }
+    ).setOrigin(0.5);
+    this.deathScoreText = this.add.text(
+      TUNING.GAME_WIDTH / 2, 220,
+      '', {
+        fontSize: '36px',
+        color: '#ffffff',
+        fontFamily: 'Early GameBoy',
+      }
+    ).setOrigin(0.5);
+    this.deathTimeText = this.add.text(
+      TUNING.GAME_WIDTH / 2, 270,
+      '', {
+        fontSize: '24px',
+        color: '#aaaaaa',
+        fontFamily: 'Early GameBoy',
+      }
+    ).setOrigin(0.5);
+    this.deathRankText = this.add.text(
+      TUNING.GAME_WIDTH / 2, 320,
+      '', {
+        fontSize: '24px',
+        color: '#ffcc00',
+        fontFamily: 'Early GameBoy',
+      }
+    ).setOrigin(0.5);
+    this.deathBestText = this.add.text(
+      TUNING.GAME_WIDTH / 2, 350,
+      '', {
+        fontSize: '20px',
+        color: '#aaaaaa',
+        fontFamily: 'Early GameBoy',
+      }
+    ).setOrigin(0.5);
+    this.deathLeaderboardText = this.add.text(
+      TUNING.GAME_WIDTH / 2, 380,
+      '', {
+        fontSize: '28px',
+        color: '#aaaaaa',
+        fontFamily: 'Early GameBoy',
+        lineSpacing: 6,
+      }
+    ).setOrigin(0.5, 0);
+    this.deathRestartText = this.add.text(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 380,
+      'Press SPACEBAR to try again', {
+        fontSize: '28px',
+        color: '#ffffff',
+        fontFamily: 'Early GameBoy',
+      }
+    ).setOrigin(0.5);
+    this.deathContainer.add([deathBg, deathTitle, this.deathScoreText, this.deathTimeText, this.deathRankText, this.deathBestText, this.deathLeaderboardText, this.deathRestartText]);
+    this.deathContainer.setVisible(false);
+
+    // Rainbow-cycling highlight for the player's leaderboard entry (scene-level, above death container)
+    this.deathHighlightText = this.add.text(0, 0, '', {
+      fontSize: '28px',
+      color: '#ffffff',
+      fontFamily: 'Early GameBoy',
+    }).setOrigin(0.5, 0).setDepth(201).setVisible(false);
+
+    // --- Name entry overlay (shown on top 10 scores) ---
+    this.nameEntryContainer = this.add.container(0, 0).setDepth(210);
+    const nameBg = this.add.rectangle(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
+      TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
+      0x000000, 1
+    );
+    this.nameTitleText = this.add.text(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 - 120,
+      'NEW HIGH SCORE!', {
+        fontSize: '48px',
+        color: '#ffcc00',
+        fontFamily: 'Early GameBoy',
+      }
+    ).setOrigin(0.5);
+    const nameScoreLabel = this.add.text(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 - 60,
+      '', {
+        fontSize: '36px',
+        color: '#ffffff',
+        fontFamily: 'monospace',
+      }
+    ).setOrigin(0.5);
+    nameScoreLabel.setData('id', 'nameScoreLabel');
+    const namePrompt = this.add.text(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 10,
+      'ENTER YOUR NAME:', {
+        fontSize: '24px',
+        color: '#aaaaaa',
+        fontFamily: 'monospace',
+      }
+    ).setOrigin(0.5);
+    this.nameInputText = this.add.text(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 60,
+      '_', {
+        fontSize: '36px',
+        color: '#ffffff',
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+      }
+    ).setOrigin(0.5);
+    this.nameSkipWarning = this.add.text(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 200,
+      'Your score won\'t be saved! Press ESC again to skip.', {
+        fontSize: '22px',
+        color: '#ff4444',
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+      }
+    ).setOrigin(0.5).setVisible(false);
+    this.nameEntryContainer.add([nameBg, this.nameTitleText, nameScoreLabel, namePrompt, this.nameInputText, this.nameSkipWarning]);
+    this.nameEntryContainer.setVisible(false);
+
+    // ENTER button — scene-level (NOT inside container) so pointer events work reliably
+    this.nameEnterBtn = this.add.text(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 140,
+      '[ ENTER ]', {
+        fontSize: '32px',
+        color: '#00ff00',
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+        backgroundColor: '#003300',
+        padding: { x: 20, y: 10 },
+      }
+    ).setOrigin(0.5).setDepth(211).setInteractive({ useHandCursor: true });
+    this.nameEnterBtn.on('pointerover', () => {
+      this.nameEnterBtn.setColor('#ffffff').setBackgroundColor('#006600');
+    });
+    this.nameEnterBtn.on('pointerout', () => {
+      this.nameEnterBtn.setColor('#00ff00').setBackgroundColor('#003300');
+    });
+    this.nameEnterBtn.on('pointerdown', () => {
+      if (this.state === GameState.NAME_ENTRY) {
+        this.confirmNameEntry();
+      }
+    });
+    this.nameEnterBtn.setVisible(false);
+
+    // "Are you sure?" prompt + Yes/No buttons (scene-level for pointer events)
+    this.emptyNamePrompt = this.add.text(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 200,
+      'No name entered. Are you sure?', {
+        fontSize: '24px',
+        color: '#ff4444',
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+      }
+    ).setOrigin(0.5).setDepth(212).setVisible(false);
+
+    const btnStyle = {
+      fontSize: '28px',
+      fontFamily: 'monospace',
+      fontStyle: 'bold',
+      padding: { x: 24, y: 8 },
+    };
+    this.emptyNameYesBtn = this.add.text(
+      TUNING.GAME_WIDTH / 2 - 100, TUNING.GAME_HEIGHT / 2 + 250,
+      'YES', { ...btnStyle, color: '#ff4444', backgroundColor: '#330000' }
+    ).setOrigin(0.5).setDepth(212).setInteractive({ useHandCursor: true }).setVisible(false);
+    this.emptyNameYesBtn.on('pointerover', () => this.emptyNameYesBtn.setColor('#ffffff').setBackgroundColor('#660000'));
+    this.emptyNameYesBtn.on('pointerout', () => this.emptyNameYesBtn.setColor('#ff4444').setBackgroundColor('#330000'));
+    this.emptyNameYesBtn.on('pointerdown', () => {
+      if (this.state === GameState.NAME_ENTRY && this.emptyNameVisible) {
+        this.submitAsAnon();
+      }
+    });
+
+    this.emptyNameNoBtn = this.add.text(
+      TUNING.GAME_WIDTH / 2 + 100, TUNING.GAME_HEIGHT / 2 + 250,
+      'NO', { ...btnStyle, color: '#00ff00', backgroundColor: '#003300' }
+    ).setOrigin(0.5).setDepth(212).setInteractive({ useHandCursor: true }).setVisible(false);
+    this.emptyNameNoBtn.on('pointerover', () => this.emptyNameNoBtn.setColor('#ffffff').setBackgroundColor('#006600'));
+    this.emptyNameNoBtn.on('pointerout', () => this.emptyNameNoBtn.setColor('#00ff00').setBackgroundColor('#003300'));
+    this.emptyNameNoBtn.on('pointerdown', () => {
+      if (this.state === GameState.NAME_ENTRY && this.emptyNameVisible) {
+        this.hideEmptyNamePrompt();
+      }
+    });
+
+    // Black overlay for countdown (covers game world, below countdown numbers)
+    this.blackOverlay = this.add.rectangle(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
+      TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
+      0x000000
+    ).setDepth(249).setVisible(false);
+
+    // Death exposure white overlay (above everything game-related)
+    this.deathWhiteOverlay = this.add.rectangle(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
+      TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
+      0xffffff
+    ).setDepth(1200).setAlpha(0).setVisible(false);
+
+    // Countdown sprite (centered, high depth, hidden until enterStarting)
+    this.countdownSprite = this.add.sprite(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
+      'countdown', 0
+    ).setDepth(250).setVisible(false);
+
+    // Tutorial layers (above title, below black overlay)
+    this.tutorialBlank = this.add.image(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'tutorial-blank'
+    ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT).setDepth(230).setVisible(false);
+
+    this.tutorialControlsSprite = this.add.sprite(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'tutorial-controls-00'
+    ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT).setDepth(231).setVisible(false);
+
+    this.tutorialObstaclesImage = this.add.image(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'tutorial-obstacles'
+    ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT).setDepth(231).setVisible(false);
+
+    this.tutorialRageSprite = this.add.sprite(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'tutorial-rage-0'
+    ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT).setDepth(231).setVisible(false);
+
+    // Tutorial skip button (bottom-right, above tutorial content, below black overlay)
+    this.tutorialSkipBtn = this.add.image(0, 0, 'tutorial-skip')
+      .setOrigin(0.5, 0.5).setScale(0.5).setAlpha(0.69).setDepth(248).setVisible(false).setInteractive({ useHandCursor: true });
+    // Position so bottom-right edge sits 30px from screen edges
+    this.tutorialSkipBtn.setPosition(
+      TUNING.GAME_WIDTH - SKIP_BTN_MARGIN_RIGHT - this.tutorialSkipBtn.displayWidth / 2,
+      TUNING.GAME_HEIGHT - SKIP_BTN_MARGIN_BOTTOM - this.tutorialSkipBtn.displayHeight / 2,
+    );
+    this.tutorialSkipBtn.on('pointerover', () => {
+      this.tweens.killTweensOf(this.tutorialSkipBtn);
+      this.tweens.add({
+        targets: this.tutorialSkipBtn,
+        alpha: 1,
+        scale: 0.575,
+        duration: 400,
+        ease: 'Sine.easeInOut',
+      });
+    });
+    this.tutorialSkipBtn.on('pointerout', () => {
+      this.tweens.killTweensOf(this.tutorialSkipBtn);
+      this.tweens.add({
+        targets: this.tutorialSkipBtn,
+        alpha: 0.69,
+        scale: 0.5,
+        duration: 400,
+        ease: 'Sine.easeInOut',
+      });
+    });
+    this.tutorialSkipBtn.on('pointerdown', () => {
+      if (this.state === GameState.TUTORIAL && this.tutorialPhase !== 'skip_fade' && this.tutorialPhase !== 'done') {
+        // Flash red, snap to base scale, fade out over 0.5s
+        this.tweens.killTweensOf(this.tutorialSkipBtn);
+        this.tutorialSkipBtn.setTint(0xff0000);
+        this.tutorialSkipBtn.setScale(0.5);
+        this.tutorialSkipBtn.disableInteractive();
+        this.tweens.add({
+          targets: this.tutorialSkipBtn,
+          alpha: 0,
+          duration: 500,
+          ease: 'Sine.easeIn',
+          onComplete: () => {
+            this.tutorialSkipBtn.setVisible(false);
+            this.tutorialSkipBtn.clearTint();
+            this.tutorialSkipBtn.setAlpha(0.69);
+            this.tutorialPhase = 'skip_fade';
+            this.tutorialTimer = 0;
+            this.blackOverlay.setVisible(true).setAlpha(0);
+          },
+        });
+      }
+    });
+
+    // Death explosion (hidden, reused each death — depth set dynamically in enterDead)
+    this.deathExplosion = this.add.sprite(0, 0, 'explosion');
+    this.deathExplosion.setVisible(false);
+
+    // Katana slash sprite (hidden until activated)
+    this.slashSprite = this.add.image(0, 0, 'katana-slash');
+    this.slashSprite.setVisible(false).setDepth(4);
+    this.slashActiveTimer = 0;
+    this.slashCooldownTimer = 0;
+
+    // Hide player until game starts
+    this.playerSystem.setVisible(false);
+
+    // --- CRT post-processing ---
+    this.cameras.main.setPostPipeline(CRTPipeline);
+
+    // CRT debug overlay (DOM element — not affected by CRT shader)
+    this.crtDebugEl = document.createElement('pre');
+    Object.assign(this.crtDebugEl.style, {
+      margin: '0',
+      fontSize: '13px',
+      color: '#00ff00',
+      fontFamily: 'monospace',
+      backgroundColor: 'rgba(0,0,0,0.67)',
+      padding: '6px 8px',
+      whiteSpace: 'pre',
+      lineHeight: '1.4',
+    });
+    this.crtDebugDom = this.add.dom(16, TUNING.GAME_HEIGHT - 320, this.crtDebugEl)
+      .setOrigin(0, 0)
+      .setDepth(300)
+      .setVisible(false)
+      .setScrollFactor(0);
+
+    // O = toggle CRT on/off, P = toggle CRT debug overlay
+    this.input.keyboard!.addKey('O').on('down', () => {
+      this.crtEnabled = !this.crtEnabled;
+      if (this.crtEnabled) {
+        this.cameras.main.setPostPipeline(CRTPipeline);
+      } else {
+        this.cameras.main.removePostPipeline('CRTPipeline');
+      }
+    });
+    this.input.keyboard!.addKey('P').on('down', () => {
+      this.crtDebugVisible = !this.crtDebugVisible;
+      this.crtDebugDom.setVisible(this.crtDebugVisible);
+      if (this.crtDebugVisible) this.updateCRTDebugText();
+    });
+
+    // 0 = instant rage (debug only)
+    if (TUNING.DEBUG_KEYS) {
+      this.input.keyboard!.addKey('ZERO').on('down', () => {
+        if (this.state === GameState.PLAYING && this.rageTimer <= 0) {
+          this.rageAmount = TUNING.RAGE_MAX;
+          this.rageTimer = TUNING.RAGE_DURATION;
+          this.playerSystem.playPoweredUp();
+          this.musicPlayer.setVolumeBoost(TUNING.RAGE_MUSIC_VOLUME_BOOST);
+          this.audioSystem.setDistortion(TUNING.RAGE_AUDIO_DISTORTION);
+          CRT_TUNING.rageDistortion = TUNING.RAGE_VISUAL_DISTORTION;
+        }
+      });
+    }
+  }
+
+  update(_time: number, delta: number) {
+    const dt = delta / 1000;
+
+    switch (this.state) {
+      case GameState.TITLE:
+        this.updateTitle(dt);
+        break;
+      case GameState.TUTORIAL:
+        this.updateTutorial(dt);
+        break;
+      case GameState.STARTING:
+        this.updateStarting(dt);
+        break;
+      case GameState.PLAYING:
+        this.updatePlaying(dt);
+        break;
+      case GameState.DYING:
+        this.updateDying(dt);
+        break;
+      case GameState.NAME_ENTRY:
+        this.updateNameEntry(dt);
+        break;
+      case GameState.DEAD:
+        this.updateDead(dt);
+        break;
+    }
+  }
+
+  private updateTitle(dt: number): void {
+    const titleSpeed = TUNING.ROAD_BASE_SPEED * 0.5;
+    this.parallaxSystem.update(titleSpeed, dt);
+    this.roadSystem.update(titleSpeed, dt);
+
+    if (this.anyInputPressed) {
+      this.anyInputPressed = false;
+      // Drain queued inputs so they don't carry into gameplay
+      this.inputSystem.getSpeedTap();
+      this.inputSystem.getAttackPressed();
+      this.inputSystem.getRocketPressed();
+      // Start audio on first user gesture
+      this.audioSystem.start();
+      this.enterTutorial();
+    }
+  }
+
+  private updateStarting(dt: number): void {
+    // Keep background scrolling during countdown
+    const titleSpeed = TUNING.ROAD_BASE_SPEED * 0.5;
+    this.parallaxSystem.update(titleSpeed, dt);
+    this.roadSystem.update(titleSpeed, dt);
+
+    // Drain inputs so nothing queues up during countdown
+    this.inputSystem.getSpeedTap();
+    this.inputSystem.getAttackPressed();
+    this.inputSystem.getRocketPressed();
+
+    if (this.countdownPhase === 'done') return;
+
+    this.countdownPhaseTimer += dt;
+
+    if (this.countdownPhase === 'animate') {
+      const dur = TUNING.COUNTDOWN_NUMBER_DURATION;
+      const t = Math.min(this.countdownPhaseTimer / dur, 1);
+
+      // Scale: ease-out cubic (fast start, slow end) — 0.5× to 1×
+      const scaleT = 1 - Math.pow(1 - t, 3);
+      this.countdownSprite.setScale(0.5 + scaleT * 0.5);
+
+      // Alpha: ease-in cubic (slow start, fast end) — 1 to 0
+      const alphaT = Math.pow(t, 3);
+      this.countdownSprite.setAlpha(1 - alphaT);
+
+      if (t >= 1) {
+        // Number animation done — move to delay before next
+        this.countdownPhase = 'delay';
+        this.countdownPhaseTimer = 0;
+        this.countdownSprite.setVisible(false);
+      }
+    } else if (this.countdownPhase === 'delay') {
+      const wait = this.countdownIndex < 0
+        ? TUNING.COUNTDOWN_INITIAL_DELAY
+        : TUNING.COUNTDOWN_DELAY;
+      if (this.countdownPhaseTimer >= wait) {
+        const nextIndex = this.countdownIndex + 1;
+        if (nextIndex >= TUNING.COUNTDOWN_FRAMES - 1) {
+          // Skip "1" — fade black overlay to reveal game instead
+          this.countdownPhase = 'fade';
+          this.countdownPhaseTimer = 0;
+          this.titleLoopSprite.stop();
+          this.titleLoopSprite.setVisible(false);
+          // Show player riding in place (visible through fading overlay)
+          this.playerSystem.reset();
+          this.playerSystem.setVisible(true);
+        } else {
+          // Show next number
+          this.countdownIndex = nextIndex;
+          this.countdownPhaseTimer = 0;
+          this.countdownPhase = 'animate';
+          this.countdownSprite.setFrame(this.countdownIndex);
+          this.countdownSprite.setScale(0.5);
+          this.countdownSprite.setAlpha(1);
+          this.countdownSprite.setVisible(true);
+        }
+      }
+    } else if (this.countdownPhase === 'fade') {
+      // Fade black overlay from 1→0 over the same duration a number would take
+      const dur = TUNING.COUNTDOWN_NUMBER_DURATION;
+      const t = Math.min(this.countdownPhaseTimer / dur, 1);
+      this.blackOverlay.setAlpha(1 - t);
+
+      if (t >= 1) {
+        this.blackOverlay.setVisible(false);
+        this.countdownPhase = 'grace';
+        this.countdownPhaseTimer = 0;
+      }
+    } else if (this.countdownPhase === 'grace') {
+      // Player visible but uncontrolled — wait before handing control
+      if (this.countdownPhaseTimer >= TUNING.COUNTDOWN_CONTROL_DELAY) {
+        this.countdownPhase = 'done';
+        this.startGame();
+        // Spawn grace: obstacles delayed after player gets control
+        this.spawnGraceTimer = TUNING.COUNTDOWN_SPAWN_DELAY;
+      }
+    }
+  }
+
+  private returnToTitle(): void {
+    this.state = GameState.TITLE;
+    this.elapsed = 0;
+
+    // Clean up tutorial
+    this.tutorialPhase = 'done';
+    this.tutorialBlank.setVisible(false);
+    this.tutorialControlsSprite.setVisible(false);
+    this.tutorialControlsSprite.stop();
+    this.tutorialObstaclesImage.setVisible(false);
+    this.tutorialRageSprite.setVisible(false);
+    this.tutorialRageSprite.stop();
+    this.tutorialSkipBtn.setVisible(false);
+
+    // Clean up any active game state
+    this.countdownPhase = 'done';
+    this.dyingPhase = 'done';
+    this.deathWhiteOverlay.setVisible(false);
+    this.countdownSprite.setVisible(false);
+    this.blackOverlay.setVisible(false);
+    this.playerSystem.setVisible(false);
+    this.deathExplosion.setVisible(false);
+    this.slashSprite.setVisible(false);
+    this.slashActiveTimer = 0;
+    this.slashCooldownTimer = 0;
+    this.slashInvincibilityTimer = 0;
+    this.obstacleSystem.reset(this.weekSeed);
+    this.fxSystem.reset();
+    this.audioSystem.silenceEngine();
+    this.rageZoomProgress = 0;
+    this.cameras.main.setZoom(1);
+    this.cameras.main.setScroll(0, 0);
+    this.adjustHudForZoom(1);
+    this.pickupSystem.reset();
+    this.pickupSystem.setHUDVisible(false);
+    this.rocketSystem.reset();
+    this.rocketCooldownTimer = 0;
+    this.hideWarningPool();
+
+    // Hide all overlays
+    this.hudLabel.setVisible(false);
+    this.hudHighScore.setVisible(false);
+    this.deathContainer.setVisible(false);
+    this.deathHighlightText.setVisible(false);
+    this.highlightRank = 0;
+    this.nameEntryContainer.setVisible(false);
+    this.nameEnterBtn.setVisible(false);
+    this.playMusicOverlay.setAlpha(0).setVisible(false);
+    this.debugText.setText('');
+
+    // Clean up name entry keyboard handler if active
+    if (this.nameKeyHandler) {
+      this.input.keyboard!.off('keydown', this.nameKeyHandler);
+      this.nameKeyHandler = null;
+    }
+    this.nameConfirmed = false;
+    this.nameSkipConfirmPending = false;
+    this.nameSkipWarning.setVisible(false);
+    this.emptyNameVisible = false;
+    this.emptyNamePrompt.setVisible(false);
+    this.emptyNameYesBtn.setVisible(false);
+    this.emptyNameNoBtn.setVisible(false);
+
+    // Reset auto-submit state
+    this.autoSubmitted = false;
+    this.deathBestText.setVisible(false);
+
+    // Restore road/parallax and show title screen
+    this.roadSystem.setVisible(true);
+    this.parallaxSystem.setVisible(true);
+    this.titleLoopSprite.setVisible(true);
+    this.titleLoopSprite.play('title-loop');
+    this.titleContainer.setVisible(true);
+
+    // ProfileHud in profile mode on title
+    this.profileHud.showProfileMode(this.profilePopup.getName(), this.getProfileRankText());
+    this.profileHud.setAlpha(1);
+    this.profileHud.setVisible(true);
+  }
+
+  private dismissMusicOverlay(): void {
+    this.musicOverlayActive = false;
+    this.musicPlayer.startTitleMusic();
+    this.profileHud.showProfileMode(this.profilePopup.getName(), this.getProfileRankText());
+    this.profileHud.setVisible(true);
+    this.tweens.add({
+      targets: this.playMusicOverlay,
+      alpha: 0,
+      duration: 1500,
+      ease: 'Power2',
+      onComplete: () => {
+        this.playMusicOverlay.setVisible(false);
+      },
+    });
+  }
+
+  private enterTutorial(): void {
+    this.state = GameState.TUTORIAL;
+    this.titleContainer.setVisible(false);
+
+    // Switch from loop to play-once start animation (fire-and-forget visual underneath)
+    this.titleLoopSprite.play('title-start');
+    this.titleLoopSprite.once('animationcomplete', () => {
+      this.titleLoopSprite.stop();
+      this.titleLoopSprite.setVisible(false);
+    });
+
+    // Show tutorial base layer (always visible under the slides)
+    this.tutorialBlank.setVisible(true);
+
+    // Start controls animation (playing underneath the black overlay)
+    this.tutorialControlsSprite.setVisible(true).setAlpha(1);
+    this.tutorialControlsSprite.play('tutorial-controls');
+
+    // Others hidden until their phase
+    this.tutorialObstaclesImage.setVisible(false).setAlpha(0);
+    this.tutorialRageSprite.setVisible(false).setAlpha(0);
+
+    // Black overlay fully opaque — will fade to reveal controls
+    this.blackOverlay.setVisible(true).setAlpha(1);
+
+    this.tutorialPhase = 'black_reveal';
+    this.tutorialTimer = 0;
+    this.tutorialAdvance = false;
+    this.tutorialSkipBtn.setVisible(true).setAlpha(0.69).setScale(0.5).clearTint().setInteractive({ useHandCursor: true });
+  }
+
+  private updateTutorial(dt: number): void {
+    // Keep background scrolling during tutorial
+    const titleSpeed = TUNING.ROAD_BASE_SPEED * 0.5;
+    this.parallaxSystem.update(titleSpeed, dt);
+    this.roadSystem.update(titleSpeed, dt);
+
+    // Drain game inputs so nothing queues up
+    this.inputSystem.getSpeedTap();
+    this.inputSystem.getAttackPressed();
+    this.inputSystem.getRocketPressed();
+
+    if (this.tutorialPhase === 'done') return;
+
+    this.tutorialTimer += dt;
+    const fadeDur = TUNING.TUTORIAL_FADE_DURATION;
+
+    switch (this.tutorialPhase) {
+      case 'black_reveal': {
+        // Black overlay fading 1→0 to reveal controls underneath
+        const t = Math.min(this.tutorialTimer / fadeDur, 1);
+        this.blackOverlay.setAlpha(1 - t);
+        if (t >= 1) {
+          this.blackOverlay.setVisible(false);
+          this.tutorialPhase = 'controls_wait';
+          this.tutorialTimer = 0;
+          this.tutorialAdvance = false;
+        }
+        break;
+      }
+      case 'controls_wait': {
+        if (this.tutorialAdvance) {
+          this.tutorialAdvance = false;
+          this.tutorialPhase = 'controls_fade';
+          this.tutorialTimer = 0;
+        }
+        break;
+      }
+      case 'controls_fade': {
+        // Controls fading out, blank visible underneath
+        const t = Math.min(this.tutorialTimer / fadeDur, 1);
+        this.tutorialControlsSprite.setAlpha(1 - t);
+        if (t >= 1) {
+          this.tutorialControlsSprite.setVisible(false);
+          this.tutorialControlsSprite.stop();
+          this.tutorialPhase = 'obstacles_in';
+          this.tutorialTimer = 0;
+        }
+        break;
+      }
+      case 'obstacles_in': {
+        // Obstacles image fading in on top of blank
+        this.tutorialObstaclesImage.setVisible(true);
+        const t = Math.min(this.tutorialTimer / fadeDur, 1);
+        this.tutorialObstaclesImage.setAlpha(t);
+        if (t >= 1) {
+          this.tutorialPhase = 'obstacles_wait';
+          this.tutorialTimer = 0;
+          this.tutorialAdvance = false;
+        }
+        break;
+      }
+      case 'obstacles_wait': {
+        if (this.tutorialAdvance) {
+          this.tutorialAdvance = false;
+          this.tutorialPhase = 'obstacles_fade';
+          this.tutorialTimer = 0;
+        }
+        break;
+      }
+      case 'obstacles_fade': {
+        // Obstacles fading out, blank visible underneath
+        const t = Math.min(this.tutorialTimer / fadeDur, 1);
+        this.tutorialObstaclesImage.setAlpha(1 - t);
+        if (t >= 1) {
+          this.tutorialObstaclesImage.setVisible(false);
+          // Start rage animation and begin fading it in
+          this.tutorialRageSprite.setVisible(true).setAlpha(0);
+          this.tutorialRageSprite.play('tutorial-rage');
+          this.tutorialPhase = 'rage_in';
+          this.tutorialTimer = 0;
+        }
+        break;
+      }
+      case 'rage_in': {
+        // Rage sequence fading in
+        const t = Math.min(this.tutorialTimer / fadeDur, 1);
+        this.tutorialRageSprite.setAlpha(t);
+        if (t >= 1) {
+          this.tutorialPhase = 'rage_wait';
+          this.tutorialTimer = 0;
+          this.tutorialAdvance = false;
+        }
+        break;
+      }
+      case 'rage_wait': {
+        if (this.tutorialAdvance) {
+          this.tutorialAdvance = false;
+          this.tutorialPhase = 'rage_black';
+          this.tutorialTimer = 0;
+          // Show black overlay, fade from 0→1 ON TOP of rage
+          this.blackOverlay.setVisible(true).setAlpha(0);
+        }
+        break;
+      }
+      case 'rage_black': {
+        // Black overlay fading in over rage
+        const t = Math.min(this.tutorialTimer / fadeDur, 1);
+        this.blackOverlay.setAlpha(t);
+        if (t >= 1) {
+          // Tutorial done — clean up all tutorial elements
+          this.tutorialControlsSprite.setVisible(false);
+          this.tutorialObstaclesImage.setVisible(false);
+          this.tutorialRageSprite.setVisible(false);
+          this.tutorialRageSprite.stop();
+          this.tutorialBlank.setVisible(false);
+          this.tutorialSkipBtn.setVisible(false);
+          this.tutorialPhase = 'done';
+
+          // Start playlist music and begin countdown
+          this.musicPlayer.switchToPlaylist();
+          this.enterStarting();
+        }
+        break;
+      }
+      case 'skip_fade': {
+        // Fade to black then skip straight to countdown
+        const t = Math.min(this.tutorialTimer / fadeDur, 1);
+        this.blackOverlay.setAlpha(t);
+        if (t >= 1) {
+          // Clean up all tutorial elements
+          this.tutorialControlsSprite.setVisible(false);
+          this.tutorialControlsSprite.stop();
+          this.tutorialObstaclesImage.setVisible(false);
+          this.tutorialRageSprite.setVisible(false);
+          this.tutorialRageSprite.stop();
+          this.tutorialBlank.setVisible(false);
+          this.tutorialPhase = 'done';
+
+          // Start playlist music and begin countdown
+          this.musicPlayer.switchToPlaylist();
+          this.enterStarting();
+        }
+        break;
+      }
+    }
+  }
+
+  private enterStarting(): void {
+    this.state = GameState.STARTING;
+    // blackOverlay already at alpha 1 from tutorial
+    this.titleContainer.setVisible(false);
+    this.titleLoopSprite.stop();
+    this.titleLoopSprite.setVisible(false);
+
+    // Fade out profile HUD during countdown
+    this.tweens.add({
+      targets: this.profileHud.getContainer(),
+      alpha: 0,
+      duration: 1500,
+      ease: 'Power2',
+    });
+
+    // Start countdown (5→2, then fade black to reveal game) — begin with initial delay
+    this.countdownIndex = -1;
+    this.countdownPhaseTimer = 0;
+    this.countdownPhase = 'delay';
+    this.countdownSprite.setVisible(false);
+  }
+
+  private startGame(): void {
+    this.state = GameState.PLAYING;
+    this.elapsed = 0;
+    this.spawnGraceTimer = 0;
+    this.blackOverlay.setVisible(false);
+    this.deathWhiteOverlay.setVisible(false);
+    this.dyingPhase = 'done';
+    this.roadSystem.setVisible(true);
+    this.parallaxSystem.setVisible(true);
+    this.playerSystem.reset();
+    this.playerSystem.setVisible(true);
+    this.obstacleSystem.reset(this.weekSeed);
+    this.difficultySystem.reset();
+    this.scoreSystem.reset();
+    this.fxSystem.reset();
+    this.titleContainer.setVisible(false);
+    this.titleLoopSprite.stop();
+    this.titleLoopSprite.setVisible(false);
+    this.deathContainer.setVisible(false);
+    this.deathHighlightText.setVisible(false);
+    this.highlightRank = 0;
+    this.nameEntryContainer.setVisible(false);
+    this.nameEnterBtn.setVisible(false);
+    if (this.nameKeyHandler) {
+      this.input.keyboard!.off('keydown', this.nameKeyHandler);
+      this.nameKeyHandler = null;
+    }
+    const entries = this.leaderboardSystem.getEntries();
+    const weeklyHigh = entries.length > 0 ? entries[0].score : 0;
+    this.hudHighScore.setText(String(weeklyHigh).padStart(7, '0'));
+    this.hudLabel.setVisible(true);
+    this.hudHighScore.setVisible(true);
+    this.profileHud.showPlayingMode();
+    this.profileHud.setAlpha(0);
+    this.tweens.add({
+      targets: this.profileHud.getContainer(),
+      alpha: 1,
+      duration: 2000,
+      ease: 'Power2',
+    });
+    this.profileHud.setScore(0);
+    this.profileHud.setRage01(0);
+    this.profileHud.setRockets(0, TUNING.PICKUP_MAX_AMMO);
+    this.rageAmount = 0;
+    this.rageTimer = 0;
+    this.rageZoomProgress = 0;
+    this.roadSpeedBonus = 0;
+    this.cameras.main.setZoom(1);
+    this.cameras.main.setScroll(0, 0);
+    this.adjustHudForZoom(1);
+    this.audioSystem.setDistortion(0);
+    CRT_TUNING.rageDistortion = 0;
+    this.deathExplosion.setVisible(false);
+    this.slashSprite.setVisible(false);
+    this.slashActiveTimer = 0;
+    this.slashCooldownTimer = 0;
+    this.slashInvincibilityTimer = 0;
+    this.rocketCooldownTimer = 0;
+    this.pickupSystem.reset();
+    this.pickupSystem.setHUDVisible(true);
+    this.rocketSystem.reset();
+    this.hideWarningPool();
+  }
+
+  private updatePlaying(dt: number): void {
+    // Drain gameplay input while popup is open (game world keeps running)
+    if (this.profilePopup.isOpen()) {
+      this.inputSystem.getAttackPressed();
+      this.inputSystem.getRocketPressed();
+      this.inputSystem.getSpeedTap();
+    }
+
+    this.elapsed += dt;
+    const baseRoadSpeed = TUNING.ROAD_BASE_SPEED + this.elapsed * TUNING.ROAD_SPEED_RAMP + this.roadSpeedBonus;
+    let rageFactor = 0; // 0 = no rage, 0→1 ramp up, 1 = full, 1→0 ramp down
+    if (this.rageTimer > 0) {
+      const elapsed = TUNING.RAGE_DURATION - this.rageTimer; // seconds since rage started
+      const rampUp = Math.min(elapsed / TUNING.RAGE_SPEED_RAMP_UP, 1);       // 0→1 over ramp-up
+      const rampDown = Math.min(this.rageTimer / TUNING.RAGE_SPEED_RAMP_DOWN, 1); // 1→0 over ramp-down
+      rageFactor = Math.min(rampUp, rampDown); // whichever is lower
+    }
+    const rageSpeedFactor = 1 + (TUNING.RAGE_SPEED_MULTIPLIER - 1) * rageFactor;
+    const roadSpeed = baseRoadSpeed * rageSpeedFactor;
+
+    // Spawn grace — no obstacles until timer expires (countdown intro period)
+    if (this.spawnGraceTimer > 0) {
+      this.spawnGraceTimer -= dt;
+    }
+
+    this.difficultySystem.update(dt);
+    this.playerSystem.setInvincible(this.rageTimer > 0 || this.rageZoomProgress > 0);
+    this.playerSystem.update(dt, roadSpeed, baseRoadSpeed);
+    this.scoreSystem.update(dt, this.playerSystem.getPlayerSpeed());
+    if (this.spawnGraceTimer <= 0) {
+      this.obstacleSystem.update(dt, roadSpeed, this.difficultySystem.getFactor(), rageFactor);
+    }
+    this.updateLaneWarnings(roadSpeed);
+
+    // Katana slash (checked BEFORE player collision so destroyed obstacles can't kill)
+    this.slashCooldownTimer = Math.max(0, this.slashCooldownTimer - dt);
+    this.slashInvincibilityTimer = Math.max(0, this.slashInvincibilityTimer - dt);
+
+    // Speed-scaled slash: wider and further right at higher speeds
+    const speedRatio = roadSpeed > 0 ? this.playerSystem.getPlayerSpeed() / roadSpeed : 1;
+    const speedT = Phaser.Math.Clamp((speedRatio - 1) / (TUNING.MAX_SPEED_MULTIPLIER - 1), 0, 1);
+    const slashWidth = TUNING.KATANA_WIDTH * (1 + speedT * (TUNING.KATANA_SPEED_WIDTH_SCALE - 1));
+    const slashOffset = TUNING.KATANA_OFFSET_X * (1 + speedT * (TUNING.KATANA_SPEED_OFFSET_SCALE - 1));
+
+    if (this.slashActiveTimer > 0) {
+      this.slashActiveTimer -= dt;
+      // Position slash to the right of the player
+      this.slashSprite.setPosition(
+        this.playerSystem.getX() + slashOffset,
+        this.playerSystem.getY()
+      );
+      this.slashSprite.setDisplaySize(slashWidth, TUNING.KATANA_HEIGHT);
+      this.slashSprite.setDepth(this.playerSystem.getY() + 0.3);
+      // Check slash vs CRASH obstacles (Y uses player collision circle, not slash visual)
+      const slashCollY = this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y;
+      const hitX = this.obstacleSystem.checkSlashCollision(
+        this.slashSprite.x,
+        slashWidth,
+        slashCollY,
+        TUNING.PLAYER_RADIUS
+      );
+      if (hitX >= 0) {
+        this.slashInvincibilityTimer = TUNING.KATANA_INVINCIBILITY;
+        this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION, TUNING.SHAKE_DEATH_INTENSITY * 0.25);
+
+        // Distance-based bonus: left edge of slash = 100pts, right edge = min pts
+        const slashLeft = this.playerSystem.getX() + slashOffset - slashWidth / 2;
+        const dist = Math.max(0, hitX - slashLeft);
+        const t = Math.min(dist / slashWidth, 1); // 0 = left edge, 1 = right edge
+        const bonus = Math.round(TUNING.KATANA_KILL_POINTS_MAX - t * t * (TUNING.KATANA_KILL_POINTS_MAX - TUNING.KATANA_KILL_POINTS_MIN));
+        this.scoreSystem.addBonus(bonus);
+        this.spawnScorePopup(bonus);
+
+        // Only add permanent road speed outside rage (rage plows through too many)
+        if (this.rageTimer <= 0) {
+          this.roadSpeedBonus += TUNING.RAGE_SPEED_BOOST_PER_KILL;
+        }
+
+        // Fill rage meter (scaled by multiplier)
+        if (this.rageTimer <= 0) {
+          this.rageAmount = Math.min(this.rageAmount + bonus * TUNING.RAGE_FILL_MULTIPLIER, TUNING.RAGE_MAX);
+          if (this.rageAmount >= TUNING.RAGE_MAX) {
+            this.rageTimer = TUNING.RAGE_DURATION;
+            this.rageAmount = TUNING.RAGE_MAX;
+            this.playerSystem.playPoweredUp();
+            this.musicPlayer.setVolumeBoost(TUNING.RAGE_MUSIC_VOLUME_BOOST);
+            this.audioSystem.setDistortion(TUNING.RAGE_AUDIO_DISTORTION);
+            CRT_TUNING.rageDistortion = TUNING.RAGE_VISUAL_DISTORTION;
+          }
+        }
+      }
+      if (this.slashActiveTimer <= 0) {
+        this.slashSprite.setVisible(false);
+      }
+    }
+    if (this.inputSystem.getAttackPressed() && this.slashCooldownTimer <= 0) {
+      this.slashActiveTimer = TUNING.KATANA_DURATION;
+      this.slashCooldownTimer = TUNING.KATANA_COOLDOWN;
+      this.slashSprite.setPosition(
+        this.playerSystem.getX() + slashOffset,
+        this.playerSystem.getY()
+      );
+      this.slashSprite.setDisplaySize(slashWidth, TUNING.KATANA_HEIGHT);
+      this.slashSprite.setVisible(true);
+      this.slashSprite.setDepth(this.playerSystem.getY() + 0.3);
+      this.audioSystem.playSlash();
+      this.playerSystem.playAttack();
+    }
+
+    // Rocket launcher: right-click fires when ammo > 0
+    this.rocketCooldownTimer = Math.max(0, this.rocketCooldownTimer - dt);
+    if (this.inputSystem.getRocketPressed() && this.rocketCooldownTimer <= 0 && this.pickupSystem.getAmmo() > 0) {
+      if (this.pickupSystem.consumeAmmo()) {
+        this.rocketSystem.fire(this.playerSystem.getX(), this.playerSystem.getY());
+        this.rocketCooldownTimer = TUNING.ROCKET_COOLDOWN;
+        this.audioSystem.playRocketLaunch();
+      }
+    }
+    this.rocketSystem.update(dt);
+
+    // Player collisions (after slash so destroyed obstacles are already gone)
+    // NOTE: rage timer is ticked AFTER collisions so it can't expire mid-frame
+    const playerCollX = this.playerSystem.getX();
+    const playerCollY = this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y;
+
+    // Update pickups (scrolling + collection)
+    this.pickupSystem.update(dt, roadSpeed, playerCollX, playerCollY, TUNING.PLAYER_RADIUS);
+
+    if (this.rageTimer > 0) {
+      // Rage mode: destroy obstacles on contact
+      const hits = this.obstacleSystem.checkRageCollision(
+        playerCollX, playerCollY, TUNING.PLAYER_RADIUS
+      );
+      if (hits.length > 0) {
+        this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 0.5, TUNING.SHAKE_DEATH_INTENSITY * 0.3);
+        for (let i = 0; i < hits.length; i++) {
+          if (hits[i].type === ObstacleType.CAR) {
+            this.scoreSystem.addBonus(TUNING.RAGE_CAR_KILL_BONUS);
+            this.spawnScorePopup(TUNING.RAGE_CAR_KILL_BONUS);
+          }
+        }
+      }
+      // Still check slow zones
+      const result = this.obstacleSystem.checkCollision(playerCollX, playerCollY, TUNING.PLAYER_RADIUS);
+      if (result.slowOverlapping) {
+        this.playerSystem.applyLeftwardPush(TUNING.SLOW_PUSH_RATE * dt);
+      }
+      this.fxSystem.onSlowOverlap(result.slowOverlapping);
+    } else {
+      const result = this.obstacleSystem.checkCollision(playerCollX, playerCollY, TUNING.PLAYER_RADIUS);
+      if (result.crashed && this.slashInvincibilityTimer <= 0) {
+        this.playerSystem.kill();
+      }
+      if (result.slowOverlapping) {
+        this.playerSystem.applyLeftwardPush(TUNING.SLOW_PUSH_RATE * dt);
+      }
+      this.fxSystem.onSlowOverlap(result.slowOverlapping);
+    }
+
+    // Rage mode tick — drain the bar so player can see time remaining
+    // (ticked AFTER collisions so rage can't expire mid-frame leaving player vulnerable)
+    if (this.rageTimer > 0) {
+      this.rageTimer -= dt;
+      if (this.rageTimer <= 0) {
+        this.rageTimer = 0;
+        this.rageAmount = 0;
+        this.playerSystem.stopPoweredUp();
+        this.musicPlayer.setVolumeBoost(1.0);
+        this.audioSystem.setDistortion(0);
+        CRT_TUNING.rageDistortion = 0;
+
+        // End-of-rage shockwave: big explosion + destroy all obstacles to protect player
+        this.obstacleSystem.destroyAllOnScreen(TUNING.RAGE_END_EXPLOSION_SCALE);
+        this.obstacleSystem.spawnExplosion(this.playerSystem.getX(), this.playerSystem.getY(), TUNING.RAGE_END_EXPLOSION_SCALE);
+        this.audioSystem.playExplosion();
+        this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 2, TUNING.SHAKE_DEATH_INTENSITY * 1.5);
+      } else {
+        this.rageAmount = TUNING.RAGE_MAX * (this.rageTimer / TUNING.RAGE_DURATION);
+      }
+    }
+
+    // Rage zoom: start zooming out early so player can adjust before rage ends
+    if (this.rageTimer > TUNING.RAGE_ZOOM_OUT_DURATION) {
+      // Still plenty of rage left — zoom in
+      this.rageZoomProgress = Math.min(this.rageZoomProgress + dt / TUNING.RAGE_ZOOM_IN_DURATION, 1);
+    } else if (this.rageZoomProgress > 0) {
+      // Zoom out (starts RAGE_ZOOM_OUT_DURATION seconds before rage expires)
+      this.rageZoomProgress = Math.max(this.rageZoomProgress - dt / TUNING.RAGE_ZOOM_OUT_DURATION, 0);
+    }
+    this.applyRageZoom();
+
+    // FX: speed lines + edge warnings
+    this.fxSystem.update(dt, this.playerSystem.getPlayerSpeed(), roadSpeed, this.playerSystem.getX());
+
+    // Audio: engine pitch/volume
+    this.audioSystem.updateEngine(this.playerSystem.getPlayerSpeed(), roadSpeed, this.inputSystem.isSpaceHeld());
+
+    // Check if player died this frame
+    if (!this.playerSystem.isAlive()) {
+      this.enterDead();
+    }
+
+    this.parallaxSystem.update(roadSpeed, dt);
+    this.roadSystem.update(roadSpeed, dt);
+
+    // Lane collision highlights
+    const collY = this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y;
+    const collTop = collY - TUNING.PLAYER_RADIUS;
+    const collBottom = collY + TUNING.PLAYER_RADIUS;
+    const laneH = (TUNING.ROAD_BOTTOM_Y - TUNING.ROAD_TOP_Y) / TUNING.LANE_COUNT;
+    // Pulse alpha: 24-frame cycle (12 out + 12 in at 60fps), cubic easing lingers near 0
+    const raw = 0.5 + 0.5 * Math.sin(this.elapsed * TUNING.LANE_PULSE_SPEED);
+    const laneAlpha = Math.pow(raw, 3);
+    for (let i = 0; i < TUNING.LANE_COUNT; i++) {
+      const laneTop = TUNING.ROAD_TOP_Y + laneH * i;
+      const laneBottom = laneTop + laneH;
+      const visible = collTop < laneBottom && collBottom > laneTop;
+      this.laneHighlights[i].setVisible(visible);
+      if (visible) this.laneHighlights[i].setAlpha(laneAlpha);
+    }
+
+    // Profile HUD
+    const ragePct = this.rageAmount / TUNING.RAGE_MAX;
+    this.profileHud.setScore(this.scoreSystem.getScore());
+    this.profileHud.setRage01(ragePct);
+    this.profileHud.setRageColor(this.rageTimer > 0 ? TUNING.RAGE_ACTIVE_COLOR : TUNING.RAGE_COLOR);
+    this.profileHud.setRockets(this.pickupSystem.getAmmo(), TUNING.PICKUP_MAX_AMMO);
+
+    // Debug
+    const diff = this.difficultySystem.getFactor();
+    this.debugText.setText(
+      `X: ${Math.round(this.playerSystem.getX())}  ` +
+      `Y: ${Math.round(this.playerSystem.getY())}  ` +
+      `bikeSpd: ${Math.round(this.playerSystem.getPlayerSpeed())}  ` +
+      `roadSpd: ${Math.round(roadSpeed)}  ` +
+      `diff: ${diff.toFixed(2)}  ` +
+      `time: ${Math.round(this.elapsed)}s`
+    );
+
+    // CRT debug overlay
+    if (this.crtDebugVisible) this.updateCRTDebugText();
+  }
+
+  private updateCRTDebugText(): void {
+    const t = CRT_TUNING;
+    this.crtDebugEl.textContent =
+      `CRT: ${this.crtEnabled ? 'ON' : 'OFF'}  [O] toggle  [P] hide\n` +
+      `── Scanlines ──\n` +
+      `  intensity: ${t.scanlineIntensity}  density: ${t.scanlineDensity}  roll: ${t.scanlineRollSpeed}\n` +
+      `── Mask ──\n` +
+      `  strength: ${t.maskStrength}  scale: ${t.maskScale}  gap: ${t.maskGap}  type: ${t.maskType}\n` +
+      `── Beam ──\n` +
+      `  focus: ${t.beamFocus}  convergence: ${t.convergenceError}\n` +
+      `── Bloom ──\n` +
+      `  strength: ${t.bloomStrength}  radius: ${t.bloomRadius}  threshold: ${t.bloomThreshold}\n` +
+      `── Curvature ──\n` +
+      `  curvature: ${t.curvature}  cornerDark: ${t.cornerDarkening}\n` +
+      `── Color ──\n` +
+      `  chromaAb: ${t.chromaAberration}  bleed: ${t.colorBleed}  sat: ${t.saturation}\n` +
+      `  gamma: ${t.gamma}  brightness: ${t.brightness}\n` +
+      `── Signal ──\n` +
+      `  noise: ${t.noiseAmount}  speed: ${t.noiseSpeed}  jitter: ${t.jitterAmount}\n` +
+      `  vignette: ${t.vignette}`;
+  }
+
+  /** Show/hide lane warning circles with obstacle previews */
+  private updateLaneWarnings(roadSpeed: number): void {
+    const warnings = this.obstacleSystem.getUpcomingByLane(roadSpeed);
+    const laneH = (TUNING.ROAD_BOTTOM_Y - TUNING.ROAD_TOP_Y) / TUNING.LANE_COUNT;
+    const warningRadius = laneH / 3;
+    const circleDiameter = warningRadius * 2;
+    const laneCenters: number[] = [];
+    for (let l = 0; l < TUNING.LANE_COUNT; l++) {
+      laneCenters.push(TUNING.ROAD_TOP_Y + laneH * l + laneH / 2);
+    }
+
+    // Merge pickup warnings into the per-lane arrays
+    if (roadSpeed > 0) {
+      const pickupPool = this.pickupSystem.getPool();
+      for (let i = 0; i < pickupPool.length; i++) {
+        const pickup = pickupPool[i];
+        if (!pickup.active || pickup.x <= TUNING.GAME_WIDTH) continue;
+
+        const timeUntil = (pickup.x - TUNING.GAME_WIDTH) / roadSpeed;
+        if (timeUntil > TUNING.LANE_WARNING_DURATION) continue;
+
+        // Find closest lane
+        let closestLane = 0;
+        let closestDist = Infinity;
+        for (let l = 0; l < TUNING.LANE_COUNT; l++) {
+          const dist = Math.abs(pickup.y - laneCenters[l]);
+          if (dist < closestDist) {
+            closestDist = dist;
+            closestLane = l;
+          }
+        }
+
+        warnings[closestLane].push({
+          type: 'pickup',
+          textureKey: 'pickup-rocket',
+          timeUntil,
+        });
+      }
+
+      // Re-sort lanes that got pickup entries
+      for (let l = 0; l < TUNING.LANE_COUNT; l++) {
+        if (warnings[l].length > 1) {
+          warnings[l].sort((a, b) => a.timeUntil - b.timeUntil);
+        }
+      }
+    }
+
+    // Reset pool usage counter — we'll claim slots as needed
+    let poolIdx = 0;
+
+    for (let lane = 0; lane < TUNING.LANE_COUNT; lane++) {
+      const laneWarnings = warnings[lane];
+      const laneY = laneCenters[lane];
+      const total = laneWarnings.length;
+
+      for (let w = 0; w < total; w++) {
+        const warning = laneWarnings[w];
+
+        // Grow pool if needed
+        if (poolIdx >= this.warningPool.length) {
+          const circle = this.add.circle(0, 0, warningRadius, 0xffffff, 0.8)
+            .setDepth(95).setVisible(false);
+          const preview = this.add.sprite(0, 0, 'obstacle-crash')
+            .setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
+          this.warningPool.push({ circle, preview, currentKey: '' });
+        }
+
+        const slot = this.warningPool[poolIdx];
+        poolIdx++;
+
+        // Position: latest arrival (last in sorted array) is at the right edge,
+        // earlier arrivals stack leftward. This means new warnings appear at the
+        // right and push existing ones left.
+        const cx = TUNING.GAME_WIDTH - warningRadius - (total - 1 - w) * circleDiameter;
+        slot.circle.setPosition(cx, laneY);
+        slot.preview.setPosition(cx, laneY);
+
+        // Alpha fades in as obstacle approaches
+        const warningDuration = warning.type === ObstacleType.CAR
+          ? TUNING.LANE_WARNING_DURATION + TUNING.LANE_WARNING_CAR_EXTRA
+          : TUNING.LANE_WARNING_DURATION;
+        const alpha = (1 - warning.timeUntil / warningDuration) * 0.8;
+        slot.circle.setAlpha(alpha).setVisible(true);
+        slot.preview.setAlpha(alpha).setVisible(true);
+
+        // Determine texture and scale
+        let scaleMultiplier: number;
+        let textureKey: string;
+        switch (warning.type) {
+          case ObstacleType.CRASH:
+            textureKey = 'obstacle-crash';
+            scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_CRASH;
+            break;
+          case ObstacleType.CAR:
+            textureKey = warning.textureKey;
+            scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_CAR;
+            break;
+          case ObstacleType.SLOW:
+            textureKey = 'obstacle-slow';
+            scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_SLOW;
+            break;
+          case 'pickup':
+            textureKey = 'pickup-rocket';
+            scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_PICKUP;
+            break;
+          default:
+            textureKey = 'obstacle-crash';
+            scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_CRASH;
+            break;
+        }
+
+        // Only switch texture/animation when key changes
+        if (slot.currentKey !== textureKey) {
+          slot.currentKey = textureKey;
+          if (warning.type === ObstacleType.CAR) {
+            slot.preview.setTexture(textureKey);
+            slot.preview.play(`${textureKey}-drive`);
+          } else {
+            slot.preview.setTexture(textureKey);
+            slot.preview.stop();
+          }
+        }
+
+        // Scale preview to fit inside circle
+        const targetH = circleDiameter * scaleMultiplier;
+        const frameW = slot.preview.width || 1;
+        const frameH = slot.preview.height || 1;
+        const targetW = targetH * (frameW / frameH);
+        slot.preview.setDisplaySize(targetW, targetH);
+      }
+    }
+
+    // Hide unused pool slots
+    for (let i = poolIdx; i < this.warningPool.length; i++) {
+      this.warningPool[i].circle.setVisible(false);
+      this.warningPool[i].preview.setVisible(false);
+      this.warningPool[i].currentKey = '';
+    }
+    this.warningPoolUsed = poolIdx;
+  }
+
+  /** Hide all warning pool items */
+  private hideWarningPool(): void {
+    for (let i = 0; i < this.warningPool.length; i++) {
+      this.warningPool[i].circle.setVisible(false);
+      this.warningPool[i].preview.setVisible(false);
+      this.warningPool[i].currentKey = '';
+    }
+    this.warningPoolUsed = 0;
+  }
+
+  /** Adjust all scrollFactor(0) HUD elements so they stay pinned during camera zoom */
+  private adjustHudForZoom(zoom: number): void {
+    this.profileHud.adjustForZoom(zoom);
+    const cx = this.cameras.main.width / 2;
+    const cy = this.cameras.main.height / 2;
+    const invZ = 1 / zoom;
+    // hudLabel original position: (GAME_WIDTH/2, 20)
+    this.hudLabel.setScale(invZ);
+    this.hudLabel.setPosition(
+      cx + (TUNING.GAME_WIDTH / 2 - cx) * invZ,
+      cy + (20 - cy) * invZ,
+    );
+    // hudHighScore original position: (GAME_WIDTH/2, 50)
+    this.hudHighScore.setScale(invZ);
+    this.hudHighScore.setPosition(
+      cx + (TUNING.GAME_WIDTH / 2 - cx) * invZ,
+      cy + (50 - cy) * invZ,
+    );
+  }
+
+  /** Apply camera zoom + scroll to create rage focal-length effect */
+  private applyRageZoom(): void {
+    if (this.rageZoomProgress <= 0) {
+      this.cameras.main.setZoom(1);
+      this.cameras.main.setScroll(0, 0);
+      this.adjustHudForZoom(1);
+      return;
+    }
+    // Ease in/out for smooth feel
+    const t = this.rageZoomProgress * this.rageZoomProgress * (3 - 2 * this.rageZoomProgress); // smoothstep
+    const zoom = 1 + (TUNING.RAGE_ZOOM_LEVEL - 1) * t;
+    this.cameras.main.setZoom(zoom);
+    this.adjustHudForZoom(zoom);
+
+    // Compute desired camera center in world coordinates
+    const halfVisW = TUNING.GAME_WIDTH / (2 * zoom);
+    const halfVisH = TUNING.GAME_HEIGHT / (2 * zoom);
+
+    // X: center on player, Y: lock bottom of road to bottom of screen
+    let centerX = this.playerSystem.getX();
+    let centerY = TUNING.ROAD_BOTTOM_Y - halfVisH;
+
+    // Clamp so visible area never extends beyond game bounds (no black edges)
+    centerX = Math.max(halfVisW, Math.min(TUNING.GAME_WIDTH - halfVisW, centerX));
+    centerY = Math.max(halfVisH, Math.min(TUNING.GAME_HEIGHT - halfVisH, centerY));
+
+    // Convert world center to scroll (scroll 0,0 = center at GAME_WIDTH/2, GAME_HEIGHT/2)
+    this.cameras.main.setScroll(centerX - TUNING.GAME_WIDTH / 2, centerY - TUNING.GAME_HEIGHT / 2);
+  }
+
+  private spawnScorePopup(points: number): void {
+    // Reuse an inactive popup or create a new one
+    let popup: Phaser.GameObjects.Text | null = null;
+    for (let i = 0; i < this.scorePopups.length; i++) {
+      if (!this.scorePopups[i].active) {
+        popup = this.scorePopups[i];
+        break;
+      }
+    }
+    if (!popup) {
+      popup = this.add.text(0, 0, '', {
+        fontSize: '28px',
+        color: '#ffcc00',
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+      }).setOrigin(0.5).setDepth(100);
+      this.scorePopups.push(popup);
+    }
+
+    popup.setText(`+${points}`);
+    popup.setPosition(this.playerSystem.getX(), this.playerSystem.getY() - 40);
+    popup.setAlpha(1);
+    popup.setActive(true).setVisible(true);
+
+    this.tweens.add({
+      targets: popup,
+      y: popup.y - 60,
+      alpha: 0,
+      duration: TUNING.KATANA_KILL_POPUP_DURATION * 1000,
+      ease: 'Power2',
+      onComplete: () => {
+        popup!.setActive(false).setVisible(false);
+      },
+    });
+  }
+
+  private updateDying(dt: number): void {
+    this.dyingTimer += dt;
+
+    switch (this.dyingPhase) {
+      case 'ramp': {
+        // Exposure ramp: 0 → peak over DEATH_RAMP_DURATION (eased for accelerating overexposure)
+        const t = Math.min(this.dyingTimer / TUNING.DEATH_RAMP_DURATION, 1);
+        this.deathWhiteOverlay.setAlpha(t * t * TUNING.DEATH_RAMP_PEAK); // quadratic ease-in
+        if (t >= 1) {
+          this.dyingPhase = 'snap';
+          this.dyingTimer = 0;
+        }
+        break;
+      }
+      case 'snap': {
+        // Quick snap from peak to full white
+        const t = Math.min(this.dyingTimer / TUNING.DEATH_SNAP_DURATION, 1);
+        this.deathWhiteOverlay.setAlpha(TUNING.DEATH_RAMP_PEAK + t * (1 - TUNING.DEATH_RAMP_PEAK));
+        if (t >= 1) {
+          this.dyingPhase = 'hold';
+          this.dyingTimer = 0;
+          // Screen is fully white — hide ALL game elements behind it
+          this.hudLabel.setVisible(false);
+          this.hudHighScore.setVisible(false);
+          this.profileHud.setVisible(false);
+          this.playerSystem.setVisible(false);
+          this.deathExplosion.setVisible(false);
+          this.slashSprite.setVisible(false);
+          this.slashActiveTimer = 0;
+          this.rageTimer = 0;
+          this.audioSystem.setDistortion(0);
+          CRT_TUNING.rageDistortion = 0;
+          this.obstacleSystem.hideAll();
+          this.pickupSystem.hideAll();
+          this.pickupSystem.setHUDVisible(false);
+          this.rocketSystem.hideAll();
+          this.fxSystem.reset();
+          this.roadSystem.setVisible(false);
+          this.parallaxSystem.setVisible(false);
+          for (let i = 0; i < this.laneHighlights.length; i++) this.laneHighlights[i].setVisible(false);
+          this.hideWarningPool();
+          for (let i = 0; i < this.scorePopups.length; i++) {
+            this.scorePopups[i].setActive(false).setVisible(false);
+          }
+        }
+        break;
+      }
+      case 'hold': {
+        // Hold full white briefly, then prepare the death/name screen behind it
+        if (this.dyingTimer >= TUNING.DEATH_WHITE_HOLD) {
+          this.dyingPhase = 'fade';
+          this.dyingTimer = 0;
+
+          const profileName = this.profilePopup.getName();
+          const hasProfileName = profileName !== 'ANON' && profileName.trim() !== '';
+
+          if (hasProfileName) {
+            // Auto-submit with profile name — skip name entry entirely
+            const rank = this.leaderboardSystem.submit(profileName, this.pendingScore, this.elapsed);
+            this.autoSubmitted = true;
+            this.prepareDeathScreenVisuals(rank);
+          } else if (this.pendingRank > 0) {
+            // Top 10 but no profile name — show name entry
+            this.autoSubmitted = false;
+            this.prepareNameEntryVisuals();
+          } else {
+            // Not top 10, no profile name
+            this.autoSubmitted = false;
+            this.leaderboardSystem.submit('---', this.pendingScore, this.elapsed);
+            this.prepareDeathScreenVisuals(0);
+          }
+        }
+        break;
+      }
+      case 'fade': {
+        // White fades away to reveal death/name-entry screen
+        const t = Math.min(this.dyingTimer / TUNING.DEATH_FADE_DURATION, 1);
+        this.deathWhiteOverlay.setAlpha(1 - t);
+        if (t >= 1) {
+          this.deathWhiteOverlay.setVisible(false);
+          this.dyingPhase = 'done';
+
+          // Show profileHud in profile mode
+          const profileName = this.profilePopup.getName();
+          this.profileHud.showProfileMode(profileName, this.getProfileRankText());
+          this.profileHud.setVisible(true);
+
+          // NOW activate the actual state
+          if (!this.autoSubmitted && this.pendingRank > 0) {
+            this.activateNameEntry();
+          } else {
+            this.state = GameState.DEAD;
+            this.deadInputDelay = 0.5;
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  private enterDead(): void {
+    this.state = GameState.DYING;
+    this.autoSubmitted = false;
+
+    // Close profile popup if open
+    if (this.profilePopup.isOpen()) this.profilePopup.close();
+
+    // Reset camera zoom before death transition
+    this.rageZoomProgress = 0;
+    this.cameras.main.setZoom(1);
+    this.cameras.main.setScroll(0, 0);
+    this.adjustHudForZoom(1);
+
+    // Juice: shake, flash, impact sound
+    this.fxSystem.triggerDeath();
+    this.audioSystem.playImpact();
+    this.audioSystem.silenceEngine();
+
+    // Stash score info for after the transition
+    this.pendingScore = this.scoreSystem.getScore();
+    this.pendingRank = this.leaderboardSystem.wouldMakeBoard(this.pendingScore);
+
+    // Explosion on top of the player (above player's Y-based depth, below white overlay at 1200)
+    this.deathExplosion.setPosition(this.playerSystem.getX(), this.playerSystem.getY());
+    this.deathExplosion.setDepth(this.playerSystem.getY() + 1);
+    this.deathExplosion.setDisplaySize(TUNING.EXPLOSION_FRAME_SIZE, TUNING.EXPLOSION_FRAME_SIZE);
+    this.deathExplosion.setVisible(true);
+    this.deathExplosion.play('explosion-play');
+    this.deathExplosion.once('animationcomplete', () => {
+      this.deathExplosion.setVisible(false);
+    });
+
+    // Start the exposure ramp — white overlay from 0 to peak
+    this.deathWhiteOverlay.setAlpha(0).setVisible(true);
+    this.dyingPhase = 'ramp';
+    this.dyingTimer = 0;
+  }
+
+  /** Show name entry UI (visuals only, no state change or keyboard handler) */
+  private prepareNameEntryVisuals(): void {
+    this.enteredName = '';
+    this.nameSkipConfirmPending = false;
+    this.nameSkipWarning.setVisible(false);
+    this.emptyNameVisible = false;
+    this.emptyNamePrompt.setVisible(false);
+    this.emptyNameYesBtn.setVisible(false);
+    this.emptyNameNoBtn.setVisible(false);
+
+    // Update the score label inside the name entry container
+    this.nameEntryContainer.each((child: Phaser.GameObjects.GameObject) => {
+      if (child.getData('id') === 'nameScoreLabel' && child instanceof Phaser.GameObjects.Text) {
+        child.setText(`SCORE: ${this.pendingScore}`);
+      }
+    });
+
+    this.nameInputText.setText('_');
+    this.nameEntryContainer.setVisible(true);
+    this.nameEnterBtn.setVisible(true);
+  }
+
+  /** Activate name entry state and keyboard handler (call after visuals are revealed) */
+  private activateNameEntry(): void {
+    this.state = GameState.NAME_ENTRY;
+    this.nameKeyHandler = (event: KeyboardEvent) => {
+      if (this.state !== GameState.NAME_ENTRY) return;
+
+      if (event.key === 'Enter') {
+        if (this.emptyNameVisible) {
+          this.submitAsAnon();
+        } else {
+          this.confirmNameEntry();
+        }
+        return;
+      }
+
+      if (this.emptyNameVisible) {
+        this.hideEmptyNamePrompt();
+      }
+
+      if (event.key === 'Backspace') {
+        this.enteredName = this.enteredName.slice(0, -1);
+      } else if (event.key.length === 1 && this.enteredName.length < NAME_MAX_LENGTH) {
+        this.enteredName += event.key.toUpperCase();
+      }
+      this.nameInputText.setText(this.enteredName + '_');
+    };
+    this.input.keyboard!.on('keydown', this.nameKeyHandler);
+  }
+
+  /** Get the rank text for the current profile name (e.g. "RANKED #3" or "") */
+  private getProfileRankText(): string {
+    const profileName = this.profilePopup.getName();
+    if (profileName === 'ANON' || profileName.trim() === '') return '';
+    const best = this.leaderboardSystem.getBestForName(profileName);
+    if (best) return `RANKED #${best.rank}`;
+    return 'UNRANKED';
+  }
+
+  /** Show death screen UI (visuals only, no state change) */
+  private prepareDeathScreenVisuals(rank: number): void {
+    this.inputSystem.getSpeedTap();
+    this.inputSystem.getAttackPressed();
+    this.inputSystem.getRocketPressed();
+
+    this.deathScoreText.setText(`SCORE: ${this.pendingScore}`);
+    this.deathTimeText.setText(`TIME: ${Math.round(this.elapsed)}s`);
+
+    if (rank > 0 && rank <= 10) {
+      this.deathRankText.setText(`#${rank} THIS WEEK`);
+    } else if (rank > 10) {
+      this.deathRankText.setText(`YOUR SCORE RANKED #${rank}`);
+    } else {
+      this.deathRankText.setText('');
+    }
+
+    // Show best score info when not in top 10
+    const profileName = this.profilePopup.getName();
+    const hasProfileName = profileName !== 'ANON' && profileName.trim() !== '';
+    if (rank > 10 && hasProfileName) {
+      const best = this.leaderboardSystem.getBestForName(profileName);
+      if (best && best.rank !== rank) {
+        this.deathBestText.setText(`BEST: ${best.score} (RANKED #${best.rank})`);
+        this.deathBestText.setVisible(true);
+      } else {
+        this.deathBestText.setVisible(false);
+      }
+    } else {
+      this.deathBestText.setVisible(false);
+    }
+
+    // Top 10 leaderboard display
+    const entries = this.leaderboardSystem.getDisplayEntries();
+    const lines: string[] = [`── ${this.weekKey} TOP 10 ──`];
+    let highlightLine = '';
+    const highlightIdx = (rank > 0 && rank <= 10) ? rank - 1 : -1;
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      const marker = (i === highlightIdx) ? ' ◄' : '';
+      const nameStr = (e.name || 'ANON').padEnd(NAME_MAX_LENGTH, ' ');
+      const line = `${String(i + 1).padStart(2, ' ')}. ${nameStr} ${String(e.score).padStart(8, ' ')}  ${e.time}s${marker}`;
+      lines.push(line);
+      if (i === highlightIdx) highlightLine = line;
+    }
+    this.deathLeaderboardText.setText(lines.join('\n'));
+
+    // Rainbow highlight overlay for the player's leaderboard entry (top 10 only)
+    this.highlightRank = highlightIdx >= 0 ? rank : 0;
+    if (highlightIdx >= 0 && highlightLine) {
+      this.deathHighlightText.setText(highlightLine);
+      const lineStep = (this.deathLeaderboardText.height + this.deathLeaderboardText.lineSpacing) / lines.length;
+      this.deathHighlightText.setPosition(
+        TUNING.GAME_WIDTH / 2,
+        this.deathLeaderboardText.y + rank * lineStep
+      );
+      this.deathHighlightText.setVisible(true);
+    } else {
+      this.deathHighlightText.setVisible(false);
+    }
+
+    this.deathContainer.setVisible(true);
+    this.deathRestartText.setVisible(true);
+  }
+
+  private confirmNameEntry(): void {
+    if (this.enteredName.trim() === '') {
+      // Empty name — show "are you sure?" prompt
+      this.showEmptyNamePrompt();
+      return;
+    }
+    // Set flag — actual transition happens in updateNameEntry to avoid
+    // issues with state changes inside Phaser's keyboard event dispatch
+    this.nameConfirmed = true;
+  }
+
+  private showEmptyNamePrompt(): void {
+    this.emptyNameVisible = true;
+    this.emptyNamePrompt.setVisible(true);
+    this.emptyNameYesBtn.setVisible(true);
+    this.emptyNameNoBtn.setVisible(true);
+    this.nameEnterBtn.setVisible(false);
+  }
+
+  private hideEmptyNamePrompt(): void {
+    this.emptyNameVisible = false;
+    this.emptyNamePrompt.setVisible(false);
+    this.emptyNameYesBtn.setVisible(false);
+    this.emptyNameNoBtn.setVisible(false);
+    this.nameEnterBtn.setVisible(true);
+  }
+
+  private submitAsAnon(): void {
+    this.hideEmptyNamePrompt();
+    this.enteredName = 'ANON';
+    this.nameConfirmed = true;
+  }
+
+  private showDeathScreen(rank: number): void {
+    this.state = GameState.DEAD;
+    this.deadInputDelay = 0.5;
+    this.prepareDeathScreenVisuals(rank);
+  }
+
+  private updateNameEntry(_dt: number): void {
+    // Game world is frozen — no road/obstacle updates
+
+    // Rainbow cycle the "NEW HIGH SCORE!" title
+    const RAINBOW = ['#FF0000', '#FF8800', '#FFFF00', '#00FF00', '#00CCFF', '#0044FF', '#FF00FF'];
+    const idx = Math.floor(Date.now() / 80) % RAINBOW.length;
+    this.nameTitleText.setColor(RAINBOW[idx]);
+
+    // Consume any space taps so they don't queue up for restart
+    this.inputSystem.getSpeedTap();
+    // Consume any clicks so they don't trigger slash on next game
+    this.inputSystem.getAttackPressed();
+    this.inputSystem.getRocketPressed();
+
+    // Process deferred name confirmation (avoids state change inside event handlers)
+    if (this.nameConfirmed) {
+      this.nameConfirmed = false;
+
+      // Remove keyboard listener
+      if (this.nameKeyHandler) {
+        this.input.keyboard!.off('keydown', this.nameKeyHandler);
+        this.nameKeyHandler = null;
+      }
+
+      // Submit score with name
+      const name = this.enteredName.trim() || 'ANON';
+      const rank = this.leaderboardSystem.submit(name, this.pendingScore, this.elapsed);
+      this.nameEntryContainer.setVisible(false);
+      this.nameEnterBtn.setVisible(false);
+      this.showDeathScreen(rank);
+    }
+  }
+
+  private updateDead(dt: number): void {
+    // Game world is frozen — no road/obstacle updates
+
+    // Rainbow cycle the highlighted leaderboard entry
+    if (this.highlightRank > 0) {
+      const RAINBOW = ['#FF0000', '#FF8800', '#FFFF00', '#00FF00', '#00CCFF', '#0044FF', '#FF00FF'];
+      const idx = Math.floor(Date.now() / 80) % RAINBOW.length;
+      this.deathHighlightText.setColor(RAINBOW[idx]);
+    }
+
+    if (this.deadInputDelay > 0) {
+      this.deadInputDelay -= dt;
+      // Drain any stale input during the delay window
+      this.inputSystem.getSpeedTap();
+      this.inputSystem.getAttackPressed();
+      this.inputSystem.getRocketPressed();
+      return;
+    }
+
+    if (this.inputSystem.getSpeedTap()) {
+      this.startGame();
+    }
+  }
+}
