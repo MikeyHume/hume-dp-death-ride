@@ -168,7 +168,7 @@ export class GameScene extends Phaser.Scene {
     this.state = GameState.TITLE;
 
     // Any key or click can start the game from title (except Escape)
-    this.input.keyboard!.on('keydown', (event: KeyboardEvent) => {
+    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
       const k = event.key.toLowerCase();
       // Forward all keys to profile popup when open
       if (this.profilePopup?.isOpen()) {
@@ -713,7 +713,7 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     // O = toggle CRT on/off, P = toggle CRT debug overlay
-    this.input.keyboard!.addKey('O').on('down', () => {
+    this.input.keyboard?.addKey('O').on('down', () => {
       this.crtEnabled = !this.crtEnabled;
       if (this.crtEnabled) {
         this.cameras.main.setPostPipeline(CRTPipeline);
@@ -721,7 +721,7 @@ export class GameScene extends Phaser.Scene {
         this.cameras.main.removePostPipeline('CRTPipeline');
       }
     });
-    this.input.keyboard!.addKey('P').on('down', () => {
+    this.input.keyboard?.addKey('P').on('down', () => {
       this.crtDebugVisible = !this.crtDebugVisible;
       this.crtDebugDom.setVisible(this.crtDebugVisible);
       if (this.crtDebugVisible) this.updateCRTDebugText();
@@ -732,7 +732,7 @@ export class GameScene extends Phaser.Scene {
 
     // 0 = instant rage (debug only)
     if (TUNING.DEBUG_KEYS) {
-      this.input.keyboard!.addKey('ZERO').on('down', () => {
+      this.input.keyboard?.addKey('ZERO').on('down', () => {
         if (this.state === GameState.PLAYING && this.rageTimer <= 0) {
           this.rageAmount = TUNING.RAGE_MAX;
           this.rageTimer = TUNING.RAGE_DURATION;
@@ -930,7 +930,7 @@ export class GameScene extends Phaser.Scene {
 
     // Clean up name entry keyboard handler if active
     if (this.nameKeyHandler) {
-      this.input.keyboard!.off('keydown', this.nameKeyHandler);
+      this.input.keyboard?.off('keydown', this.nameKeyHandler);
       this.nameKeyHandler = null;
     }
     this.nameConfirmed = false;
@@ -1198,7 +1198,7 @@ export class GameScene extends Phaser.Scene {
     this.nameEntryContainer.setVisible(false);
     this.nameEnterBtn.setVisible(false);
     if (this.nameKeyHandler) {
-      this.input.keyboard!.off('keydown', this.nameKeyHandler);
+      this.input.keyboard?.off('keydown', this.nameKeyHandler);
       this.nameKeyHandler = null;
     }
     const entries = this.leaderboardSystem.getEntries();
@@ -1926,7 +1926,7 @@ export class GameScene extends Phaser.Scene {
       }
       this.nameInputText.setText(this.enteredName + '_');
     };
-    this.input.keyboard!.on('keydown', this.nameKeyHandler);
+    this.input.keyboard?.on('keydown', this.nameKeyHandler);
   }
 
   /** Get the rank text for the current profile name (e.g. "RANKED #3" or "") */
@@ -2062,7 +2062,7 @@ export class GameScene extends Phaser.Scene {
 
       // Remove keyboard listener
       if (this.nameKeyHandler) {
-        this.input.keyboard!.off('keydown', this.nameKeyHandler);
+        this.input.keyboard?.off('keydown', this.nameKeyHandler);
         this.nameKeyHandler = null;
       }
 

@@ -30,6 +30,7 @@ export class MusicPlayer {
   // Dual-source
   private source: MusicSource = 'youtube';
   private spotifyPlayer: SpotifyPlayerSystem | null = null;
+  private countdownMusic: Phaser.Sound.BaseSound | null = null;
 
 
   constructor(scene: Phaser.Scene) {
@@ -334,25 +335,39 @@ export class MusicPlayer {
     }
   }
 
-  private async switchSourceToSpotify(): Promise<void> {
+  private switchSourceToSpotify(): void {
     if (!this.spotifyPlayer) return;
-    const ok = await this.spotifyPlayer.startPlaylist();
-    if (!ok) {
-      console.warn('MusicPlayer: Spotify playlist start failed, falling back to YouTube');
-      // Fall back to YouTube
-      if (!this.playlistStarted) return;
-      if (this.source === 'youtube') {
-        if (this.ytReady) this.startYTPlaylist();
-        else this.pendingPlay = true;
-      }
-      return;
-    }
-
     this.source = 'spotify';
 
     // Mute YouTube if it was playing
     if (this.ytPlayer) {
       try { this.ytPlayer.mute(); this.ytPlayer.pauseVideo(); } catch {}
+    }
+
+    // Play countdown audio first, then start Spotify playlist when it ends
+    if (this.scene.cache.audio.exists('countdown-music')) {
+      this.countdownMusic = this.scene.sound.add('countdown-music', { loop: false, volume: 0.5 });
+      this.countdownMusic.play();
+      this.countdownMusic.once('complete', () => {
+        this.countdownMusic = null;
+        this.startSpotifyPlaylist();
+      });
+    } else {
+      this.startSpotifyPlaylist();
+    }
+  }
+
+  private async startSpotifyPlaylist(): Promise<void> {
+    if (!this.spotifyPlayer) return;
+    const ok = await this.spotifyPlayer.startPlaylist();
+    if (!ok) {
+      console.warn('MusicPlayer: Spotify playlist start failed, falling back to YouTube');
+      if (!this.playlistStarted) return;
+      if (this.ytReady) this.startYTPlaylist();
+      else {
+        this.pendingPlay = true;
+        this.loadYouTubeAPI();
+      }
     }
   }
 

@@ -14,7 +14,12 @@ export class AudioSystem {
     if (this.started) return;
     this.started = true;
 
-    this.ctx = new AudioContext();
+    try {
+      this.ctx = new AudioContext();
+    } catch (e) {
+      console.warn('AudioSystem: AudioContext creation failed', e);
+      return;
+    }
 
     // Engine oscillator — sawtooth for gritty motorbike feel
     this.engineOsc = this.ctx.createOscillator();

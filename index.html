@@ -139,6 +139,16 @@
   </div>
 
   <script>
+  // Prevent unhandled errors from crashing iOS Safari (which reloads the page)
+  window.addEventListener('error', function(e) {
+    console.error('Uncaught error:', e.error || e.message);
+    e.preventDefault();
+  });
+  window.addEventListener('unhandledrejection', function(e) {
+    console.error('Unhandled rejection:', e.reason);
+    e.preventDefault();
+  });
+
   // Boot overlay API — available immediately, before any module JS loads
   (function() {
     var fill = document.getElementById('boot-bar-fill');

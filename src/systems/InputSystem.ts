@@ -41,10 +41,11 @@ export class InputSystem {
     const halfH = TUNING.PLAYER_DISPLAY_HEIGHT / 2;
     this.touchTargetY = (TUNING.ROAD_TOP_Y + TUNING.ROAD_BOTTOM_Y - halfH) / 2;
 
-    this.spaceKey = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    this.upKey = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
-    this.downKey = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
-    this.xKey = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+    const kb = scene.input.keyboard;
+    this.spaceKey = kb ? kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE) : {} as Phaser.Input.Keyboard.Key;
+    this.upKey = kb ? kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP) : {} as Phaser.Input.Keyboard.Key;
+    this.downKey = kb ? kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN) : {} as Phaser.Input.Keyboard.Key;
+    this.xKey = kb ? kb.addKey(Phaser.Input.Keyboard.KeyCodes.X) : {} as Phaser.Input.Keyboard.Key;
     this.lastMouseY = scene.input.activePointer.y;
 
     if (this.mobileMode) {
@@ -56,7 +57,7 @@ export class InputSystem {
 
   private setupDesktopInput(scene: Phaser.Scene): void {
     // Disable browser right-click context menu
-    scene.input.mouse!.disableContextMenu();
+    scene.input.mouse?.disableContextMenu();
 
     // Left click = katana slash, Right click = rocket fire
     scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -228,10 +229,10 @@ export class InputSystem {
   }
 
   destroy(): void {
-    this.scene.input.keyboard!.removeKey(this.spaceKey);
-    this.scene.input.keyboard!.removeKey(this.upKey);
-    this.scene.input.keyboard!.removeKey(this.downKey);
-    this.scene.input.keyboard!.removeKey(this.xKey);
+    this.scene.input.keyboard?.removeKey(this.spaceKey);
+    this.scene.input.keyboard?.removeKey(this.upKey);
+    this.scene.input.keyboard?.removeKey(this.downKey);
+    this.scene.input.keyboard?.removeKey(this.xKey);
     if (this.cursorGraphic) {
       this.cursorGraphic.destroy();
       this.cursorGraphic = null;

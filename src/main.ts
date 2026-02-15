@@ -33,5 +33,14 @@ handleCallback().then((wasCallback) => {
   // Register CRT as a post-processing pipeline
   const renderer = game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
   renderer.pipelines.addPostPipeline('CRTPipeline', CRTPipeline);
+
+  // Handle WebGL context loss gracefully (common on iOS Safari)
+  game.canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    console.warn('WebGL context lost — preventing page reload');
+  });
+  game.canvas.addEventListener('webglcontextrestored', () => {
+    console.warn('WebGL context restored');
+  });
 });
 console.log('SPOTIFY CLIENT ID:', import.meta.env.VITE_SPOTIFY_CLIENT_ID);
