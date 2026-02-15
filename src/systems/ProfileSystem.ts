@@ -94,10 +94,19 @@ export async function loadOrCreateProfile(): Promise<Profile> {
     return { spotify_user_id: spotifyId, username: 'ANON', avatar_url: null };
   }
 
+  // avatar_url stores a storage path — resolve to a public URL with cache-bust
+  let avatarPublicUrl: string | null = null;
+  if (data?.avatar_url) {
+    const { data: urlData } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(data.avatar_url);
+    avatarPublicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+  }
+
   return {
     spotify_user_id: spotifyId,
     username: data?.username || 'ANON',
-    avatar_url: data?.avatar_url || null,
+    avatar_url: avatarPublicUrl,
   };
 }
 
@@ -118,9 +127,10 @@ export async function updateUsername(nameRaw: string): Promise<string> {
 }
 
 /**
- * Upload avatar file to Supabase Storage and save the public URL.
+ * Upload avatar file to Supabase Storage and save the storage path.
  * Only works when Spotify-connected (returns null otherwise).
- * Path: {spotify_user_id}/avatar.png (overwrites each time).
+ * Stores the path (not public URL) in profiles.avatar_url.
+ * Returns the resolved public URL for immediate display.
  */
 export async function uploadAvatarAndSave(file: File): Promise<string | null> {
   if (!linkedSpotifyId) return null;
@@ -132,15 +142,14 @@ export async function uploadAvatarAndSave(file: File): Promise<string | null> {
     .upload(path, file, { upsert: true, contentType: file.type });
   if (uploadErr) throw uploadErr;
 
-  // Cache-bust so browsers don't serve stale avatar
-  const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-  const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
-
+  // Store the storage path (not the full public URL)
   const { error: updateErr } = await supabase
     .from('profiles')
-    .update({ avatar_url: publicUrl })
+    .update({ avatar_url: path })
     .eq('spotify_user_id', linkedSpotifyId);
   if (updateErr) throw updateErr;
 
-  return publicUrl;
+  // Return a public URL with cache-bust for immediate display
+  const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+  return `${urlData.publicUrl}?t=${Date.now()}`;
 }

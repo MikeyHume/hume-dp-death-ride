@@ -35,7 +35,7 @@ export class BootScene extends Phaser.Scene {
       frameHeight: TUNING.POWERED_FRAME_HEIGHT,
     });
     this.load.audio('title-music', 'assets/audio/music/red malibu 1.5.wav');
-    this.load.audio('countdown-music', 'assets/audio/music/hell_girl_countdown.wav');
+    this.load.audio('countdown-music', 'assets/audio/music/hell_girl_countdown.mp3');
     this.load.image('play-music-overlay', 'assets/start/play_music.png');
     this.load.image('obstacle-crash', 'assets/obstacles/road_barrier_01.png');
     this.load.image('road-img', 'assets/background/road.jpg');
