@@ -213,10 +213,18 @@ export function getAccessToken(): string | null {
   return auth ? auth.access_token : null;
 }
 
-/** Cached Spotify user ID (avoids repeated /v1/me calls). */
-let cachedSpotifyUserId: string | null = null;
+/** localStorage key for persisted Spotify user ID. */
+const SPOTIFY_USER_ID_KEY = 'spotify_user_id';
 
-/** Get the Spotify user ID for the connected account. Cached after first call. */
+/** In-memory cache (populated from localStorage or /v1/me fetch). */
+let cachedSpotifyUserId: string | null =
+  localStorage.getItem(SPOTIFY_USER_ID_KEY);
+
+/**
+ * Get the Spotify user ID for the connected account.
+ * Returns from localStorage cache first, falls back to /v1/me fetch.
+ * Result is persisted to localStorage so it survives page reloads.
+ */
 export async function getSpotifyUserId(): Promise<string | null> {
   if (cachedSpotifyUserId) return cachedSpotifyUserId;
   const token = getAccessToken();
@@ -227,8 +235,12 @@ export async function getSpotifyUserId(): Promise<string | null> {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    cachedSpotifyUserId = data.id ?? null;
-    return cachedSpotifyUserId;
+    const id: string | null = data.id ?? null;
+    if (id) {
+      cachedSpotifyUserId = id;
+      localStorage.setItem(SPOTIFY_USER_ID_KEY, id);
+    }
+    return id;
   } catch {
     return null;
   }
@@ -245,7 +257,10 @@ export async function checkPremium(): Promise<boolean> {
     if (!res.ok) return false;
     const data = await res.json();
     // Cache the user ID while we're at it
-    if (data.id) cachedSpotifyUserId = data.id;
+    if (data.id) {
+      cachedSpotifyUserId = data.id;
+      localStorage.setItem(SPOTIFY_USER_ID_KEY, data.id);
+    }
     return data.product === 'premium';
   } catch {
     return false;
