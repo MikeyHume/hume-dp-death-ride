@@ -173,70 +173,84 @@
   // Boot overlay API — available immediately, before any module JS loads
   (function() {
     /* ---- TYPEWRITER TUNING (edit these) ---- */
-    var DOT_INTERVAL_MS  = 100;  // base ms between each dot (adapts to load speed)
-    var WORD_INTERVAL_MS = 40;   // ms pause after each word/text chunk appears
+    var DOT_TIME_PERCENT = 0.85;  // fraction of loading progress that dots consume
+    var DOT_POP_MS       = 60;    // min ms between each dot popping on
+    var WORD_POP_MS      = 30;    // ms pause after a word chunk appears
 
     var fill = document.getElementById('boot-bar-fill');
     var lineEls = document.querySelectorAll('#boot-lines .line');
     var overlay = document.getElementById('boot-overlay');
 
-    // Build flat character list and count total dots
+    // Build flat character list, count dots/non-dots, assign progress thresholds
     var chars = [];
     var totalDots = 0;
+    var totalNonDots = 0;
     for (var i = 0; i < lineEls.length; i++) {
       var text = lineEls[i].getAttribute('data-text') || '';
       lineEls[i].textContent = '';
       lineEls[i].classList.add('visible');
       for (var j = 0; j < text.length; j++) {
         var isDot = text[j] === '.';
-        chars.push({ el: lineEls[i], idx: j, fullText: text, isDot: isDot });
-        if (isDot) totalDots++;
+        chars.push({ el: lineEls[i], idx: j, fullText: text, isDot: isDot, threshold: 0 });
+        if (isDot) totalDots++; else totalNonDots++;
       }
+    }
+
+    // Each dot eats DOT_TIME_PERCENT/totalDots of the progress range;
+    // each non-dot eats (1-DOT_TIME_PERCENT)/totalNonDots — words fly through.
+    var dotW    = totalDots    > 0 ? DOT_TIME_PERCENT / totalDots : 0;
+    var nonDotW = totalNonDots > 0 ? (1 - DOT_TIME_PERCENT) / totalNonDots : 0;
+    var cum = 0;
+    for (var k = 0; k < chars.length; k++) {
+      cum += chars[k].isDot ? dotW : nonDotW;
+      chars[k].threshold = cum;
     }
 
     var revealed = 0;
-    var dotsRevealed = 0;
-    var loadProgress = 0;
+    var targetProgress = 0;
     var typingDone = false;
     var loadingDone = false;
     var dismissed = false;
+    var dripScheduled = false;
 
-    // Adaptive dot speed: compare typing progress to load progress
-    // and scale the interval so they finish around the same time
-    function getDotDelay() {
-      if (loadProgress < 0.05) return DOT_INTERVAL_MS; // too early to judge
-      var typeFrac = dotsRevealed / totalDots;          // how far typing is
-      var diff = typeFrac - loadProgress;               // positive = typing ahead
-      var scale = 1 + diff * 3;                         // ahead → slower, behind → faster
-      if (scale < 0.3) scale = 0.3;
-      if (scale > 2.0) scale = 2.0;
-      return Math.round(DOT_INTERVAL_MS * scale);
-    }
+    // Drip: reveal one item per tick, only if loading progress allows it
+    function drip() {
+      dripScheduled = false;
+      if (revealed >= chars.length) { typingDone = true; tryDismiss(); return; }
+      if (chars[revealed].threshold > targetProgress) return; // wait for more progress
 
-    // Self-running typewriter — adapts dot speed to match load progress
-    // Words appear as a batch; dots pop one at a time
-    function typeNext() {
-      if (revealed >= chars.length) {
-        typingDone = true;
-        tryDismiss();
-        return;
-      }
       var c = chars[revealed];
       if (c.isDot) {
         c.el.textContent = c.fullText.substring(0, c.idx + 1);
         revealed++;
-        dotsRevealed++;
-        setTimeout(typeNext, getDotDelay());
+        scheduleDrip(DOT_POP_MS);
       } else {
-        while (revealed < chars.length && !chars[revealed].isDot) {
+        // Batch all consecutive non-dots whose thresholds are earned
+        while (revealed < chars.length && !chars[revealed].isDot && chars[revealed].threshold <= targetProgress) {
           var ch = chars[revealed];
           ch.el.textContent = ch.fullText.substring(0, ch.idx + 1);
           revealed++;
         }
-        setTimeout(typeNext, WORD_INTERVAL_MS);
+        scheduleDrip(WORD_POP_MS);
       }
     }
-    typeNext();
+
+    function scheduleDrip(delay) {
+      if (dripScheduled) return;
+      if (revealed >= chars.length) { typingDone = true; tryDismiss(); return; }
+      if (chars[revealed].threshold <= targetProgress) {
+        dripScheduled = true;
+        setTimeout(drip, delay);
+      }
+    }
+
+    function revealAll() {
+      for (var m = 0; m < lineEls.length; m++) {
+        lineEls[m].textContent = lineEls[m].getAttribute('data-text') || '';
+      }
+      revealed = chars.length;
+      typingDone = true;
+    }
 
     function tryDismiss() {
       if (dismissed || !typingDone || !loadingDone) return;
@@ -255,12 +269,17 @@
     window.__bootOverlay = {
       setProgress: function(p) {
         if (dismissed) return;
-        loadProgress = p;
+        targetProgress = p;
         fill.style.width = (p * 100) + '%';
+        // Kick the drip if new progress unlocks more chars
+        if (!dripScheduled) scheduleDrip(0);
       },
       markStartScreenReady: function() {
         if (loadingDone) return;
         loadingDone = true;
+        // Ensure all text is revealed (loading done = progress earned to 100%)
+        targetProgress = 1;
+        if (!typingDone && !dripScheduled) scheduleDrip(0);
         tryDismiss();
       }
     };
