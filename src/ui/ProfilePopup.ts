@@ -194,8 +194,12 @@ export class ProfilePopup {
     }).setOrigin(0, 0.5).setVisible(false);
     this.container.add(this.spotifyConnectedText);
 
-    this.spotifyHit = scene.add.zone(0, this.spotifyY, spotifyW, spotifyH)
-      .setInteractive({ useHandCursor: true });
+    // Scene-level hit zone (NOT inside container) so pointer events work reliably
+    this.spotifyHit = scene.add.zone(cx, cy + this.spotifyY, spotifyW, spotifyH)
+      .setDepth(POPUP_DEPTH + 2)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true })
+      .setVisible(false);
     this.spotifyHit.on('pointerdown', async () => {
       if (isConnected()) {
         const confirmed = await this.disconnectModal.show();
@@ -214,7 +218,6 @@ export class ProfilePopup {
         }
       }
     });
-    this.container.add(this.spotifyHit);
 
     // --- Save progress hint (centered between spotify button and exit button) ---
     const exitY = POPUP_H / 2 - 70;
@@ -299,6 +302,7 @@ export class ProfilePopup {
     }
     this.backdrop.setVisible(true);
     this.container.setVisible(true);
+    this.spotifyHit.setVisible(true);
     this.updateSpotifyButton();
   }
 
@@ -309,6 +313,7 @@ export class ProfilePopup {
     this.closedAt = Date.now();
     this.backdrop.setVisible(false);
     this.container.setVisible(false);
+    this.spotifyHit.setVisible(false);
     if (this.closeCallback) this.closeCallback();
   }
 
@@ -539,6 +544,7 @@ export class ProfilePopup {
 
   destroy(): void {
     this.disconnectModal.destroy();
+    this.spotifyHit.destroy();
     this.container.destroy();
     this.backdrop.destroy();
     this.fileInput.remove();
