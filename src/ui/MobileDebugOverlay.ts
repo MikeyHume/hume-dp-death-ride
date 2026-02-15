@@ -1,10 +1,10 @@
 /**
  * Mobile debug overlay — activated by ?mobileDebug=1 URL param.
- * Shows FPS, quality tier, device flags, and platform info on-screen
+ * Shows FPS, quality tier, device flags, platform info, and crash log
  * since there's no dev console on mobile devices.
  *
- * Call `MobileDebugOverlay.create()` once after the game canvas exists.
- * Call `MobileDebugOverlay.update(fps, quality)` each frame.
+ * Call `createMobileDebugOverlay()` once after the game canvas exists.
+ * Call `updateMobileDebugOverlay(fps, quality)` each frame.
  */
 
 import { GAME_MODE, QualityTier } from '../config/gameMode';
@@ -35,12 +35,13 @@ export function createMobileDebugOverlay(): void {
     padding: '6px 8px',
     borderRadius: '4px',
     pointerEvents: 'none',
-    maxWidth: '280px',
+    maxWidth: '320px',
     whiteSpace: 'pre',
+    overflow: 'hidden',
   });
   document.body.appendChild(el);
 
-  // Show static platform info immediately
+  // Show static platform info + crash log immediately
   refreshContent();
 }
 
@@ -64,6 +65,19 @@ function refreshContent(): void {
     `screen: ${screen.width}x${screen.height}  dpr: ${devicePixelRatio.toFixed(1)}`,
     `canvas: ${window.innerWidth}x${window.innerHeight}`,
   ];
+
+  // Append crash log if it exists (persisted from previous load)
+  const crashLog = (window as any).__crashLog?.dump?.() as { t: number; s: string }[] | undefined;
+  if (crashLog && crashLog.length > 0) {
+    lines.push('--- crash log ---');
+    // Show last 8 entries to keep overlay compact
+    const recent = crashLog.slice(-8);
+    for (const entry of recent) {
+      const ago = ((Date.now() - entry.t) / 1000).toFixed(1);
+      lines.push(`${ago}s ago: ${entry.s}`);
+    }
+  }
+
   el.textContent = lines.join('\n');
 }
 

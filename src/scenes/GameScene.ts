@@ -203,6 +203,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
+    (window as any).__crashLog?.stage('gamescene-create-start');
     this.elapsed = 0;
     this.state = GameState.TITLE;
 
@@ -291,6 +292,7 @@ export class GameScene extends Phaser.Scene {
     this.fxSystem = new FXSystem(this);
     this.audioSystem = new AudioSystem();
     this.musicPlayer = new MusicPlayer(this);
+    (window as any).__crashLog?.stage('gamescene-systems-ready');
 
     // Wire car-vs-crash explosion sound
     this.obstacleSystem.onExplosion = () => this.audioSystem.playExplosion();
@@ -725,7 +727,14 @@ export class GameScene extends Phaser.Scene {
     this.playerSystem.setVisible(false);
 
     // --- CRT post-processing ---
-    this.cameras.main.setPostPipeline(CRTPipeline);
+    try {
+      this.cameras.main.setPostPipeline(CRTPipeline);
+      (window as any).__crashLog?.stage('gamescene-crt-applied');
+    } catch (err) {
+      console.warn('GameScene: CRT shader failed, running without post-processing', err);
+      (window as any).__crashLog?.stage('gamescene-crt-failed');
+      this.crtEnabled = false;
+    }
 
     // CRT debug overlay (DOM element — not affected by CRT shader)
     this.crtDebugEl = document.createElement('pre');
@@ -765,6 +774,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Signal boot overlay that the start screen is ready
+    (window as any).__crashLog?.stage('gamescene-create-done');
     (window as any).__bootOverlay?.markStartScreenReady?.();
 
     if (DEBUG_HOTKEYS.instantRage.active) {

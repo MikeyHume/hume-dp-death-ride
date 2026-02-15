@@ -175,6 +175,35 @@
     e.preventDefault();
   });
 
+  // ── Crash stage tracker (persists across iOS page reloads) ──
+  (function() {
+    var KEY = '__dp_crash_log';
+    var MAX_ENTRIES = 20;
+    var log = [];
+    try { log = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(_) {}
+
+    window.__crashLog = {
+      stage: function(label) {
+        var entry = { t: Date.now(), s: label };
+        log.push(entry);
+        if (log.length > MAX_ENTRIES) log = log.slice(-MAX_ENTRIES);
+        try { localStorage.setItem(KEY, JSON.stringify(log)); } catch(_) {}
+      },
+      dump: function() { return log; },
+      clear: function() { log = []; try { localStorage.removeItem(KEY); } catch(_) {} }
+    };
+
+    // Log every unhandled error with the stage tracker
+    window.addEventListener('error', function(e) {
+      window.__crashLog.stage('ERROR: ' + (e.message || 'unknown'));
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      window.__crashLog.stage('REJECT: ' + (e.reason?.message || e.reason || 'unknown'));
+    });
+
+    window.__crashLog.stage('page-load');
+  })();
+
   // Boot overlay API — available immediately, before any module JS loads
   (function() {
     /* ---- TYPEWRITER TUNING (edit these) ---- */
