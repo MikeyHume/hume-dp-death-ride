@@ -21,6 +21,7 @@ import { ProfilePopup } from '../ui/ProfilePopup';
 import { PerfSystem } from '../systems/PerfSystem';
 import { OrientationOverlay } from '../systems/OrientationOverlay';
 import { GAME_MODE } from '../config/gameMode';
+import { submitScore } from '../systems/LeaderboardService';
 
 enum GameState {
   TITLE,
@@ -1799,6 +1800,7 @@ export class GameScene extends Phaser.Scene {
           if (hasProfileName) {
             // Auto-submit with profile name — skip name entry entirely
             const rank = this.leaderboardSystem.submit(profileName, this.pendingScore, this.elapsed);
+            void submitScore(this.pendingScore, profileName);
             this.autoSubmitted = true;
             this.prepareDeathScreenVisuals(rank);
           } else if (this.pendingRank > 0) {
@@ -1809,6 +1811,7 @@ export class GameScene extends Phaser.Scene {
             // Not top 10, no profile name
             this.autoSubmitted = false;
             this.leaderboardSystem.submit('---', this.pendingScore, this.elapsed);
+            void submitScore(this.pendingScore);
             this.prepareDeathScreenVisuals(0);
           }
         }
@@ -2069,6 +2072,7 @@ export class GameScene extends Phaser.Scene {
       // Submit score with name
       const name = this.enteredName.trim() || 'ANON';
       const rank = this.leaderboardSystem.submit(name, this.pendingScore, this.elapsed);
+      void submitScore(this.pendingScore, name);
       this.nameEntryContainer.setVisible(false);
       this.nameEnterBtn.setVisible(false);
       this.showDeathScreen(rank);

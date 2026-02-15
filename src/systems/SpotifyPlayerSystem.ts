@@ -113,7 +113,7 @@ export class SpotifyPlayerSystem {
     });
   }
 
-  /** Start playing the playlist with shuffle. */
+  /** Start playing the playlist with shuffle. Silently skips the first track so it's never heard. */
   async startPlaylist(): Promise<boolean> {
     if (!this.ready || !this.deviceId) return false;
     const token = getAccessToken();
@@ -125,13 +125,16 @@ export class SpotifyPlayerSystem {
     };
 
     try {
+      // Mute during startup so the first track isn't audible
+      if (this.player) await this.player.setVolume(0).catch(() => {});
+
       // Enable shuffle first
       await fetch(
         `https://api.spotify.com/v1/me/player/shuffle?state=true&device_id=${this.deviceId}`,
         { method: 'PUT', headers },
       );
 
-      // Start playlist
+      // Start playlist (lands on track 1 briefly, but we're muted)
       const res = await fetch(
         `https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`,
         {
@@ -141,9 +144,27 @@ export class SpotifyPlayerSystem {
         },
       );
 
-      return res.ok;
+      if (!res.ok) {
+        this.restoreVolume();
+        return false;
+      }
+
+      // Skip to a random track (shuffle is on) so we never hear track 1
+      await this.next();
+      // Wait for the skip to register before restoring volume
+      await new Promise((r) => setTimeout(r, 600));
+      this.restoreVolume();
+
+      return true;
     } catch {
+      this.restoreVolume();
       return false;
+    }
+  }
+
+  private restoreVolume(): void {
+    if (this.player && !this.muted) {
+      this.player.setVolume(this.volume).catch(() => {});
     }
   }
 
