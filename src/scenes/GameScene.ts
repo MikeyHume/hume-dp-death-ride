@@ -37,6 +37,16 @@ const NAME_MAX_LENGTH = 10;
 const SKIP_BTN_MARGIN_RIGHT = 60;    // px from right edge of screen
 const SKIP_BTN_MARGIN_BOTTOM = 36;   // px from bottom edge of screen
 
+// ── Debug hotkeys (set active: false to disable) ──
+const DEBUG_HOTKEYS = {
+  gameplayInfo:   { key: 'E',    active: false },  // toggle gameplay debug text (pos, speed, diff, time)
+  musicSource:    { key: 'W',    active: false },  // toggle music source label (SPOTIFY / YOUTUBE)
+  jumpLeaderboard:{ key: 'Q',    active: false },  // skip straight to death/leaderboard screen
+  toggleCRT:      { key: 'O',    active: false },  // toggle CRT shader on/off
+  crtDebug:       { key: 'P',    active: false },  // toggle CRT tuning overlay
+  instantRage:    { key: 'ZERO', active: false },  // trigger instant rage mode
+};
+
 // ── Death screen leaderboard: Top 3 group ──
 const DLB_T3_X = 560;              // left edge X of the entire top-3 group
 const DLB_T3_Y = 0;                // Y offset from leaderboard header bottom
@@ -218,8 +228,9 @@ export class GameScene extends Phaser.Scene {
         }
         return;
       }
-      // O/P are debug keys (CRT toggle/debug) — don't advance game state
-      if (k === 'o' || k === 'p') return;
+      // Debug keys — don't advance game state
+      const debugKeys = Object.values(DEBUG_HOTKEYS).map(h => h.key.toLowerCase());
+      if (debugKeys.includes(k)) return;
       // Any non-Escape key dismisses the skip warning
       if (this.nameSkipConfirmPending) {
         this.nameSkipConfirmPending = false;
@@ -733,27 +744,30 @@ export class GameScene extends Phaser.Scene {
       .setVisible(false)
       .setScrollFactor(0);
 
-    // O = toggle CRT on/off, P = toggle CRT debug overlay
-    this.input.keyboard?.addKey('O').on('down', () => {
-      this.crtEnabled = !this.crtEnabled;
-      if (this.crtEnabled) {
-        this.cameras.main.setPostPipeline(CRTPipeline);
-      } else {
-        this.cameras.main.removePostPipeline('CRTPipeline');
-      }
-    });
-    this.input.keyboard?.addKey('P').on('down', () => {
-      this.crtDebugVisible = !this.crtDebugVisible;
-      this.crtDebugDom.setVisible(this.crtDebugVisible);
-      if (this.crtDebugVisible) this.updateCRTDebugText();
-    });
+    // Debug hotkeys registered in create() (event-based)
+    if (DEBUG_HOTKEYS.toggleCRT.active) {
+      this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleCRT.key).on('down', () => {
+        this.crtEnabled = !this.crtEnabled;
+        if (this.crtEnabled) {
+          this.cameras.main.setPostPipeline(CRTPipeline);
+        } else {
+          this.cameras.main.removePostPipeline('CRTPipeline');
+        }
+      });
+    }
+    if (DEBUG_HOTKEYS.crtDebug.active) {
+      this.input.keyboard?.addKey(DEBUG_HOTKEYS.crtDebug.key).on('down', () => {
+        this.crtDebugVisible = !this.crtDebugVisible;
+        this.crtDebugDom.setVisible(this.crtDebugVisible);
+        if (this.crtDebugVisible) this.updateCRTDebugText();
+      });
+    }
 
     // Signal boot overlay that the start screen is ready
     (window as any).__bootOverlay?.markStartScreenReady?.();
 
-    // 0 = instant rage (debug only)
-    if (TUNING.DEBUG_KEYS) {
-      this.input.keyboard?.addKey('ZERO').on('down', () => {
+    if (DEBUG_HOTKEYS.instantRage.active) {
+      this.input.keyboard?.addKey(DEBUG_HOTKEYS.instantRage.key).on('down', () => {
         if (this.state === GameState.PLAYING && this.rageTimer <= 0) {
           this.rageAmount = TUNING.RAGE_MAX;
           this.rageTimer = TUNING.RAGE_DURATION;
@@ -776,14 +790,15 @@ export class GameScene extends Phaser.Scene {
       if (this.orientationOverlay.isPaused()) return;
     }
 
-    // DEBUG: E key toggles gameplay debug text
-    if (this.input.keyboard && Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey('E'))) {
+    // Debug hotkeys polled in update()
+    if (DEBUG_HOTKEYS.gameplayInfo.active && this.input.keyboard
+        && Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey(DEBUG_HOTKEYS.gameplayInfo.key))) {
       this.debugText.setVisible(!this.debugText.visible);
       if (!this.debugText.visible) this.debugText.setText('');
     }
 
-    // DEBUG: W key toggles music source label
-    if (this.input.keyboard && Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey('W'))) {
+    if (DEBUG_HOTKEYS.musicSource.active && this.input.keyboard
+        && Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey(DEBUG_HOTKEYS.musicSource.key))) {
       if (!this.debugMusicSourceText) {
         this.debugMusicSourceText = this.add.text(TUNING.GAME_WIDTH - 40, 150, '', {
           fontSize: '18px', color: '#00ff00', fontFamily: 'monospace',
@@ -795,10 +810,9 @@ export class GameScene extends Phaser.Scene {
       this.debugMusicSourceText.setText(`SRC: ${this.musicPlayer.getSource().toUpperCase()}`);
     }
 
-    // DEBUG: Q key jumps straight to leaderboard screen
-    if (this.input.keyboard && Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey('Q'))
+    if (DEBUG_HOTKEYS.jumpLeaderboard.active && this.input.keyboard
+        && Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey(DEBUG_HOTKEYS.jumpLeaderboard.key))
         && this.state !== GameState.DEAD) {
-      // Seed some dummy entries if the board is empty
       if (this.leaderboardSystem.getDisplayEntries().length < 10) {
         const names = ['ACE', 'BLAZE', 'CRUX', 'DRIFT', 'EDGE', 'FLUX', 'GRIM', 'HAWK', 'JINX', 'KOVA'];
         for (let i = 0; i < 10; i++) {
