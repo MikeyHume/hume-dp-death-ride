@@ -198,6 +198,8 @@ export class ProfilePopup {
         if (success) {
           this.updateSpotifyButton();
           this.scene.events.emit('spotify-auth-changed');
+          // Reload profile from Supabase now that Spotify is connected
+          this.loadProfile();
         }
       }
     });
@@ -437,9 +439,9 @@ export class ProfilePopup {
     const file = this.fileInput.files?.[0];
     if (!file) return;
 
-    // Upload to Supabase in the background
+    // Upload to Supabase in the background (only persists when Spotify-connected)
     uploadAvatarAndSave(file).then((url) => {
-      this.currentAvatarUrl = url;
+      if (url) this.currentAvatarUrl = url;
     }).catch((err) => {
       console.warn('ProfilePopup: avatar upload to Supabase failed, local avatar still visible', err);
     });

@@ -1,42 +1,34 @@
 /**
- * Supabase profile persistence with cross-device sync via Spotify ID.
+ * Supabase profile persistence keyed by Spotify user ID.
  *
- * Two paths:
- *   1) Anon (no Spotify): reads/writes the per-device `profiles` table (existing).
- *   2) Spotify connected: reads/writes `spotify_profiles` table keyed by Spotify user ID.
- *      This allows the same profile to load on any device where the user connects Spotify.
+ * Two modes:
+ *   1) Not connected to Spotify → pure local (no DB calls).
+ *   2) Spotify connected        → reads/writes `profiles` table via spotify_user_id.
  *
- * Prerequisites (create manually in Supabase dashboard):
- *   TABLE profiles (
- *     user_id    uuid PRIMARY KEY REFERENCES auth.users(id),
- *     username   text NOT NULL DEFAULT 'ANON',
- *     avatar_url text,
- *     updated_at timestamptz DEFAULT now()
- *   );
- *   TABLE spotify_profiles (
- *     spotify_id   text PRIMARY KEY,
- *     display_name text NOT NULL DEFAULT 'ANON',
- *     avatar_url   text,
- *     updated_at   timestamptz NOT NULL DEFAULT now()
- *   );
- *   RLS on profiles: auth.uid() = user_id
- *   RLS on spotify_profiles: permissive for all authenticated users
- *   STORAGE bucket "avatars" — public, with INSERT/UPDATE policy for authenticated users.
+ * Table schema (already exists — do NOT modify):
+ *   profiles (
+ *     spotify_user_id   text UNIQUE,
+ *     username          text,
+ *     avatar_url        text,
+ *     spotify_connected boolean
+ *   )
+ *
+ * No Supabase Auth is used. Identity is purely spotify_user_id.
+ * Storage bucket "avatars" — public.
  */
 
 import { supabase } from '../supabaseClient';
-import { ensureAnonUser } from './AuthSystem';
 import { isConnected, getSpotifyUserId } from './SpotifyAuthSystem';
 
 const NAME_MAX_LENGTH = 10;
 
 export interface Profile {
-  user_id: string;
+  spotify_user_id: string;
   username: string;
   avatar_url: string | null;
 }
 
-/** Cached Spotify ID for the current session, set during loadOrCreateProfile. */
+/** Cached Spotify ID for the current session. */
 let linkedSpotifyId: string | null = null;
 
 /** Returns the linked Spotify ID if profile was loaded via Spotify path. */
@@ -45,183 +37,98 @@ export function getLinkedSpotifyId(): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Spotify profile helpers (spotify_profiles table)
+// Public API
 // ---------------------------------------------------------------------------
 
-async function loadOrCreateSpotifyProfile(spotifyId: string): Promise<Profile> {
-  const { data, error } = await supabase
-    .from('spotify_profiles')
-    .select('spotify_id, display_name, avatar_url')
-    .eq('spotify_id', spotifyId)
-    .maybeSingle();
-
-  if (error) throw error;
-
-  if (data) {
-    return {
-      user_id: data.spotify_id,
-      username: data.display_name,
-      avatar_url: data.avatar_url,
-    };
-  }
-
-  // First time connecting Spotify — create row
-  const { error: insertErr } = await supabase
-    .from('spotify_profiles')
-    .insert({ spotify_id: spotifyId, display_name: 'ANON', avatar_url: null });
-  if (insertErr) throw insertErr;
-
-  return { user_id: spotifyId, username: 'ANON', avatar_url: null };
-}
-
-async function updateSpotifyUsername(spotifyId: string, name: string): Promise<void> {
-  const { error } = await supabase
-    .from('spotify_profiles')
-    .update({ display_name: name, updated_at: new Date().toISOString() })
-    .eq('spotify_id', spotifyId);
-  if (error) throw error;
-}
-
-async function uploadSpotifyAvatar(spotifyId: string, file: File): Promise<string> {
-  const ext = file.name.split('.').pop() || 'png';
-  const path = `spotify_${spotifyId}/${Date.now()}.${ext}`;
-
-  const { error: uploadErr } = await supabase.storage
-    .from('avatars')
-    .upload(path, file, { upsert: true, contentType: file.type });
-  if (uploadErr) throw uploadErr;
-
-  const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-  const publicUrl = urlData.publicUrl;
-
-  const { error: updateErr } = await supabase
-    .from('spotify_profiles')
-    .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
-    .eq('spotify_id', spotifyId);
-  if (updateErr) throw updateErr;
-
-  return publicUrl;
-}
-
-// ---------------------------------------------------------------------------
-// Public API (routes to the correct table based on Spotify connection)
-// ---------------------------------------------------------------------------
-
-/** Load existing profile or create a default one.
- *  If Spotify is connected, uses spotify_profiles (cross-device).
- *  Otherwise uses per-device profiles table. */
+/**
+ * Load existing profile or create/upsert a default one.
+ * If Spotify is connected → upsert into profiles, then load username + avatar_url.
+ * Otherwise → return local-only defaults (no DB).
+ */
 export async function loadOrCreateProfile(): Promise<Profile> {
-  // --- Spotify path ---
-  if (isConnected()) {
-    const spotifyId = await getSpotifyUserId();
-    if (spotifyId) {
-      linkedSpotifyId = spotifyId;
-      const spotifyProfile = await loadOrCreateSpotifyProfile(spotifyId);
-
-      // Merge local data UP if spotify profile is still default
-      if (spotifyProfile.username === 'ANON' && !spotifyProfile.avatar_url) {
-        try {
-          const localProfile = await loadAnonProfile();
-          if (localProfile && (localProfile.username !== 'ANON' || localProfile.avatar_url)) {
-            // Push local name/avatar up to spotify_profiles
-            if (localProfile.username !== 'ANON') {
-              await updateSpotifyUsername(spotifyId, localProfile.username);
-              spotifyProfile.username = localProfile.username;
-            }
-            if (localProfile.avatar_url) {
-              await supabase
-                .from('spotify_profiles')
-                .update({ avatar_url: localProfile.avatar_url, updated_at: new Date().toISOString() })
-                .eq('spotify_id', spotifyId);
-              spotifyProfile.avatar_url = localProfile.avatar_url;
-            }
-          }
-        } catch {
-          // Merge failed — not critical, spotify profile is still valid
-        }
-      }
-
-      return spotifyProfile;
-    }
+  if (!isConnected()) {
+    linkedSpotifyId = null;
+    return { spotify_user_id: '', username: 'ANON', avatar_url: null };
   }
 
-  // --- Anon path (existing behavior) ---
-  linkedSpotifyId = null;
-  const userId = await ensureAnonUser();
+  const spotifyId = await getSpotifyUserId();
+  if (!spotifyId) {
+    linkedSpotifyId = null;
+    return { spotify_user_id: '', username: 'ANON', avatar_url: null };
+  }
 
+  linkedSpotifyId = spotifyId;
+
+  // Upsert — creates the row if it doesn't exist, no-ops if it does.
+  // Only sets spotify_connected; never overwrites existing username/avatar_url.
+  const { error: upsertErr } = await supabase
+    .from('profiles')
+    .upsert(
+      { spotify_user_id: spotifyId, spotify_connected: true },
+      { onConflict: 'spotify_user_id' }
+    );
+  if (upsertErr) {
+    console.warn('ProfileSystem: upsert failed', upsertErr);
+  }
+
+  // Load the full row
   const { data, error } = await supabase
     .from('profiles')
-    .select('user_id, username, avatar_url')
-    .eq('user_id', userId)
-    .maybeSingle();
+    .select('username, avatar_url')
+    .eq('spotify_user_id', spotifyId)
+    .single();
 
-  if (error) throw error;
+  if (error || !data) {
+    console.warn('ProfileSystem: failed to load profile', error);
+    return { spotify_user_id: spotifyId, username: 'ANON', avatar_url: null };
+  }
 
-  if (data) return data as Profile;
-
-  // First visit — insert default row
-  const newProfile: Profile = { user_id: userId, username: 'ANON', avatar_url: null };
-  const { error: insertErr } = await supabase.from('profiles').insert(newProfile);
-  if (insertErr) throw insertErr;
-
-  return newProfile;
+  return {
+    spotify_user_id: spotifyId,
+    username: data.username || 'ANON',
+    avatar_url: data.avatar_url || null,
+  };
 }
 
-/** Load anon profile without creating one (used for merge). */
-async function loadAnonProfile(): Promise<Profile | null> {
-  const userId = await ensureAnonUser();
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('user_id, username, avatar_url')
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (error || !data) return null;
-  return data as Profile;
-}
-
-/** Sanitize + persist username. Routes to correct table. Returns the final saved value. */
+/** Sanitize + persist username. Only writes to DB when Spotify-connected. */
 export async function updateUsername(nameRaw: string): Promise<string> {
   let name = nameRaw.trim().toUpperCase().slice(0, NAME_MAX_LENGTH);
   if (name === '') name = 'ANON';
 
   if (linkedSpotifyId) {
-    await updateSpotifyUsername(linkedSpotifyId, name);
-    return name;
+    const { error } = await supabase
+      .from('profiles')
+      .update({ username: name })
+      .eq('spotify_user_id', linkedSpotifyId);
+    if (error) console.warn('ProfileSystem: failed to update username', error);
   }
 
-  const userId = await ensureAnonUser();
-  const { error } = await supabase
-    .from('profiles')
-    .update({ username: name, updated_at: new Date().toISOString() })
-    .eq('user_id', userId);
-
-  if (error) throw error;
   return name;
 }
 
-/** Upload avatar file to Supabase Storage and save the public URL. Routes to correct table. */
-export async function uploadAvatarAndSave(file: File): Promise<string> {
-  if (linkedSpotifyId) {
-    return uploadSpotifyAvatar(linkedSpotifyId, file);
-  }
+/**
+ * Upload avatar file to Supabase Storage and save the public URL.
+ * Only works when Spotify-connected (returns null otherwise).
+ * Path: {spotify_user_id}/avatar.png (overwrites each time).
+ */
+export async function uploadAvatarAndSave(file: File): Promise<string | null> {
+  if (!linkedSpotifyId) return null;
 
-  const userId = await ensureAnonUser();
-
-  const ext = file.name.split('.').pop() || 'png';
-  const path = `${userId}/${Date.now()}.${ext}`;
+  const path = `${linkedSpotifyId}/avatar.png`;
 
   const { error: uploadErr } = await supabase.storage
     .from('avatars')
     .upload(path, file, { upsert: true, contentType: file.type });
   if (uploadErr) throw uploadErr;
 
+  // Cache-bust so browsers don't serve stale avatar
   const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-  const publicUrl = urlData.publicUrl;
+  const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
   const { error: updateErr } = await supabase
     .from('profiles')
-    .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
-    .eq('user_id', userId);
+    .update({ avatar_url: publicUrl })
+    .eq('spotify_user_id', linkedSpotifyId);
   if (updateErr) throw updateErr;
 
   return publicUrl;
