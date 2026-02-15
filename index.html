@@ -40,6 +40,24 @@
     }
 
     /* ===== BIOS BOOT OVERLAY ===== */
+    /* ---- CRT TUNING (edit these) ---- */
+    :root {
+      --bios-color:             #ff2a2a;   /* main text & bar color            */
+      --bios-glow:              #aa0000;   /* outer glow / shadow color        */
+      --bios-glow-bright:       #ff6666;   /* inner highlight on bar           */
+      --bios-glow-radius:       8px;       /* text-shadow glow spread          */
+      --bios-scanline-opacity:  0.15;      /* scanline darkness (0 = off)      */
+      --bios-scanline-gap:      3px;       /* px between scanlines             */
+      --bios-vignette-start:    50%;       /* vignette transparent center      */
+      --bios-vignette-opacity:  0.6;       /* vignette edge darkness           */
+      --bios-flicker-speed:     0.08s;     /* flicker animation cycle          */
+      --bios-flicker-min:       0.97;      /* min opacity during flicker       */
+      --bios-jitter-speed:      0.1s;      /* vertical jitter cycle            */
+      --bios-jitter-amount:     0.5px;     /* px of vertical jitter            */
+      --bios-font-size:         clamp(12px, 2vw, 18px);
+      --bios-line-height:       1.8;
+    }
+
     #boot-overlay {
       position: fixed;
       inset: 0;
@@ -50,8 +68,8 @@
       justify-content: center;
       align-items: center;
       font-family: 'Early GameBoy', 'Courier New', monospace;
-      color: #ff2a2a;
-      animation: bios-flicker 0.08s infinite alternate;
+      color: var(--bios-color);
+      animation: bios-flicker var(--bios-flicker-speed) infinite alternate;
     }
     #boot-overlay.hidden { display: none; }
 
@@ -62,10 +80,10 @@
       inset: 0;
       background: repeating-linear-gradient(
         0deg,
-        rgba(0,0,0,0.15) 0px,
-        rgba(0,0,0,0.15) 1px,
+        rgba(0,0,0,var(--bios-scanline-opacity)) 0px,
+        rgba(0,0,0,var(--bios-scanline-opacity)) 1px,
         transparent 1px,
-        transparent 3px
+        transparent var(--bios-scanline-gap)
       );
       pointer-events: none;
       z-index: 2;
@@ -75,27 +93,30 @@
       content: '';
       position: absolute;
       inset: 0;
-      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6) 100%);
+      background: radial-gradient(ellipse at center,
+        transparent var(--bios-vignette-start),
+        rgba(0,0,0,var(--bios-vignette-opacity)) 100%);
       pointer-events: none;
       z-index: 2;
     }
 
     @keyframes bios-flicker {
       0%   { opacity: 1; }
-      100% { opacity: 0.97; }
+      100% { opacity: var(--bios-flicker-min); }
     }
     @keyframes bios-jitter {
       0%   { transform: translateY(0); }
-      100% { transform: translateY(0.5px); }
+      100% { transform: translateY(var(--bios-jitter-amount)); }
     }
 
     #boot-lines {
       text-align: left;
-      font-size: clamp(12px, 2vw, 18px);
-      line-height: 1.8;
-      text-shadow: 0 0 8px #aa0000, 0 0 2px #ff2a2a;
+      font-size: var(--bios-font-size);
+      line-height: var(--bios-line-height);
+      text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow),
+                   0 0 2px var(--bios-color);
       z-index: 1;
-      animation: bios-jitter 0.1s infinite alternate;
+      animation: bios-jitter var(--bios-jitter-speed) infinite alternate;
       min-width: 280px;
       padding: 0 24px;
     }
@@ -109,17 +130,17 @@
       margin-top: 24px;
       width: clamp(240px, 40vw, 420px);
       height: 14px;
-      border: 1px solid #ff2a2a;
+      border: 1px solid var(--bios-color);
       background: #111;
       z-index: 1;
-      box-shadow: 0 0 6px #aa0000;
+      box-shadow: 0 0 6px var(--bios-glow);
       overflow: hidden;
     }
     #boot-bar-fill {
       height: 100%;
       width: 10%;
-      background: #ff2a2a;
-      box-shadow: inset 0 0 4px #ff6666;
+      background: var(--bios-color);
+      box-shadow: inset 0 0 4px var(--bios-glow-bright);
       transition: width 0.15s linear;
     }
   </style>
@@ -151,50 +172,82 @@
 
   // Boot overlay API — available immediately, before any module JS loads
   (function() {
-    var fill = document.getElementById('boot-bar-fill');
-    var lines = document.querySelectorAll('#boot-lines .line');
-    var overlay = document.getElementById('boot-overlay');
-    var currentProgress = 0.1; // start at 10%
-    var ready = false;
+    /* ---- TYPEWRITER TUNING (edit these) ---- */
+    var DOT_INTERVAL_MS  = 100;  // ms pause after each dot appears
+    var WORD_INTERVAL_MS = 40;   // ms pause after each word/text chunk appears
 
-    // Type out lines quickly (80ms apart)
-    var lineIndex = 0;
-    function typeNextLine() {
-      if (lineIndex >= lines.length) return;
-      var el = lines[lineIndex];
-      el.textContent = el.getAttribute('data-text');
-      el.classList.add('visible');
-      lineIndex++;
-      if (lineIndex < lines.length) {
-        setTimeout(typeNextLine, 80);
+    var fill = document.getElementById('boot-bar-fill');
+    var lineEls = document.querySelectorAll('#boot-lines .line');
+    var overlay = document.getElementById('boot-overlay');
+
+    // Build flat character list across all lines
+    var chars = [];
+    for (var i = 0; i < lineEls.length; i++) {
+      var text = lineEls[i].getAttribute('data-text') || '';
+      lineEls[i].textContent = '';
+      lineEls[i].classList.add('visible');
+      for (var j = 0; j < text.length; j++) {
+        chars.push({ el: lineEls[i], idx: j, fullText: text, isDot: text[j] === '.' });
       }
     }
-    typeNextLine();
+
+    var revealed = 0;
+    var typingDone = false;
+    var loadingDone = false;
+    var dismissed = false;
+
+    // Self-running typewriter — starts immediately, independent of load progress
+    // Dots pop on one at a time; non-dot chars appear as a batch (whole word chunk at once)
+    function typeNext() {
+      if (revealed >= chars.length) {
+        typingDone = true;
+        tryDismiss();
+        return;
+      }
+      var c = chars[revealed];
+      if (c.isDot) {
+        // Single dot — reveal it, then pause
+        c.el.textContent = c.fullText.substring(0, c.idx + 1);
+        revealed++;
+        setTimeout(typeNext, DOT_INTERVAL_MS);
+      } else {
+        // Batch all consecutive non-dot chars so they appear instantly as a chunk
+        while (revealed < chars.length && !chars[revealed].isDot) {
+          var ch = chars[revealed];
+          ch.el.textContent = ch.fullText.substring(0, ch.idx + 1);
+          revealed++;
+        }
+        setTimeout(typeNext, WORD_INTERVAL_MS);
+      }
+    }
+    typeNext();
+
+    function tryDismiss() {
+      if (dismissed || !typingDone || !loadingDone) return;
+      dismissed = true;
+      // Smooth bar fill to 100% then fade out
+      fill.style.transition = 'width 0.3s ease-out';
+      fill.style.width = '100%';
+      setTimeout(function() {
+        overlay.style.transition = 'opacity 0.3s ease-out';
+        overlay.style.opacity = '0';
+        setTimeout(function() {
+          overlay.classList.add('hidden');
+        }, 320);
+      }, 350);
+    }
 
     window.__bootOverlay = {
+      /** Update the loading bar to reflect actual load progress (0..1). */
       setProgress: function(p) {
-        if (ready) return;
-        // Map p (0..1) into 0.1..0.9 range, never exceed 0.9
-        var mapped = 0.1 + p * 0.8;
-        if (mapped > 0.9) mapped = 0.9;
-        if (mapped > currentProgress) {
-          currentProgress = mapped;
-          fill.style.width = (currentProgress * 100) + '%';
-        }
+        if (dismissed) return;
+        fill.style.width = (p * 100) + '%';
       },
+      /** Signal that loading is complete. Overlay dismisses once typing also finishes. */
       markStartScreenReady: function() {
-        if (ready) return;
-        ready = true;
-        // Smooth fill to 100% then fade out
-        fill.style.transition = 'width 0.3s ease-out';
-        fill.style.width = '100%';
-        setTimeout(function() {
-          overlay.style.transition = 'opacity 0.3s ease-out';
-          overlay.style.opacity = '0';
-          setTimeout(function() {
-            overlay.classList.add('hidden');
-          }, 320);
-        }, 350);
+        if (loadingDone) return;
+        loadingDone = true;
+        tryDismiss();
       }
     };
   })();
