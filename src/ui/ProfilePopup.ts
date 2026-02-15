@@ -12,11 +12,22 @@ const AVATAR_TEX_SIZE = 512;
 const NAME_MAX_LENGTH = 10;
 export const AVATAR_TEXTURE_KEY = 'profile-avatar';
 
+// Save-progress hint layout
+const SAVE_HINT_FONT_SIZE = 50;           // px
+const SAVE_HINT_TEXT = 'login to spotify to\nsave your progress';  // use \n to control line breaks
+const SAVE_HINT_COLOR = '#888888';
+
+// Name field layout
+const NAME_BOX_GAP = 46;                 // px gap between "NAME" label and name box top
+const SPOTIFY_BTN_GAP = 120;             // px gap between name box center and spotify button center
+const SPOTIFY_CONTENT_SCALE = 1.0;       // uniform scale for text+logo group inside spotify button
+
 export class ProfilePopup {
   private scene: Phaser.Scene;
   private backdrop: Phaser.GameObjects.Rectangle;
   private container: Phaser.GameObjects.Container;
   private _isOpen: boolean = false;
+  private closedAt: number = 0;
 
   // Callbacks
   private closeCallback: (() => void) | null = null;
@@ -31,7 +42,15 @@ export class ProfilePopup {
   private currentName: string = 'ANON';
   private nameEditing: boolean = false;
   private currentAvatarUrl: string | null = null;
-  private spotifyConnectedLabel!: Phaser.GameObjects.Text;
+
+  // Spotify button elements
+  private spotifyBg!: Phaser.GameObjects.Graphics;
+  private spotifyLoginText!: Phaser.GameObjects.Text;
+  private spotifyLogo!: Phaser.GameObjects.Image;
+  private spotifyConnectedText!: Phaser.GameObjects.Text;
+  private spotifyHit!: Phaser.GameObjects.Zone;
+  private spotifyY: number = 0;
+  private spotifySaveHint!: Phaser.GameObjects.Text;
 
   // DOM (hidden file input for OS file picker)
   private fileInput: HTMLInputElement;
@@ -111,7 +130,7 @@ export class ProfilePopup {
 
     const nameBoxW = 400;
     const nameBoxH = 50;
-    const nameBoxY = nameY + 30;
+    const nameBoxY = nameY + NAME_BOX_GAP;
 
     const nameBox = scene.add.graphics();
     nameBox.fillStyle(0x222244, 0.9);
@@ -142,47 +161,57 @@ export class ProfilePopup {
     // --- Spotify Login button ---
     const spotifyW = 400;
     const spotifyH = 50;
-    const spotifyY = nameBoxY + 100;
+    this.spotifyY = nameBoxY + SPOTIFY_BTN_GAP;
 
-    const spotifyBg = scene.add.graphics();
-    spotifyBg.fillStyle(0x1DB954, 1);
-    spotifyBg.fillRoundedRect(-spotifyW / 2, spotifyY - spotifyH / 2, spotifyW, spotifyH, 10);
-    this.container.add(spotifyBg);
+    this.spotifyBg = scene.add.graphics();
+    this.container.add(this.spotifyBg);
 
-    // "Login to" text — measure first so we can center the combo
-    const loginText = scene.add.text(0, spotifyY, 'Login to ', {
-      fontSize: '22px',
+    // "Login to" text (shown when not connected)
+    const spotifyFontSize = Math.round(22 * SPOTIFY_CONTENT_SCALE);
+    this.spotifyLoginText = scene.add.text(0, this.spotifyY, 'Login to ', {
+      fontSize: `${spotifyFontSize}px`,
       fontFamily: 'monospace',
       color: '#ffffff',
     }).setOrigin(0, 0.5);
+    this.container.add(this.spotifyLoginText);
+
     // Logo scaled to fit button height with padding
-    const logoImg = scene.add.image(0, spotifyY, 'spotify-text-logo').setOrigin(0, 0.5);
-    const logoTargetH = 26;
-    const logoScale = logoTargetH / logoImg.height;
-    logoImg.setScale(logoScale);
-    // Center the combo horizontally
-    const comboW = loginText.width + logoImg.width * logoScale;
-    const comboStartX = -comboW / 2;
-    loginText.setPosition(comboStartX, spotifyY);
-    logoImg.setPosition(comboStartX + loginText.width, spotifyY);
-    this.container.add(loginText);
-    this.container.add(logoImg);
+    this.spotifyLogo = scene.add.image(0, this.spotifyY, 'spotify-text-logo').setOrigin(0, 0.5);
+    const logoTargetH = 26 * SPOTIFY_CONTENT_SCALE;
+    const logoScale = logoTargetH / this.spotifyLogo.height;
+    this.spotifyLogo.setScale(logoScale);
+    this.container.add(this.spotifyLogo);
 
-    const spotifyHit = scene.add.zone(0, spotifyY, spotifyW, spotifyH)
-      .setInteractive({ useHandCursor: true });
-    spotifyHit.on('pointerdown', () => { startLogin(); });
-    this.container.add(spotifyHit);
-
-    // "Connected" label (shown when already authed)
-    this.spotifyConnectedLabel = scene.add.text(0, spotifyY + spotifyH / 2 + 14, 'Connected', {
-      fontSize: '14px',
+    // "Connected" text (shown when connected, inside button)
+    this.spotifyConnectedText = scene.add.text(0, this.spotifyY, 'Connected', {
+      fontSize: `${spotifyFontSize}px`,
       fontFamily: 'monospace',
-      color: '#1DB954',
+      color: '#ffffff',
+    }).setOrigin(0, 0.5).setVisible(false);
+    this.container.add(this.spotifyConnectedText);
+
+    this.spotifyHit = scene.add.zone(0, this.spotifyY, spotifyW, spotifyH)
+      .setInteractive({ useHandCursor: true });
+    this.spotifyHit.on('pointerdown', () => {
+      if (!isConnected()) startLogin();
+    });
+    this.container.add(this.spotifyHit);
+
+    // --- Save progress hint (centered between spotify button and exit button) ---
+    const exitY = POPUP_H / 2 - 70;
+    const spotifyBottom = this.spotifyY + 25; // spotifyH / 2
+    const exitTop = exitY - 25;               // exitBtnH / 2
+    const hintY = (spotifyBottom + exitTop) / 2;
+    this.spotifySaveHint = scene.add.text(0, hintY, SAVE_HINT_TEXT, {
+      fontSize: `${SAVE_HINT_FONT_SIZE}px`,
+      fontFamily: 'Alagard',
+      color: SAVE_HINT_COLOR,
+      align: 'center',
+      wordWrap: { width: POPUP_W - 40 },
     }).setOrigin(0.5).setVisible(false);
-    this.container.add(this.spotifyConnectedLabel);
+    this.container.add(this.spotifySaveHint);
 
     // --- Exit button ---
-    const exitY = POPUP_H / 2 - 70;
     const exitBtnW = 200;
     const exitBtnH = 50;
 
@@ -248,19 +277,23 @@ export class ProfilePopup {
     }
     this.backdrop.setVisible(true);
     this.container.setVisible(true);
-    this.spotifyConnectedLabel.setVisible(isConnected());
+    this.updateSpotifyButton();
   }
 
   close(): void {
     if (!this._isOpen) return;
     if (this.nameEditing) this.stopNameEditing();
     this._isOpen = false;
+    this.closedAt = Date.now();
     this.backdrop.setVisible(false);
     this.container.setVisible(false);
     if (this.closeCallback) this.closeCallback();
   }
 
   isOpen(): boolean {
+    // Treat as still open for 100ms after close to prevent the closing click
+    // from propagating to the scene behind the popup
+    if (!this._isOpen && Date.now() - this.closedAt < 100) return true;
     return this._isOpen;
   }
 
@@ -309,6 +342,44 @@ export class ProfilePopup {
   }
 
   // --- Private ---
+
+  private updateSpotifyButton(): void {
+    const connected = isConnected();
+    const spotifyW = 400;
+    const spotifyH = 50;
+
+    // Redraw background with appropriate color
+    this.spotifyBg.clear();
+    this.spotifyBg.fillStyle(connected ? 0x5a0b0b : 0x1DB954, 1);
+    this.spotifyBg.fillRoundedRect(-spotifyW / 2, this.spotifyY - spotifyH / 2, spotifyW, spotifyH, 10);
+
+    // Show save hint only when not connected
+    this.spotifySaveHint.setVisible(!connected);
+
+    if (connected) {
+      // Show: [logo] + "Connected"
+      this.spotifyLoginText.setVisible(false);
+      this.spotifyConnectedText.setVisible(true);
+
+      const logoW = this.spotifyLogo.width * this.spotifyLogo.scaleX;
+      const gap = 8;
+      const connW = this.spotifyConnectedText.width;
+      const totalW = logoW + gap + connW;
+      const startX = -totalW / 2;
+      this.spotifyLogo.setPosition(startX, this.spotifyY);
+      this.spotifyConnectedText.setPosition(startX + logoW + gap, this.spotifyY);
+    } else {
+      // Show: "Login to" + [logo]
+      this.spotifyLoginText.setVisible(true);
+      this.spotifyConnectedText.setVisible(false);
+
+      const logoW = this.spotifyLogo.width * this.spotifyLogo.scaleX;
+      const comboW = this.spotifyLoginText.width + logoW;
+      const startX = -comboW / 2;
+      this.spotifyLoginText.setPosition(startX, this.spotifyY);
+      this.spotifyLogo.setPosition(startX + this.spotifyLoginText.width, this.spotifyY);
+    }
+  }
 
   private startNameEditing(): void {
     if (this.nameEditing) return;

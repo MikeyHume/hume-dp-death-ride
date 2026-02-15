@@ -227,6 +227,13 @@ export const TUNING = {
   RAGE_COLOR: 0xff4400,             // bar fill color (orange-red)
   RAGE_ACTIVE_COLOR: 0xffff00,      // bar color when rage is active (yellow)
 
+  // Mobile touch controls
+  MOBILE_CURSOR_WIDTH: 69,         // green triangle width in px
+  MOBILE_CURSOR_COLOR: 0x00ff00,   // green
+  MOBILE_TAP_THRESHOLD: 180,       // ms — touch shorter than this = tap (boost)
+  MOBILE_ROCKET_HOLD: 1000,        // ms — hold right side this long to fire rocket
+  MOBILE_SAFE_TOP: 20,             // px safe area padding when mobile
+
   // Debug — set to true to enable hotkeys (0 = instant rage)
   DEBUG_KEYS: true,
 } as const;

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isConnected } from '../systems/SpotifyAuthSystem';
 
 // Layout constants
 const HUD_ORIGIN_X = 40;                  // container rest position
@@ -14,6 +15,12 @@ const BAR_H = 28;
 const BAR_SEGMENTS = 10;
 const PIP_RADIUS = 6;
 const PIP_GAP = 8;                        // vertical gap below rage bar
+
+// Sign-in indicator layout
+const SIGN_IN_SCALE = 0.4;              // scale relative to source image size
+const SIGN_IN_OFFSET_X = 96;              // px offset from avatar center X
+const SIGN_IN_OFFSET_Y = 50;             // px gap below avatar bottom edge
+const RANK_FONT_SIZE = 30;               // rank text font size in px
 
 export class ProfileHud {
   private container: Phaser.GameObjects.Container;
@@ -34,6 +41,10 @@ export class ProfileHud {
   private nameDisplay!: Phaser.GameObjects.Text;
   private rankDisplay!: Phaser.GameObjects.Text;
   private clickCallback: (() => void) | null = null;
+
+  // Sign-in indicator (below avatar, pulses on title/tutorial)
+  private signInImage!: Phaser.GameObjects.Image;
+  private signInTween: Phaser.Tweens.Tween | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.container = scene.add.container(HUD_ORIGIN_X, HUD_ORIGIN_Y).setDepth(1300).setScrollFactor(0);
@@ -87,6 +98,15 @@ export class ProfileHud {
       this.container.add(seg);
     }
 
+    // --- Sign-in indicator (below avatar, white-tinted, hidden if Spotify connected) ---
+    const signInX = AVATAR_X + SIGN_IN_OFFSET_X;
+    const signInY = AVATAR_Y + AVATAR_RADIUS + SIGN_IN_OFFSET_Y;
+    this.signInImage = scene.add.image(signInX, signInY, 'sign-in')
+      .setTintFill(0xffffff)
+      .setScale(SIGN_IN_SCALE)
+      .setVisible(false);
+    this.container.add(this.signInImage);
+
     // Profile mode: name display (vertically centered on avatar)
     this.nameDisplay = scene.add.text(SCORE_X, AVATAR_Y, '', {
       fontSize: '48px',
@@ -97,7 +117,7 @@ export class ProfileHud {
 
     // Profile mode: rank display (bottom-aligned with avatar bottom)
     this.rankDisplay = scene.add.text(BAR_X, AVATAR_Y + AVATAR_RADIUS, '', {
-      fontSize: '24px',
+      fontSize: `${RANK_FONT_SIZE}px`,
       fontFamily: 'monospace',
       color: '#ffcc00',
     }).setOrigin(0, 1).setVisible(false);
@@ -213,6 +233,9 @@ export class ProfileHud {
     // Show rank
     this.rankDisplay.setText(rankText);
     this.rankDisplay.setVisible(rankText.length > 0);
+
+    // Show sign-in pulse if not connected to Spotify
+    this.startSignInPulse();
   }
 
   showPlayingMode(): void {
@@ -223,6 +246,40 @@ export class ProfileHud {
 
     this.nameDisplay.setVisible(false);
     this.rankDisplay.setVisible(false);
+    this.stopSignInPulse();
+  }
+
+  /** Start the sign-in pulse animation (only if not connected to Spotify). */
+  private startSignInPulse(): void {
+    if (isConnected()) {
+      this.signInImage.setVisible(false);
+      return;
+    }
+    this.signInImage.setAlpha(1).setVisible(true);
+    if (this.signInTween) {
+      this.signInTween.destroy();
+      this.signInTween = null;
+    }
+    // Timeline: 1.5s visible → 1s fade out → 0.5s off → 1s fade in → repeat
+    const scene = this.container.scene;
+    this.signInTween = scene.tweens.add({
+      targets: this.signInImage,
+      alpha: { from: 1, to: 0 },
+      delay: 1500,
+      duration: 1000,
+      hold: 500,
+      yoyo: true,
+      repeat: -1,
+    });
+  }
+
+  /** Stop the sign-in pulse and hide the image. */
+  private stopSignInPulse(): void {
+    if (this.signInTween) {
+      this.signInTween.destroy();
+      this.signInTween = null;
+    }
+    this.signInImage.setVisible(false);
   }
 
   destroy(): void {

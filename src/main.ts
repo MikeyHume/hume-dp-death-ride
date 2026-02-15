@@ -4,6 +4,7 @@ import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { CRTPipeline } from './fx/CRTPipeline';
 import { handleCallback } from './systems/SpotifyAuthSystem';
+import { GAME_MODE } from './config/gameMode';
 
 // Handle Spotify OAuth callback before booting Phaser.
 // If we're on /callback, exchange the code and redirect to "/".
@@ -24,6 +25,7 @@ handleCallback().then((wasCallback) => {
     dom: {
       createContainer: true
     },
+    render: GAME_MODE.mobileMode ? { powerPreference: 'low-power' } : undefined,
   };
 
   const game = new Phaser.Game(config);

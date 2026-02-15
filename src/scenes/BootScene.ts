@@ -10,13 +10,17 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload() {
+    // Report real load progress to the boot overlay (clamped 0..0.9)
+    this.load.on('progress', (value: number) => {
+      (window as any).__bootOverlay?.setProgress?.(value);
+    });
     for (let i = 0; i < TITLE_LOOP_FRAME_COUNT; i++) {
       const idx = String(i).padStart(2, '0');
-      this.load.image(`start-loop-${idx}`, `assets/start/start_loop/DP_Death_Ride_Title_Loop_${idx}.png`);
+      this.load.image(`start-loop-${idx}`, `assets/start/start_loop/DP_Death_Ride_Title_Loop${idx}.jpg`);
     }
     for (let i = 0; i < TITLE_START_FRAME_COUNT; i++) {
       const idx = String(i).padStart(2, '0');
-      this.load.image(`start-play-${idx}`, `assets/start/start_play/DP_Death_Ride_Title_Start_${idx}.png`);
+      this.load.image(`start-play-${idx}`, `assets/start/start_play/DP_Death_Ride_Title_Start${idx}.jpg`);
     }
     this.load.spritesheet('player-ride', 'assets/dp_player/dp_moto_v03.png', {
       frameWidth: TUNING.PLAYER_FRAME_WIDTH,
@@ -58,6 +62,7 @@ export class BootScene extends Phaser.Scene {
 
     // UI assets
     this.load.image('spotify-text-logo', 'ui/spotify_text_logo_.png');
+    this.load.image('sign-in', 'ui/sign_in.png');
 
     // Tutorial assets
     this.load.image('tutorial-skip', 'assets/tutorial/skip.png');

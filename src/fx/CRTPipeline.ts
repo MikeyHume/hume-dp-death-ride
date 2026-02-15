@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { CRT_TUNING, maskTypeToFloat } from '../config/crtTuning';
+import { GAME_MODE } from '../config/gameMode';
 
 const FRAG_SHADER = `
 precision mediump float;
@@ -305,13 +306,14 @@ export class CRTPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline 
 
   onPreRender(): void {
     const t = CRT_TUNING;
+    const quality = GAME_MODE.quality;
 
     this.set1f('uTime', this.game.loop.time / 1000);
     this.set2f('uResolution', this.renderer.width, this.renderer.height);
 
     // Scanlines
     this.set1f('uScanlineIntensity', t.scanlineIntensity);
-    this.set1f('uScanlineDensity', t.scanlineDensity);
+    this.set1f('uScanlineDensity', quality === 'low' ? 270 : t.scanlineDensity);
     this.set1f('uScanlineRollSpeed', t.scanlineRollSpeed);
 
     // Mask
@@ -324,8 +326,9 @@ export class CRTPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline 
     this.set1f('uBeamFocus', t.beamFocus);
     this.set1f('uConvergenceError', t.convergenceError);
 
-    // Bloom
-    this.set1f('uBloomStrength', t.bloomStrength);
+    // Bloom — reduced on medium, disabled on low
+    const bloomMul = quality === 'low' ? 0 : quality === 'medium' ? 0.5 : 1;
+    this.set1f('uBloomStrength', t.bloomStrength * bloomMul);
     this.set1f('uBloomRadius', t.bloomRadius);
     this.set1f('uBloomThreshold', t.bloomThreshold);
 
@@ -340,8 +343,9 @@ export class CRTPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline 
     this.set1f('uGamma', t.gamma);
     this.set1f('uBrightness', t.brightness);
 
-    // Noise
-    this.set1f('uNoiseAmount', t.noiseAmount);
+    // Noise — reduced on medium, disabled on low
+    const noiseMul = quality === 'low' ? 0 : quality === 'medium' ? 0.5 : 1;
+    this.set1f('uNoiseAmount', t.noiseAmount * noiseMul);
     this.set1f('uNoiseSpeed', t.noiseSpeed);
     this.set1f('uJitterAmount', t.jitterAmount);
     this.set1f('uVignette', t.vignette);

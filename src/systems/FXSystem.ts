@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
+import { GAME_MODE } from '../config/gameMode';
 
 export class FXSystem {
   private scene: Phaser.Scene;
@@ -59,6 +60,16 @@ export class FXSystem {
   }
 
   private updateSpeedLines(dt: number, playerSpeed: number, roadSpeed: number): void {
+    const quality = GAME_MODE.quality;
+
+    // Low quality: skip speed lines entirely
+    if (quality === 'low') {
+      for (let i = 0; i < this.speedLines.length; i++) {
+        this.speedLines[i].setAlpha(0);
+      }
+      return;
+    }
+
     const threshold = roadSpeed * TUNING.SPEED_LINE_THRESHOLD;
     const intensity = playerSpeed > threshold
       ? Math.min((playerSpeed - threshold) / (roadSpeed * (TUNING.MAX_SPEED_MULTIPLIER - TUNING.SPEED_LINE_THRESHOLD)), 1)
@@ -66,6 +77,10 @@ export class FXSystem {
 
     for (let i = 0; i < this.speedLines.length; i++) {
       const line = this.speedLines[i];
+      if (quality === 'medium' && i % 2 !== 0) {
+        line.setAlpha(0);
+        continue;
+      }
       if (intensity > 0) {
         line.setAlpha(intensity * TUNING.SPEED_LINE_ALPHA_MAX * (0.3 + Math.random() * 0.7));
         // Scroll lines left relative to road speed

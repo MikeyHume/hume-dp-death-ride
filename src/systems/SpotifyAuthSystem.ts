@@ -18,7 +18,7 @@ import {
 const STORAGE_KEY = 'spotify_auth';
 const SESSION_VERIFIER = 'spotify_verifier';
 const SESSION_STATE = 'spotify_state';
-const SCOPE = 'user-read-email user-read-private';
+const SCOPE = 'streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state';
 
 export interface SpotifyAuth {
   access_token: string;
@@ -160,5 +160,50 @@ export function getAuth(): SpotifyAuth | null {
     return auth;
   } catch {
     return null;
+  }
+}
+
+/** Get a valid access token string, or null. */
+export function getAccessToken(): string | null {
+  const auth = getAuth();
+  return auth ? auth.access_token : null;
+}
+
+/** Cached Spotify user ID (avoids repeated /v1/me calls). */
+let cachedSpotifyUserId: string | null = null;
+
+/** Get the Spotify user ID for the connected account. Cached after first call. */
+export async function getSpotifyUserId(): Promise<string | null> {
+  if (cachedSpotifyUserId) return cachedSpotifyUserId;
+  const token = getAccessToken();
+  if (!token) return null;
+  try {
+    const res = await fetch('https://api.spotify.com/v1/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    cachedSpotifyUserId = data.id ?? null;
+    return cachedSpotifyUserId;
+  } catch {
+    return null;
+  }
+}
+
+/** Check if the connected Spotify account is Premium. Returns false on any error. */
+export async function checkPremium(): Promise<boolean> {
+  const token = getAccessToken();
+  if (!token) return false;
+  try {
+    const res = await fetch('https://api.spotify.com/v1/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    // Cache the user ID while we're at it
+    if (data.id) cachedSpotifyUserId = data.id;
+    return data.product === 'premium';
+  } catch {
+    return false;
   }
 }

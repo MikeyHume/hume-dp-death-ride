@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
 import { SeededRNG } from '../util/rng';
+import { GAME_MODE } from '../config/gameMode';
 
 export enum ObstacleType {
   CRASH = 'crash',
@@ -191,11 +192,16 @@ export class ObstacleSystem {
     if (this.spawnTimer >= this.nextSpawnInterval) {
       this.spawnTimer = 0;
       this.spawnWave(difficultyFactor, rageFactor > 0, roadSpeed);
-      this.nextSpawnInterval = Phaser.Math.Linear(
+      let interval = Phaser.Math.Linear(
         TUNING.SPAWN_INTERVAL_MAX,
         TUNING.SPAWN_INTERVAL_MIN,
         difficultyFactor
       );
+      // Wider spacing on lower quality tiers for more reaction time
+      if (GAME_MODE.quality !== 'high') {
+        interval *= 1.15;
+      }
+      this.nextSpawnInterval = interval;
     }
   }
 

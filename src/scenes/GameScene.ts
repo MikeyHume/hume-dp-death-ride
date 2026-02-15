@@ -18,6 +18,9 @@ import { CRTPipeline } from '../fx/CRTPipeline';
 import { CRT_TUNING } from '../config/crtTuning';
 import { ProfileHud } from '../ui/ProfileHud';
 import { ProfilePopup } from '../ui/ProfilePopup';
+import { PerfSystem } from '../systems/PerfSystem';
+import { OrientationOverlay } from '../systems/OrientationOverlay';
+import { GAME_MODE } from '../config/gameMode';
 
 enum GameState {
   TITLE,
@@ -50,6 +53,8 @@ export class GameScene extends Phaser.Scene {
   private rocketSystem!: RocketSystem;
   private profileHud!: ProfileHud;
   private profilePopup!: ProfilePopup;
+  private perfSystem!: PerfSystem;
+  private orientationOverlay: OrientationOverlay | null = null;
 
   // Weekly seed
   private weekKey!: string;
@@ -291,6 +296,12 @@ export class GameScene extends Phaser.Scene {
       color: '#ffffff',
       fontFamily: 'Early GameBoy',
     }).setOrigin(0.5, 0).setDepth(100).setScrollFactor(0).setVisible(false);
+
+    // --- Performance monitor + orientation lock ---
+    this.perfSystem = new PerfSystem();
+    if (GAME_MODE.mobileMode) {
+      this.orientationOverlay = new OrientationOverlay(this);
+    }
 
     // --- Profile HUD (Phaser-based, upper-left, affected by shaders) ---
     this.profileHud = new ProfileHud(this);
@@ -645,14 +656,14 @@ export class GameScene extends Phaser.Scene {
     });
     this.tutorialSkipBtn.on('pointerdown', () => {
       if (this.state === GameState.TUTORIAL && this.tutorialPhase !== 'skip_fade' && this.tutorialPhase !== 'done') {
-        // Flash red, snap to base scale, fade out over 0.5s
+        // Flash red, shrink smoothly from current scale to base, fade out over 0.5s
         this.tweens.killTweensOf(this.tutorialSkipBtn);
         this.tutorialSkipBtn.setTint(0xff0000);
-        this.tutorialSkipBtn.setScale(0.5);
         this.tutorialSkipBtn.disableInteractive();
         this.tweens.add({
           targets: this.tutorialSkipBtn,
           alpha: 0,
+          scale: 0.5,
           duration: 500,
           ease: 'Sine.easeIn',
           onComplete: () => {
@@ -716,6 +727,9 @@ export class GameScene extends Phaser.Scene {
       if (this.crtDebugVisible) this.updateCRTDebugText();
     });
 
+    // Signal boot overlay that the start screen is ready
+    (window as any).__bootOverlay?.markStartScreenReady?.();
+
     // 0 = instant rage (debug only)
     if (TUNING.DEBUG_KEYS) {
       this.input.keyboard!.addKey('ZERO').on('down', () => {
@@ -733,6 +747,13 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number) {
     const dt = delta / 1000;
+
+    this.perfSystem.update(dt);
+    this.inputSystem.update(dt);
+    if (this.orientationOverlay) {
+      this.orientationOverlay.update();
+      if (this.orientationOverlay.isPaused()) return;
+    }
 
     switch (this.state) {
       case GameState.TITLE:

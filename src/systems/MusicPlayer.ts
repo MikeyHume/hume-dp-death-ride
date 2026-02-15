@@ -1,10 +1,14 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
+import { isConnected, checkPremium } from './SpotifyAuthSystem';
+import { SpotifyPlayerSystem } from './SpotifyPlayerSystem';
 
 const MUSIC_UI_SCALE = 1;             // uniform scale from upper-right corner
 const SPOTIFY_URL = 'https://open.spotify.com/artist/5uzPIJDzWAujemRDKiJMRj';
 const YT_THUMB_WIDTH = 171;
 const YT_THUMB_HEIGHT = 96;
+
+export type MusicSource = 'youtube' | 'spotify';
 
 export class MusicPlayer {
   private scene: Phaser.Scene;
@@ -23,10 +27,16 @@ export class MusicPlayer {
   private canvasOverlay!: HTMLDivElement;
   private overlaySyncAnim: number = 0;
 
+  // Dual-source
+  private source: MusicSource = 'youtube';
+  private spotifyPlayer: SpotifyPlayerSystem | null = null;
+
+
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.createUI();
-    this.loadYouTubeAPI();
+    // YouTube API loading is deferred until switchToPlaylist() to speed up initial boot
+    this.tryInitSpotify();
   }
 
   /** Start the in-game title music. Call from a user gesture handler. */
@@ -47,6 +57,8 @@ export class MusicPlayer {
     this.titleClip.style.display = 'block';
     this.startTitleScroll();
   }
+
+  getSource(): MusicSource { return this.source; }
 
   private createUI(): void {
     // Create an overlay div that exactly tracks the game canvas position/size
@@ -148,15 +160,16 @@ export class MusicPlayer {
     });
     this.titleClip.appendChild(this.trackTitle);
 
-    // Control buttons
+    // Control buttons row with source indicator
     const btnContainer = document.createElement('div');
-    Object.assign(btnContainer.style, { display: 'flex', justifyContent: 'center', gap: '14px' });
+    Object.assign(btnContainer.style, { display: 'flex', justifyContent: 'center', gap: '14px', alignItems: 'center' });
     const prevBtn = this.createButton('\u23EE', () => this.prev());
     const nextBtn = this.createButton('\u23ED', () => this.next());
     this.muteBtn = this.createButton('\uD83D\uDD0A', () => this.toggleMute());
     const igBtn = this.createButton('', () => window.open('https://www.instagram.com/deathpixiexx/?hl=en', '_blank'));
     igBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>';
     Object.assign(igBtn.style, { display: 'flex', alignItems: 'center', justifyContent: 'center' });
+
     btnContainer.append(prevBtn, nextBtn, this.muteBtn, igBtn);
 
     rightColumn.append(this.titleClip, btnContainer);
@@ -234,25 +247,67 @@ export class MusicPlayer {
           this.ytReady = true;
           if (this.pendingPlay) {
             this.pendingPlay = false;
-            this.startPlaylist();
+            this.startYTPlaylist();
           }
         },
         onStateChange: (event: any) => {
           // Restart playlist if it ends (state 0 = ended)
-          if (event.data === 0 && this.playlistStarted) {
+          if (event.data === 0 && this.playlistStarted && this.source === 'youtube') {
             this.ytPlayer.setShuffle(true);
             this.ytPlayer.playVideo();
           }
           // Update track info when a video starts playing (state 1 = playing)
-          if (event.data === 1) {
-            this.updateTrackInfo();
+          if (event.data === 1 && this.source === 'youtube') {
+            this.updateYTTrackInfo();
           }
         },
       },
     });
   }
 
-  /** Stop title music and start YouTube playlist. Call from a user gesture handler. */
+  /** Attempt to initialize Spotify playback if connected + premium. Non-blocking. */
+  private tryInitSpotify(): void {
+    if (!isConnected()) return;
+
+    checkPremium().then(async (isPremium) => {
+      if (!isPremium) return;
+
+      const sp = new SpotifyPlayerSystem();
+      const ok = await sp.init();
+      if (!ok) {
+        console.warn('MusicPlayer: Spotify SDK init failed, staying on YouTube');
+        sp.destroy();
+        return;
+      }
+
+      this.spotifyPlayer = sp;
+
+      // Wire track change updates
+      sp.onTrackChanged((track) => {
+        if (this.source !== 'spotify') return;
+        // Square album art
+        this.thumbnailImg.style.width = `${YT_THUMB_HEIGHT}px`;
+        this.thumbnailImg.style.height = `${YT_THUMB_HEIGHT}px`;
+        if (track.albumImageUrl) {
+          this.thumbnailImg.src = track.albumImageUrl;
+          this.thumbnailImg.style.display = 'block';
+        }
+        const display = track.artist ? `${track.name} - ${track.artist}` : track.name;
+        this.trackTitle.textContent = display;
+        this.titleClip.style.display = 'block';
+        this.startTitleScroll();
+      });
+
+      // If playlist already started, switch now
+      if (this.playlistStarted) {
+        this.switchSourceToSpotify();
+      }
+    }).catch(() => {
+      // Premium check failed — stay on YouTube silently
+    });
+  }
+
+  /** Stop title music and start playlist. Call from a user gesture handler. */
   switchToPlaylist(): void {
     if (this.playlistStarted) return;
     this.playlistStarted = true;
@@ -264,29 +319,59 @@ export class MusicPlayer {
       this.titleMusic = null;
     }
 
-    // Start YouTube
+    // If Spotify player is ready, use it
+    if (this.spotifyPlayer?.isReady()) {
+      this.switchSourceToSpotify();
+      return;
+    }
+
+    // Otherwise start YouTube (load API on first need)
     if (this.ytReady) {
-      this.startPlaylist();
+      this.startYTPlaylist();
     } else {
       this.pendingPlay = true;
+      this.loadYouTubeAPI();
     }
   }
 
-  private startPlaylist(): void {
+  private async switchSourceToSpotify(): Promise<void> {
+    if (!this.spotifyPlayer) return;
+    const ok = await this.spotifyPlayer.startPlaylist();
+    if (!ok) {
+      console.warn('MusicPlayer: Spotify playlist start failed, falling back to YouTube');
+      // Fall back to YouTube
+      if (!this.playlistStarted) return;
+      if (this.source === 'youtube') {
+        if (this.ytReady) this.startYTPlaylist();
+        else this.pendingPlay = true;
+      }
+      return;
+    }
+
+    this.source = 'spotify';
+
+    // Mute YouTube if it was playing
+    if (this.ytPlayer) {
+      try { this.ytPlayer.mute(); this.ytPlayer.pauseVideo(); } catch {}
+    }
+  }
+
+  private startYTPlaylist(): void {
     if (!this.ytPlayer) return;
+    this.source = 'youtube';
     this.ytPlayer.setVolume(50);
     this.ytPlayer.playVideo();
     // Let the first song play for 5 seconds, then shuffle and skip
     setTimeout(() => {
-      if (this.ytPlayer && this.playlistStarted) {
+      if (this.ytPlayer && this.playlistStarted && this.source === 'youtube') {
         this.ytPlayer.setShuffle(true);
         this.ytPlayer.nextVideo();
       }
     }, 5500);
   }
 
-  private updateTrackInfo(): void {
-    if (!this.ytPlayer) return;
+  private updateYTTrackInfo(): void {
+    if (!this.ytPlayer || this.source !== 'youtube') return;
     try {
       const videoData = this.ytPlayer.getVideoData();
       if (videoData && videoData.video_id) {
@@ -353,22 +438,28 @@ export class MusicPlayer {
   }
 
   private prev(): void {
-    if (this.ytPlayer && this.playlistStarted) {
+    if (this.source === 'spotify' && this.spotifyPlayer) {
+      this.spotifyPlayer.prev();
+    } else if (this.ytPlayer && this.playlistStarted) {
       this.ytPlayer.previousVideo();
-      setTimeout(() => this.updateTrackInfo(), 500);
+      setTimeout(() => this.updateYTTrackInfo(), 500);
     }
   }
 
   private next(): void {
-    if (this.ytPlayer && this.playlistStarted) {
+    if (this.source === 'spotify' && this.spotifyPlayer) {
+      this.spotifyPlayer.next();
+    } else if (this.ytPlayer && this.playlistStarted) {
       this.ytPlayer.nextVideo();
-      setTimeout(() => this.updateTrackInfo(), 500);
+      setTimeout(() => this.updateYTTrackInfo(), 500);
     }
   }
 
   /** Boost or restore music volume (multiplier: 1.0 = normal, >1 = louder) */
   setVolumeBoost(multiplier: number): void {
-    if (this.playlistStarted && this.ytPlayer && !this.ytPlayer.isMuted()) {
+    if (this.source === 'spotify' && this.spotifyPlayer) {
+      this.spotifyPlayer.setVolumeBoost(multiplier);
+    } else if (this.playlistStarted && this.ytPlayer && !this.ytPlayer.isMuted()) {
       this.ytPlayer.setVolume(Math.min(100, Math.round(50 * multiplier)));
     } else if (this.titleMusic && !this.titleMuted) {
       this.titleMusic.setVolume(0.5 * multiplier);
@@ -376,7 +467,15 @@ export class MusicPlayer {
   }
 
   private toggleMute(): void {
-    if (this.playlistStarted && this.ytPlayer) {
+    if (this.source === 'spotify' && this.spotifyPlayer && this.playlistStarted) {
+      const muted = this.spotifyPlayer.toggleMute();
+      // toggleMute returns a Promise<boolean> — handle async
+      if (muted instanceof Promise) {
+        muted.then((m) => {
+          this.muteBtn.textContent = m ? '\uD83D\uDD07' : '\uD83D\uDD0A';
+        });
+      }
+    } else if (this.playlistStarted && this.ytPlayer) {
       // Toggle YouTube mute
       if (this.ytPlayer.isMuted()) {
         this.ytPlayer.unMute();
@@ -402,6 +501,9 @@ export class MusicPlayer {
     }
     if (this.ytPlayer) {
       this.ytPlayer.destroy();
+    }
+    if (this.spotifyPlayer) {
+      this.spotifyPlayer.destroy();
     }
     this.canvasOverlay.remove();
     const ytEl = document.getElementById('yt-player');

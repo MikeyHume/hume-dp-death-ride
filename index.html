@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>DP Moto</title>
   <style>
     @font-face {
@@ -38,9 +38,158 @@
       height: 100%;
       position: relative;
     }
+
+    /* ===== BIOS BOOT OVERLAY ===== */
+    #boot-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      font-family: 'Early GameBoy', 'Courier New', monospace;
+      color: #ff2a2a;
+      animation: bios-flicker 0.08s infinite alternate;
+    }
+    #boot-overlay.hidden { display: none; }
+
+    /* CRT scanlines overlay */
+    #boot-overlay::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0,0,0,0.15) 0px,
+        rgba(0,0,0,0.15) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+      pointer-events: none;
+      z-index: 2;
+    }
+    /* CRT vignette overlay */
+    #boot-overlay::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6) 100%);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    @keyframes bios-flicker {
+      0%   { opacity: 1; }
+      100% { opacity: 0.97; }
+    }
+    @keyframes bios-jitter {
+      0%   { transform: translateY(0); }
+      100% { transform: translateY(0.5px); }
+    }
+
+    #boot-lines {
+      text-align: left;
+      font-size: clamp(12px, 2vw, 18px);
+      line-height: 1.8;
+      text-shadow: 0 0 8px #aa0000, 0 0 2px #ff2a2a;
+      z-index: 1;
+      animation: bios-jitter 0.1s infinite alternate;
+      min-width: 280px;
+      padding: 0 24px;
+    }
+    #boot-lines .line {
+      opacity: 0;
+      white-space: pre;
+    }
+    #boot-lines .line.visible { opacity: 1; }
+
+    #boot-bar-wrap {
+      margin-top: 24px;
+      width: clamp(240px, 40vw, 420px);
+      height: 14px;
+      border: 1px solid #ff2a2a;
+      background: #111;
+      z-index: 1;
+      box-shadow: 0 0 6px #aa0000;
+      overflow: hidden;
+    }
+    #boot-bar-fill {
+      height: 100%;
+      width: 10%;
+      background: #ff2a2a;
+      box-shadow: inset 0 0 4px #ff6666;
+      transition: width 0.15s linear;
+    }
   </style>
 </head>
 <body>
+  <!-- BIOS boot overlay — renders instantly before any JS -->
+  <div id="boot-overlay">
+    <div id="boot-lines">
+      <div class="line" data-text="DP MOTO BIOS v0.1"></div>
+      <div class="line" data-text="VIDEO  .......... OK"></div>
+      <div class="line" data-text="AUDIO  .......... OK"></div>
+      <div class="line" data-text="LOADING GAME ....."></div>
+    </div>
+    <div id="boot-bar-wrap">
+      <div id="boot-bar-fill"></div>
+    </div>
+  </div>
+
+  <script>
+  // Boot overlay API — available immediately, before any module JS loads
+  (function() {
+    var fill = document.getElementById('boot-bar-fill');
+    var lines = document.querySelectorAll('#boot-lines .line');
+    var overlay = document.getElementById('boot-overlay');
+    var currentProgress = 0.1; // start at 10%
+    var ready = false;
+
+    // Type out lines quickly (80ms apart)
+    var lineIndex = 0;
+    function typeNextLine() {
+      if (lineIndex >= lines.length) return;
+      var el = lines[lineIndex];
+      el.textContent = el.getAttribute('data-text');
+      el.classList.add('visible');
+      lineIndex++;
+      if (lineIndex < lines.length) {
+        setTimeout(typeNextLine, 80);
+      }
+    }
+    typeNextLine();
+
+    window.__bootOverlay = {
+      setProgress: function(p) {
+        if (ready) return;
+        // Map p (0..1) into 0.1..0.9 range, never exceed 0.9
+        var mapped = 0.1 + p * 0.8;
+        if (mapped > 0.9) mapped = 0.9;
+        if (mapped > currentProgress) {
+          currentProgress = mapped;
+          fill.style.width = (currentProgress * 100) + '%';
+        }
+      },
+      markStartScreenReady: function() {
+        if (ready) return;
+        ready = true;
+        // Smooth fill to 100% then fade out
+        fill.style.transition = 'width 0.3s ease-out';
+        fill.style.width = '100%';
+        setTimeout(function() {
+          overlay.style.transition = 'opacity 0.3s ease-out';
+          overlay.style.opacity = '0';
+          setTimeout(function() {
+            overlay.classList.add('hidden');
+          }, 320);
+        }, 350);
+      }
+    };
+  })();
+  </script>
+
   <div id="game-container"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
