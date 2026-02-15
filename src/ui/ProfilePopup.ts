@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
-import { loadOrCreateProfile, updateUsername, uploadAvatarAndSave } from '../systems/ProfileSystem';
-import { startLogin, isConnected } from '../systems/SpotifyAuthSystem';
+import { loadOrCreateProfile, updateUsername, uploadAvatarAndSave, disconnectProfile } from '../systems/ProfileSystem';
+import { startLogin, isConnected, disconnect } from '../systems/SpotifyAuthSystem';
+import { DisconnectModal } from './DisconnectModal';
 
 const POPUP_W = 690;
 const POPUP_H = 900;
@@ -51,6 +52,9 @@ export class ProfilePopup {
   private spotifyHit!: Phaser.GameObjects.Zone;
   private spotifyY: number = 0;
   private spotifySaveHint!: Phaser.GameObjects.Text;
+
+  // Disconnect confirmation modal
+  private disconnectModal: DisconnectModal;
 
   // DOM (hidden file input for OS file picker)
   private fileInput: HTMLInputElement;
@@ -193,12 +197,19 @@ export class ProfilePopup {
     this.spotifyHit = scene.add.zone(0, this.spotifyY, spotifyW, spotifyH)
       .setInteractive({ useHandCursor: true });
     this.spotifyHit.on('pointerdown', async () => {
-      if (!isConnected()) {
+      if (isConnected()) {
+        const confirmed = await this.disconnectModal.show();
+        if (confirmed) {
+          await disconnectProfile();
+          disconnect();
+          this.updateSpotifyButton();
+          this.scene.events.emit('spotify-auth-changed');
+        }
+      } else {
         const success = await startLogin();
         if (success) {
           this.updateSpotifyButton();
           this.scene.events.emit('spotify-auth-changed');
-          // Reload profile from Supabase now that Spotify is connected
           this.loadProfile();
         }
       }
@@ -242,6 +253,9 @@ export class ProfilePopup {
       .setInteractive({ useHandCursor: true });
     exitHit.on('pointerdown', () => this.close());
     this.container.add(exitHit);
+
+    // --- Disconnect confirmation modal ---
+    this.disconnectModal = new DisconnectModal(scene);
 
     // --- Hidden DOM file input (only DOM usage, required for OS file picker) ---
     this.fileInput = document.createElement('input');
@@ -524,6 +538,7 @@ export class ProfilePopup {
   }
 
   destroy(): void {
+    this.disconnectModal.destroy();
     this.container.destroy();
     this.backdrop.destroy();
     this.fileInput.remove();

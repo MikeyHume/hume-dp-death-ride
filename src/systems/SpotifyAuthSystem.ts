@@ -246,6 +246,15 @@ export async function getSpotifyUserId(): Promise<string | null> {
   }
 }
 
+/** Clear all Spotify auth state (localStorage + in-memory cache). */
+export function disconnect(): void {
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(SESSION_VERIFIER);
+  localStorage.removeItem(SESSION_STATE);
+  localStorage.removeItem(SPOTIFY_USER_ID_KEY);
+  cachedSpotifyUserId = null;
+}
+
 /** Check if the connected Spotify account is Premium. Returns false on any error. */
 export async function checkPremium(): Promise<boolean> {
   const token = getAccessToken();

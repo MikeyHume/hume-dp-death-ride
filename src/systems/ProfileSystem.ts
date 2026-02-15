@@ -127,6 +127,21 @@ export async function updateUsername(nameRaw: string): Promise<string> {
 }
 
 /**
+ * Mark the profile as disconnected from Spotify in Supabase.
+ * Clears spotify_connected and spotify_display_name but keeps username/avatar_url.
+ */
+export async function disconnectProfile(): Promise<void> {
+  if (linkedSpotifyId) {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ spotify_connected: false, spotify_display_name: null })
+      .eq('spotify_user_id', linkedSpotifyId);
+    if (error) console.warn('ProfileSystem: failed to update disconnect state', error);
+  }
+  linkedSpotifyId = null;
+}
+
+/**
  * Upload avatar file to Supabase Storage and save the storage path.
  * Only works when Spotify-connected (returns null otherwise).
  * Stores the path (not public URL) in profiles.avatar_url.
