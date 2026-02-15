@@ -4,6 +4,10 @@ import { isConnected, checkPremium } from './SpotifyAuthSystem';
 import { SpotifyPlayerSystem } from './SpotifyPlayerSystem';
 
 const MUSIC_UI_SCALE = 1;             // uniform scale from upper-right corner
+const COUNTDOWN_VOLUME = 3.0;         // countdown music volume (0.0–1.0+)
+const CROSSFADE_LEAD_S = 3.0;        // fade duration in seconds (audio audibly fades over this)
+const CROSSFADE_STARTUP_S = 2.0;    // estimated startup overhead for startPlaylist() (shuffle+play+skip+wait)
+const CROSSFADE_START_DB = -6;       // starting volume in dB (0 = full, -12 ≈ 25%)
 const SPOTIFY_URL = 'https://open.spotify.com/artist/5uzPIJDzWAujemRDKiJMRj';
 const YT_THUMB_WIDTH = 171;
 const YT_THUMB_HEIGHT = 96;
@@ -31,6 +35,8 @@ export class MusicPlayer {
   private source: MusicSource = 'youtube';
   private spotifyPlayer: SpotifyPlayerSystem | null = null;
   private countdownMusic: Phaser.Sound.BaseSound | null = null;
+  private crossfadeTimer: number = 0;
+  private crossfadeAnim: number = 0;
 
 
   constructor(scene: Phaser.Scene) {
@@ -347,16 +353,70 @@ export class MusicPlayer {
       try { this.ytPlayer.mute(); this.ytPlayer.pauseVideo(); } catch {}
     }
 
-    // Play countdown audio first, then start Spotify playlist when it ends
+    // Play countdown audio first, crossfade Spotify in before it ends
     if (this.scene.cache.audio.exists('countdown-music')) {
-      this.countdownMusic = this.scene.sound.add('countdown-music', { loop: false, volume: 0.5 });
+      this.countdownMusic = this.scene.sound.add('countdown-music', { loop: false, volume: COUNTDOWN_VOLUME });
       this.countdownMusic.play();
+
+      // Schedule Spotify early enough that startup + fade finishes before countdown ends
+      const duration = (this.countdownMusic as any).duration || 0;
+      const leadMs = Math.max(0, duration - CROSSFADE_LEAD_S - CROSSFADE_STARTUP_S) * 1000;
+      let spotifyStarted = false;
+
+      this.crossfadeTimer = window.setTimeout(() => {
+        spotifyStarted = true;
+        this.startSpotifyWithFade();
+      }, leadMs);
+
       this.countdownMusic.once('complete', () => {
         this.countdownMusic = null;
-        this.startSpotifyPlaylist();
+        // Fallback: if the timer hasn't fired yet, start normally
+        if (!spotifyStarted) {
+          window.clearTimeout(this.crossfadeTimer);
+          this.startSpotifyPlaylist();
+        }
       });
     } else {
       this.startSpotifyPlaylist();
+    }
+  }
+
+  /** Start Spotify and fade in from CROSSFADE_START_DB to 0 dB over CROSSFADE_LEAD_S. */
+  private async startSpotifyWithFade(): Promise<void> {
+    if (!this.spotifyPlayer) return;
+
+    const ok = await this.spotifyPlayer.startPlaylist();
+    if (!ok) {
+      // Fallback handled by startSpotifyPlaylist path
+      this.startSpotifyFallback();
+      return;
+    }
+
+    // Fade from -12 dB to 0 dB (relative to the player's base volume of 0.5)
+    const startGain = Math.pow(10, CROSSFADE_START_DB / 20); // ~0.25
+    const baseVol = 0.5;
+    const fadeMs = CROSSFADE_LEAD_S * 1000;
+    const startTime = performance.now();
+
+    this.spotifyPlayer.setVolume(startGain * baseVol);
+
+    const step = () => {
+      const t = Math.min(1, (performance.now() - startTime) / fadeMs);
+      const gain = startGain + (1 - startGain) * t;
+      this.spotifyPlayer?.setVolume(gain * baseVol);
+      if (t < 1) {
+        this.crossfadeAnim = requestAnimationFrame(step);
+      }
+    };
+    this.crossfadeAnim = requestAnimationFrame(step);
+  }
+
+  private startSpotifyFallback(): void {
+    if (!this.playlistStarted) return;
+    if (this.ytReady) this.startYTPlaylist();
+    else {
+      this.pendingPlay = true;
+      this.loadYouTubeAPI();
     }
   }
 
@@ -511,6 +571,8 @@ export class MusicPlayer {
   }
 
   destroy(): void {
+    if (this.crossfadeTimer) window.clearTimeout(this.crossfadeTimer);
+    if (this.crossfadeAnim) cancelAnimationFrame(this.crossfadeAnim);
     if (this.scrollAnim) cancelAnimationFrame(this.scrollAnim);
     if (this.overlaySyncAnim) cancelAnimationFrame(this.overlaySyncAnim);
     if (this.titleMusic) {

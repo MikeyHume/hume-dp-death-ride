@@ -50,6 +50,7 @@ const DLB_T3_NAME_X = 96;          // name text X relative to group left
 const DLB_T3_SCORE_X = 380;        // score text X relative to group left
 const DLB_T3_TIME_X = 500;         // time text X relative to group left
 const DLB_T3_MEDAL_COLORS = [0xFFD700, 0xC0C0C0, 0xCD7F32]; // gold, silver, bronze
+const DLB_GAP = 12;               // min px gap between adjacent elements in a row
 
 // ── Death screen leaderboard: Rows 4-10 group ──
 const DLB_REST_X = 615;            // left edge X of the 4-10 group
@@ -2077,29 +2078,33 @@ export class GameScene extends Phaser.Scene {
       }
 
       // Rank
-      const rankT = this.add.text(DLB_T3_X + DLB_T3_RANK_X, rowCenterY, `${String(i + 1).padStart(2, ' ')}.`, {
+      let nextX = DLB_T3_X + DLB_T3_RANK_X;
+      const rankT = this.add.text(nextX, rowCenterY, `${String(i + 1).padStart(2, ' ')}.`, {
         fontSize: DLB_T3_FONT, color, fontFamily: 'Early GameBoy',
       }).setOrigin(0, 0.5);
       this.deathLbEntriesContainer.add(rankT);
       rowTexts.push(rankT);
 
-      // Name
-      const nameT = this.add.text(DLB_T3_X + DLB_T3_NAME_X, rowCenterY, (e.name || 'ANON').padEnd(NAME_MAX_LENGTH, ' '), {
+      // Name — push right if rank text overflows its slot
+      nextX = Math.max(DLB_T3_X + DLB_T3_NAME_X, rankT.x + rankT.width + DLB_GAP);
+      const nameT = this.add.text(nextX, rowCenterY, (e.name || 'ANON').padEnd(NAME_MAX_LENGTH, ' '), {
         fontSize: DLB_T3_FONT, color, fontFamily: 'Early GameBoy',
       }).setOrigin(0, 0.5);
       this.deathLbEntriesContainer.add(nameT);
       rowTexts.push(nameT);
 
-      // Score
-      const scoreT = this.add.text(DLB_T3_X + DLB_T3_SCORE_X, rowCenterY, String(e.score).padStart(8, ' '), {
+      // Score — push right if name overflows its slot
+      nextX = Math.max(DLB_T3_X + DLB_T3_SCORE_X, nameT.x + nameT.width + DLB_GAP);
+      const scoreT = this.add.text(nextX, rowCenterY, String(e.score).padStart(8, ' '), {
         fontSize: DLB_T3_FONT, color, fontFamily: 'Early GameBoy',
       }).setOrigin(0, 0.5);
       this.deathLbEntriesContainer.add(scoreT);
       rowTexts.push(scoreT);
 
-      // Time + marker
+      // Time + marker — push right if score overflows its slot
       const marker = (i === highlightIdx) ? ' ◄' : '';
-      const timeT = this.add.text(DLB_T3_X + DLB_T3_TIME_X, rowCenterY, `${e.time}s${marker}`, {
+      nextX = Math.max(DLB_T3_X + DLB_T3_TIME_X, scoreT.x + scoreT.width + DLB_GAP);
+      const timeT = this.add.text(nextX, rowCenterY, `${e.time}s${marker}`, {
         fontSize: DLB_T3_FONT, color, fontFamily: 'Early GameBoy',
       }).setOrigin(0, 0.5);
       this.deathLbEntriesContainer.add(timeT);
@@ -2118,21 +2123,24 @@ export class GameScene extends Phaser.Scene {
       const rowTexts: Phaser.GameObjects.Text[] = [];
 
       // Rank
-      const rankT = this.add.text(DLB_REST_X + DLB_REST_RANK_X, rowCenterY, `${String(i + 1).padStart(2, ' ')}.`, {
+      let nextX = DLB_REST_X + DLB_REST_RANK_X;
+      const rankT = this.add.text(nextX, rowCenterY, `${String(i + 1).padStart(2, ' ')}.`, {
         fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
       }).setOrigin(0, 0.5);
       this.deathLbEntriesContainer.add(rankT);
       rowTexts.push(rankT);
 
       // Name
-      const nameT = this.add.text(DLB_REST_X + DLB_REST_NAME_X, rowCenterY, (e.name || 'ANON').padEnd(NAME_MAX_LENGTH, ' '), {
+      nextX = Math.max(DLB_REST_X + DLB_REST_NAME_X, rankT.x + rankT.width + DLB_GAP);
+      const nameT = this.add.text(nextX, rowCenterY, (e.name || 'ANON').padEnd(NAME_MAX_LENGTH, ' '), {
         fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
       }).setOrigin(0, 0.5);
       this.deathLbEntriesContainer.add(nameT);
       rowTexts.push(nameT);
 
       // Score
-      const scoreT = this.add.text(DLB_REST_X + DLB_REST_SCORE_X, rowCenterY, String(e.score).padStart(8, ' '), {
+      nextX = Math.max(DLB_REST_X + DLB_REST_SCORE_X, nameT.x + nameT.width + DLB_GAP);
+      const scoreT = this.add.text(nextX, rowCenterY, String(e.score).padStart(8, ' '), {
         fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
       }).setOrigin(0, 0.5);
       this.deathLbEntriesContainer.add(scoreT);
@@ -2140,7 +2148,8 @@ export class GameScene extends Phaser.Scene {
 
       // Time + marker
       const marker = (i === highlightIdx) ? ' ◄' : '';
-      const timeT = this.add.text(DLB_REST_X + DLB_REST_TIME_X, rowCenterY, `${e.time}s${marker}`, {
+      nextX = Math.max(DLB_REST_X + DLB_REST_TIME_X, scoreT.x + scoreT.width + DLB_GAP);
+      const timeT = this.add.text(nextX, rowCenterY, `${e.time}s${marker}`, {
         fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
       }).setOrigin(0, 0.5);
       this.deathLbEntriesContainer.add(timeT);
