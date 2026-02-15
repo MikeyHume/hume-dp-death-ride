@@ -22,7 +22,6 @@ import { PerfSystem } from '../systems/PerfSystem';
 import { OrientationOverlay } from '../systems/OrientationOverlay';
 import { GAME_MODE } from '../config/gameMode';
 import { submitScore } from '../systems/LeaderboardService';
-import { updateMobileDebugOverlay } from '../ui/MobileDebugOverlay';
 
 enum GameState {
   TITLE,
@@ -203,7 +202,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
-    (window as any).__crashLog?.stage('gamescene-create-start');
     this.elapsed = 0;
     this.state = GameState.TITLE;
 
@@ -292,7 +290,6 @@ export class GameScene extends Phaser.Scene {
     this.fxSystem = new FXSystem(this);
     this.audioSystem = new AudioSystem();
     this.musicPlayer = new MusicPlayer(this);
-    (window as any).__crashLog?.stage('gamescene-systems-ready');
 
     // Wire car-vs-crash explosion sound
     this.obstacleSystem.onExplosion = () => this.audioSystem.playExplosion();
@@ -727,14 +724,7 @@ export class GameScene extends Phaser.Scene {
     this.playerSystem.setVisible(false);
 
     // --- CRT post-processing ---
-    try {
-      this.cameras.main.setPostPipeline(CRTPipeline);
-      (window as any).__crashLog?.stage('gamescene-crt-applied');
-    } catch (err) {
-      console.warn('GameScene: CRT shader failed, running without post-processing', err);
-      (window as any).__crashLog?.stage('gamescene-crt-failed');
-      this.crtEnabled = false;
-    }
+    this.cameras.main.setPostPipeline(CRTPipeline);
 
     // CRT debug overlay (DOM element — not affected by CRT shader)
     this.crtDebugEl = document.createElement('pre');
@@ -774,7 +764,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Signal boot overlay that the start screen is ready
-    (window as any).__crashLog?.stage('gamescene-create-done');
     (window as any).__bootOverlay?.markStartScreenReady?.();
 
     if (DEBUG_HOTKEYS.instantRage.active) {
@@ -795,7 +784,6 @@ export class GameScene extends Phaser.Scene {
     const dt = delta / 1000;
 
     this.perfSystem.update(dt);
-    updateMobileDebugOverlay(this.perfSystem.getFps(), this.perfSystem.getQuality());
     this.inputSystem.update(dt);
     if (this.orientationOverlay) {
       this.orientationOverlay.update();

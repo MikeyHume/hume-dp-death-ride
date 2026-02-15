@@ -4,19 +4,12 @@ import { ensureAnonUser } from '../systems/AuthSystem';
 
 const TITLE_LOOP_FRAME_COUNT = 27;
 const TITLE_START_FRAME_COUNT = 25;
-
-/** Log a crash stage marker (survives iOS page reloads via localStorage). */
-function stage(label: string): void {
-  (window as any).__crashLog?.stage(label);
-}
-
 export class BootScene extends Phaser.Scene {
   constructor() {
     super({ key: 'BootScene' });
   }
 
   preload() {
-    stage('boot-preload-start');
     // Report real load progress to the boot overlay (clamped 0..0.9)
     this.load.on('progress', (value: number) => {
       (window as any).__bootOverlay?.setProgress?.(value);
@@ -83,12 +76,9 @@ export class BootScene extends Phaser.Scene {
     for (let i = 0; i < TUNING.TUTORIAL_RAGE_FRAMES; i++) {
       this.load.image(`tutorial-rage-${i}`, `assets/tutorial/rage/rage/rage_${i}.jpg`);
     }
-    stage('boot-preload-queued');
   }
 
   async create() {
-    stage('boot-create-start');
-
     // Title loop animation (from loaded image sequence)
     const frames: Phaser.Types.Animations.AnimationFrame[] = [];
     for (let i = 0; i < TITLE_LOOP_FRAME_COUNT; i++) {
@@ -220,37 +210,13 @@ export class BootScene extends Phaser.Scene {
     rocketGfx.generateTexture('rocket-projectile', TUNING.ROCKET_DISPLAY_W, TUNING.ROCKET_DISPLAY_H);
     rocketGfx.destroy();
 
-    stage('boot-anims-done');
-
     // Force-load custom fonts before transitioning (browser won't load them until something uses them)
-    // Timeout after 3s so iOS standalone mode doesn't hang indefinitely
-    try {
-      await Promise.race([
-        Promise.all([
-          document.fonts.load('48px "Early GameBoy"'),
-          document.fonts.load('24px "Alagard"'),
-        ]),
-        new Promise(r => setTimeout(r, 3000)),
-      ]);
-      stage('boot-fonts-done');
-    } catch (err) {
-      console.warn('BootScene: font load failed, continuing anyway', err);
-      stage('boot-fonts-failed');
-    }
+    await Promise.all([
+      document.fonts.load('48px "Early GameBoy"'),
+      document.fonts.load('24px "Alagard"'),
+    ]);
 
-    // Auth — non-blocking. If Supabase is unreachable, the game still starts.
-    try {
-      await Promise.race([
-        ensureAnonUser(),
-        new Promise(r => setTimeout(r, 5000)),
-      ]);
-      stage('boot-auth-done');
-    } catch (err) {
-      console.warn('BootScene: auth failed, continuing without user', err);
-      stage('boot-auth-failed');
-    }
-
-    stage('boot-starting-gamescene');
+    await ensureAnonUser();
     this.scene.start('GameScene');
   }
 }
