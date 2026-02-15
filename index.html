@@ -255,8 +255,7 @@
     function tryDismiss() {
       if (dismissed || !typingDone || !loadingDone) return;
       dismissed = true;
-      fill.style.transition = 'width 0.3s ease-out';
-      fill.style.width = '100%';
+      // Bar is already at 100% (set in markStartScreenReady) — just fade out
       setTimeout(function() {
         overlay.style.transition = 'opacity 0.3s ease-out';
         overlay.style.opacity = '0';
@@ -277,8 +276,11 @@
       markStartScreenReady: function() {
         if (loadingDone) return;
         loadingDone = true;
-        // Ensure all text is revealed (loading done = progress earned to 100%)
-        targetProgress = 1;
+        // Fill bar to 100% immediately — loading IS done
+        fill.style.transition = 'width 0.3s ease-out';
+        fill.style.width = '100%';
+        // Unlock all remaining chars (use 2 to avoid floating-point edge cases)
+        targetProgress = 2;
         if (!typingDone && !dripScheduled) scheduleDrip(0);
         tryDismiss();
       }
