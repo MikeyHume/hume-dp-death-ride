@@ -17,7 +17,7 @@ import { getCurrentWeekKey, weekKeyToSeed } from '../util/time';
 import { CRTPipeline } from '../fx/CRTPipeline';
 import { CRT_TUNING } from '../config/crtTuning';
 import { ProfileHud } from '../ui/ProfileHud';
-import { ProfilePopup } from '../ui/ProfilePopup';
+import { ProfilePopup, AVATAR_TEXTURE_KEY } from '../ui/ProfilePopup';
 import { PerfSystem } from '../systems/PerfSystem';
 import { OrientationOverlay } from '../systems/OrientationOverlay';
 import { GAME_MODE } from '../config/gameMode';
@@ -36,6 +36,30 @@ enum GameState {
 const NAME_MAX_LENGTH = 10;
 const SKIP_BTN_MARGIN_RIGHT = 60;    // px from right edge of screen
 const SKIP_BTN_MARGIN_BOTTOM = 36;   // px from bottom edge of screen
+
+// ── Death screen leaderboard: Top 3 group ──
+const DLB_T3_X = 560;              // left edge X of the entire top-3 group
+const DLB_T3_Y = 0;                // Y offset from leaderboard header bottom
+const DLB_T3_ROW_H = 58;           // row height per top-3 entry
+const DLB_T3_FONT = '34px';        // font size for top-3 text
+const DLB_T3_AVATAR_R = 22;        // avatar circle radius
+const DLB_T3_AVATAR_STROKE = 3;    // medal ring stroke width
+const DLB_T3_AVATAR_X = -55;       // avatar center X relative to group left
+const DLB_T3_RANK_X = 0;           // rank text X relative to group left
+const DLB_T3_NAME_X = 96;          // name text X relative to group left
+const DLB_T3_SCORE_X = 380;        // score text X relative to group left
+const DLB_T3_TIME_X = 500;         // time text X relative to group left
+const DLB_T3_MEDAL_COLORS = [0xFFD700, 0xC0C0C0, 0xCD7F32]; // gold, silver, bronze
+
+// ── Death screen leaderboard: Rows 4-10 group ──
+const DLB_REST_X = 615;            // left edge X of the 4-10 group
+const DLB_REST_Y = 8;              // Y gap between top-3 block and 4-10 block
+const DLB_REST_ROW_H = 38;         // row height per 4-10 entry
+const DLB_REST_FONT = '24px';      // font size for 4-10 text
+const DLB_REST_RANK_X = 0;         // rank X relative to group left
+const DLB_REST_NAME_X = 56;        // name X relative to group left
+const DLB_REST_SCORE_X = 280;      // score X relative to group left
+const DLB_REST_TIME_X = 420;       // time X relative to group left
 
 export class GameScene extends Phaser.Scene {
   // Systems
@@ -109,10 +133,12 @@ export class GameScene extends Phaser.Scene {
   private deathBestText!: Phaser.GameObjects.Text;
   private deathLeaderboardText!: Phaser.GameObjects.Text;
   private deathRestartText!: Phaser.GameObjects.Text;
-  private deathHighlightText!: Phaser.GameObjects.Text;
   private highlightRank: number = 0;
+  private deathLbEntriesContainer!: Phaser.GameObjects.Container;
+  private highlightedRowTexts: Phaser.GameObjects.Text[] = [];
   private nameTitleText!: Phaser.GameObjects.Text;
   private debugText!: Phaser.GameObjects.Text;
+  private debugMusicSourceText: Phaser.GameObjects.Text | null = null;
 
   // Name entry
   private nameEntryContainer!: Phaser.GameObjects.Container;
@@ -330,7 +356,7 @@ export class GameScene extends Phaser.Scene {
       fontSize: '16px',
       color: '#ffffff',
       fontFamily: 'monospace',
-    }).setDepth(100);
+    }).setDepth(100).setVisible(false);
 
     // --- Title loop animation (fullscreen, behind title text) ---
     this.titleLoopSprite = this.add.sprite(
@@ -450,9 +476,9 @@ export class GameScene extends Phaser.Scene {
         fontSize: '28px',
         color: '#aaaaaa',
         fontFamily: 'Early GameBoy',
-        lineSpacing: 6,
       }
     ).setOrigin(0.5, 0);
+    this.deathLbEntriesContainer = this.add.container(0, 0);
     this.deathRestartText = this.add.text(
       TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 380,
       'Press SPACEBAR to try again', {
@@ -461,15 +487,8 @@ export class GameScene extends Phaser.Scene {
         fontFamily: 'Early GameBoy',
       }
     ).setOrigin(0.5);
-    this.deathContainer.add([deathBg, deathTitle, this.deathScoreText, this.deathTimeText, this.deathRankText, this.deathBestText, this.deathLeaderboardText, this.deathRestartText]);
+    this.deathContainer.add([deathBg, deathTitle, this.deathScoreText, this.deathTimeText, this.deathRankText, this.deathBestText, this.deathLeaderboardText, this.deathLbEntriesContainer, this.deathRestartText]);
     this.deathContainer.setVisible(false);
-
-    // Rainbow-cycling highlight for the player's leaderboard entry (scene-level, above death container)
-    this.deathHighlightText = this.add.text(0, 0, '', {
-      fontSize: '28px',
-      color: '#ffffff',
-      fontFamily: 'Early GameBoy',
-    }).setOrigin(0.5, 0).setDepth(201).setVisible(false);
 
     // --- Name entry overlay (shown on top 10 scores) ---
     this.nameEntryContainer = this.add.container(0, 0).setDepth(210);
@@ -756,6 +775,43 @@ export class GameScene extends Phaser.Scene {
       if (this.orientationOverlay.isPaused()) return;
     }
 
+    // DEBUG: E key toggles gameplay debug text
+    if (this.input.keyboard && Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey('E'))) {
+      this.debugText.setVisible(!this.debugText.visible);
+      if (!this.debugText.visible) this.debugText.setText('');
+    }
+
+    // DEBUG: W key toggles music source label
+    if (this.input.keyboard && Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey('W'))) {
+      if (!this.debugMusicSourceText) {
+        this.debugMusicSourceText = this.add.text(TUNING.GAME_WIDTH - 40, 150, '', {
+          fontSize: '18px', color: '#00ff00', fontFamily: 'monospace',
+        }).setOrigin(1, 0).setDepth(9999).setScrollFactor(0);
+      }
+      this.debugMusicSourceText.setVisible(!this.debugMusicSourceText.visible);
+    }
+    if (this.debugMusicSourceText?.visible) {
+      this.debugMusicSourceText.setText(`SRC: ${this.musicPlayer.getSource().toUpperCase()}`);
+    }
+
+    // DEBUG: Q key jumps straight to leaderboard screen
+    if (this.input.keyboard && Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey('Q'))
+        && this.state !== GameState.DEAD) {
+      // Seed some dummy entries if the board is empty
+      if (this.leaderboardSystem.getDisplayEntries().length < 10) {
+        const names = ['ACE', 'BLAZE', 'CRUX', 'DRIFT', 'EDGE', 'FLUX', 'GRIM', 'HAWK', 'JINX', 'KOVA'];
+        for (let i = 0; i < 10; i++) {
+          this.leaderboardSystem.submit(names[i], 5000 - i * 400, 60 - i * 4);
+        }
+      }
+      this.pendingScore = 3800;
+      this.elapsed = 42;
+      const rank = this.leaderboardSystem.wouldMakeBoard(this.pendingScore);
+      if (rank > 0) this.leaderboardSystem.submit(this.profilePopup.getName() || 'ANON', this.pendingScore, this.elapsed);
+      this.deathContainer.setVisible(true);
+      this.showDeathScreen(rank || 3);
+    }
+
     switch (this.state) {
       case GameState.TITLE:
         this.updateTitle(dt);
@@ -922,8 +978,9 @@ export class GameScene extends Phaser.Scene {
     this.hudLabel.setVisible(false);
     this.hudHighScore.setVisible(false);
     this.deathContainer.setVisible(false);
-    this.deathHighlightText.setVisible(false);
     this.highlightRank = 0;
+    this.deathLbEntriesContainer.removeAll(true);
+    this.highlightedRowTexts = [];
     this.nameEntryContainer.setVisible(false);
     this.nameEnterBtn.setVisible(false);
     this.playMusicOverlay.setAlpha(0).setVisible(false);
@@ -1194,8 +1251,9 @@ export class GameScene extends Phaser.Scene {
     this.titleLoopSprite.stop();
     this.titleLoopSprite.setVisible(false);
     this.deathContainer.setVisible(false);
-    this.deathHighlightText.setVisible(false);
     this.highlightRank = 0;
+    this.deathLbEntriesContainer.removeAll(true);
+    this.highlightedRowTexts = [];
     this.nameEntryContainer.setVisible(false);
     this.nameEnterBtn.setVisible(false);
     if (this.nameKeyHandler) {
@@ -1469,14 +1527,16 @@ export class GameScene extends Phaser.Scene {
 
     // Debug
     const diff = this.difficultySystem.getFactor();
-    this.debugText.setText(
-      `X: ${Math.round(this.playerSystem.getX())}  ` +
-      `Y: ${Math.round(this.playerSystem.getY())}  ` +
-      `bikeSpd: ${Math.round(this.playerSystem.getPlayerSpeed())}  ` +
-      `roadSpd: ${Math.round(roadSpeed)}  ` +
-      `diff: ${diff.toFixed(2)}  ` +
-      `time: ${Math.round(this.elapsed)}s`
-    );
+    if (this.debugText.visible) {
+      this.debugText.setText(
+        `X: ${Math.round(this.playerSystem.getX())}  ` +
+        `Y: ${Math.round(this.playerSystem.getY())}  ` +
+        `bikeSpd: ${Math.round(this.playerSystem.getPlayerSpeed())}  ` +
+        `roadSpd: ${Math.round(roadSpeed)}  ` +
+        `diff: ${diff.toFixed(2)}  ` +
+        `time: ${Math.round(this.elapsed)}s`
+      );
+    }
 
     // CRT debug overlay
     if (this.crtDebugVisible) this.updateCRTDebugText();
@@ -1973,34 +2033,124 @@ export class GameScene extends Phaser.Scene {
       this.deathBestText.setVisible(false);
     }
 
-    // Top 10 leaderboard display
+    // Top 10 leaderboard display — top 3 get podium styling
     const entries = this.leaderboardSystem.getDisplayEntries();
-    const lines: string[] = [`── ${this.weekKey} TOP 10 ──`];
-    let highlightLine = '';
-    const highlightIdx = (rank > 0 && rank <= 10) ? rank - 1 : -1;
-    for (let i = 0; i < entries.length; i++) {
-      const e = entries[i];
-      const marker = (i === highlightIdx) ? ' ◄' : '';
-      const nameStr = (e.name || 'ANON').padEnd(NAME_MAX_LENGTH, ' ');
-      const line = `${String(i + 1).padStart(2, ' ')}. ${nameStr} ${String(e.score).padStart(8, ' ')}  ${e.time}s${marker}`;
-      lines.push(line);
-      if (i === highlightIdx) highlightLine = line;
-    }
-    this.deathLeaderboardText.setText(lines.join('\n'));
+    this.deathLeaderboardText.setText(`── ${this.weekKey} TOP 10 ──`);
 
-    // Rainbow highlight overlay for the player's leaderboard entry (top 10 only)
-    this.highlightRank = highlightIdx >= 0 ? rank : 0;
-    if (highlightIdx >= 0 && highlightLine) {
-      this.deathHighlightText.setText(highlightLine);
-      const lineStep = (this.deathLeaderboardText.height + this.deathLeaderboardText.lineSpacing) / lines.length;
-      this.deathHighlightText.setPosition(
-        TUNING.GAME_WIDTH / 2,
-        this.deathLeaderboardText.y + rank * lineStep
-      );
-      this.deathHighlightText.setVisible(true);
-    } else {
-      this.deathHighlightText.setVisible(false);
+    // Clear previous entry rows
+    this.deathLbEntriesContainer.removeAll(true);
+    this.highlightedRowTexts = [];
+
+    const highlightIdx = (rank > 0 && rank <= 10) ? rank - 1 : -1;
+    const headerH = 40;
+    const baseY = this.deathLeaderboardText.y + headerH;
+
+    const hasAvatar = this.textures.exists(AVATAR_TEXTURE_KEY);
+    const playerName = this.profilePopup.getName();
+
+    // ── Top 3 entries ──
+    let curY = baseY + DLB_T3_Y;
+    const top3Count = Math.min(entries.length, 3);
+    for (let i = 0; i < top3Count; i++) {
+      const e = entries[i];
+      const rowCenterY = curY + DLB_T3_ROW_H / 2;
+      const color = (i === highlightIdx) ? '#ffffff' : '#aaaaaa';
+      const rowTexts: Phaser.GameObjects.Text[] = [];
+
+      // Avatar with medal stroke
+      const avatarX = DLB_T3_X + DLB_T3_AVATAR_X;
+      const ring = this.add.circle(avatarX, rowCenterY, DLB_T3_AVATAR_R + DLB_T3_AVATAR_STROKE, DLB_T3_MEDAL_COLORS[i]);
+      this.deathLbEntriesContainer.add(ring);
+
+      const isPlayerEntry = e.name === playerName && hasAvatar;
+      if (isPlayerEntry) {
+        const avatar = this.add.image(avatarX, rowCenterY, AVATAR_TEXTURE_KEY)
+          .setDisplaySize(DLB_T3_AVATAR_R * 2, DLB_T3_AVATAR_R * 2);
+        this.deathLbEntriesContainer.add(avatar);
+      } else {
+        const inner = this.add.circle(avatarX, rowCenterY, DLB_T3_AVATAR_R, 0x222222);
+        this.deathLbEntriesContainer.add(inner);
+        const numLabel = this.add.text(avatarX, rowCenterY, String(i + 1), {
+          fontSize: '20px', color: '#ffffff', fontFamily: 'Early GameBoy',
+        }).setOrigin(0.5);
+        this.deathLbEntriesContainer.add(numLabel);
+      }
+
+      // Rank
+      const rankT = this.add.text(DLB_T3_X + DLB_T3_RANK_X, rowCenterY, `${String(i + 1).padStart(2, ' ')}.`, {
+        fontSize: DLB_T3_FONT, color, fontFamily: 'Early GameBoy',
+      }).setOrigin(0, 0.5);
+      this.deathLbEntriesContainer.add(rankT);
+      rowTexts.push(rankT);
+
+      // Name
+      const nameT = this.add.text(DLB_T3_X + DLB_T3_NAME_X, rowCenterY, (e.name || 'ANON').padEnd(NAME_MAX_LENGTH, ' '), {
+        fontSize: DLB_T3_FONT, color, fontFamily: 'Early GameBoy',
+      }).setOrigin(0, 0.5);
+      this.deathLbEntriesContainer.add(nameT);
+      rowTexts.push(nameT);
+
+      // Score
+      const scoreT = this.add.text(DLB_T3_X + DLB_T3_SCORE_X, rowCenterY, String(e.score).padStart(8, ' '), {
+        fontSize: DLB_T3_FONT, color, fontFamily: 'Early GameBoy',
+      }).setOrigin(0, 0.5);
+      this.deathLbEntriesContainer.add(scoreT);
+      rowTexts.push(scoreT);
+
+      // Time + marker
+      const marker = (i === highlightIdx) ? ' ◄' : '';
+      const timeT = this.add.text(DLB_T3_X + DLB_T3_TIME_X, rowCenterY, `${e.time}s${marker}`, {
+        fontSize: DLB_T3_FONT, color, fontFamily: 'Early GameBoy',
+      }).setOrigin(0, 0.5);
+      this.deathLbEntriesContainer.add(timeT);
+      rowTexts.push(timeT);
+
+      if (i === highlightIdx) this.highlightedRowTexts = rowTexts;
+      curY += DLB_T3_ROW_H;
     }
+
+    // ── Rows 4-10 ──
+    curY += DLB_REST_Y;
+    for (let i = 3; i < entries.length; i++) {
+      const e = entries[i];
+      const rowCenterY = curY + DLB_REST_ROW_H / 2;
+      const color = (i === highlightIdx) ? '#ffffff' : '#aaaaaa';
+      const rowTexts: Phaser.GameObjects.Text[] = [];
+
+      // Rank
+      const rankT = this.add.text(DLB_REST_X + DLB_REST_RANK_X, rowCenterY, `${String(i + 1).padStart(2, ' ')}.`, {
+        fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
+      }).setOrigin(0, 0.5);
+      this.deathLbEntriesContainer.add(rankT);
+      rowTexts.push(rankT);
+
+      // Name
+      const nameT = this.add.text(DLB_REST_X + DLB_REST_NAME_X, rowCenterY, (e.name || 'ANON').padEnd(NAME_MAX_LENGTH, ' '), {
+        fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
+      }).setOrigin(0, 0.5);
+      this.deathLbEntriesContainer.add(nameT);
+      rowTexts.push(nameT);
+
+      // Score
+      const scoreT = this.add.text(DLB_REST_X + DLB_REST_SCORE_X, rowCenterY, String(e.score).padStart(8, ' '), {
+        fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
+      }).setOrigin(0, 0.5);
+      this.deathLbEntriesContainer.add(scoreT);
+      rowTexts.push(scoreT);
+
+      // Time + marker
+      const marker = (i === highlightIdx) ? ' ◄' : '';
+      const timeT = this.add.text(DLB_REST_X + DLB_REST_TIME_X, rowCenterY, `${e.time}s${marker}`, {
+        fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
+      }).setOrigin(0, 0.5);
+      this.deathLbEntriesContainer.add(timeT);
+      rowTexts.push(timeT);
+
+      if (i === highlightIdx) this.highlightedRowTexts = rowTexts;
+      curY += DLB_REST_ROW_H;
+    }
+
+    this.highlightRank = highlightIdx >= 0 ? rank : 0;
 
     this.deathContainer.setVisible(true);
     this.deathRestartText.setVisible(true);
@@ -2083,10 +2233,10 @@ export class GameScene extends Phaser.Scene {
     // Game world is frozen — no road/obstacle updates
 
     // Rainbow cycle the highlighted leaderboard entry
-    if (this.highlightRank > 0) {
+    if (this.highlightRank > 0 && this.highlightedRowTexts.length > 0) {
       const RAINBOW = ['#FF0000', '#FF8800', '#FFFF00', '#00FF00', '#00CCFF', '#0044FF', '#FF00FF'];
       const idx = Math.floor(Date.now() / 80) % RAINBOW.length;
-      this.deathHighlightText.setColor(RAINBOW[idx]);
+      for (const t of this.highlightedRowTexts) t.setColor(RAINBOW[idx]);
     }
 
     if (this.deadInputDelay > 0) {
