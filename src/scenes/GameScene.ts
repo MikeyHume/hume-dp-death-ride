@@ -22,6 +22,7 @@ import { PerfSystem } from '../systems/PerfSystem';
 import { OrientationOverlay } from '../systems/OrientationOverlay';
 import { GAME_MODE } from '../config/gameMode';
 import { submitScore } from '../systems/LeaderboardService';
+import { updateMobileDebugOverlay } from '../ui/MobileDebugOverlay';
 
 enum GameState {
   TITLE,
@@ -784,6 +785,7 @@ export class GameScene extends Phaser.Scene {
     const dt = delta / 1000;
 
     this.perfSystem.update(dt);
+    updateMobileDebugOverlay(this.perfSystem.getFps(), this.perfSystem.getQuality());
     this.inputSystem.update(dt);
     if (this.orientationOverlay) {
       this.orientationOverlay.update();

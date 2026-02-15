@@ -5,6 +5,8 @@ import { GameScene } from './scenes/GameScene';
 import { CRTPipeline } from './fx/CRTPipeline';
 import { handleCallback } from './systems/SpotifyAuthSystem';
 import { GAME_MODE } from './config/gameMode';
+import { setupAudioUnlock } from './audio/AudioUnlock';
+import { createMobileDebugOverlay } from './ui/MobileDebugOverlay';
 
 // Handle Spotify OAuth callback before booting Phaser.
 // If we're on /callback, exchange the code and redirect to "/".
@@ -42,5 +44,11 @@ handleCallback().then((wasCallback) => {
   game.canvas.addEventListener('webglcontextrestored', () => {
     console.warn('WebGL context restored');
   });
+
+  // iOS/Safari: unlock audio on first user gesture (belt-and-suspenders)
+  setupAudioUnlock(game);
+
+  // Mobile debug overlay (?mobileDebug=1 URL param)
+  createMobileDebugOverlay();
 });
 console.log('SPOTIFY CLIENT ID:', import.meta.env.VITE_SPOTIFY_CLIENT_ID);
