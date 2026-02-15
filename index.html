@@ -173,31 +173,48 @@
   // Boot overlay API — available immediately, before any module JS loads
   (function() {
     /* ---- TYPEWRITER TUNING (edit these) ---- */
-    var DOT_INTERVAL_MS  = 100;  // ms pause after each dot appears
+    var DOT_INTERVAL_MS  = 100;  // base ms between each dot (adapts to load speed)
     var WORD_INTERVAL_MS = 40;   // ms pause after each word/text chunk appears
 
     var fill = document.getElementById('boot-bar-fill');
     var lineEls = document.querySelectorAll('#boot-lines .line');
     var overlay = document.getElementById('boot-overlay');
 
-    // Build flat character list across all lines
+    // Build flat character list and count total dots
     var chars = [];
+    var totalDots = 0;
     for (var i = 0; i < lineEls.length; i++) {
       var text = lineEls[i].getAttribute('data-text') || '';
       lineEls[i].textContent = '';
       lineEls[i].classList.add('visible');
       for (var j = 0; j < text.length; j++) {
-        chars.push({ el: lineEls[i], idx: j, fullText: text, isDot: text[j] === '.' });
+        var isDot = text[j] === '.';
+        chars.push({ el: lineEls[i], idx: j, fullText: text, isDot: isDot });
+        if (isDot) totalDots++;
       }
     }
 
     var revealed = 0;
+    var dotsRevealed = 0;
+    var loadProgress = 0;
     var typingDone = false;
     var loadingDone = false;
     var dismissed = false;
 
-    // Self-running typewriter — starts immediately, independent of load progress
-    // Dots pop on one at a time; non-dot chars appear as a batch (whole word chunk at once)
+    // Adaptive dot speed: compare typing progress to load progress
+    // and scale the interval so they finish around the same time
+    function getDotDelay() {
+      if (loadProgress < 0.05) return DOT_INTERVAL_MS; // too early to judge
+      var typeFrac = dotsRevealed / totalDots;          // how far typing is
+      var diff = typeFrac - loadProgress;               // positive = typing ahead
+      var scale = 1 + diff * 3;                         // ahead → slower, behind → faster
+      if (scale < 0.3) scale = 0.3;
+      if (scale > 2.0) scale = 2.0;
+      return Math.round(DOT_INTERVAL_MS * scale);
+    }
+
+    // Self-running typewriter — adapts dot speed to match load progress
+    // Words appear as a batch; dots pop one at a time
     function typeNext() {
       if (revealed >= chars.length) {
         typingDone = true;
@@ -206,12 +223,11 @@
       }
       var c = chars[revealed];
       if (c.isDot) {
-        // Single dot — reveal it, then pause
         c.el.textContent = c.fullText.substring(0, c.idx + 1);
         revealed++;
-        setTimeout(typeNext, DOT_INTERVAL_MS);
+        dotsRevealed++;
+        setTimeout(typeNext, getDotDelay());
       } else {
-        // Batch all consecutive non-dot chars so they appear instantly as a chunk
         while (revealed < chars.length && !chars[revealed].isDot) {
           var ch = chars[revealed];
           ch.el.textContent = ch.fullText.substring(0, ch.idx + 1);
@@ -225,7 +241,6 @@
     function tryDismiss() {
       if (dismissed || !typingDone || !loadingDone) return;
       dismissed = true;
-      // Smooth bar fill to 100% then fade out
       fill.style.transition = 'width 0.3s ease-out';
       fill.style.width = '100%';
       setTimeout(function() {
@@ -238,12 +253,11 @@
     }
 
     window.__bootOverlay = {
-      /** Update the loading bar to reflect actual load progress (0..1). */
       setProgress: function(p) {
         if (dismissed) return;
+        loadProgress = p;
         fill.style.width = (p * 100) + '%';
       },
-      /** Signal that loading is complete. Overlay dismisses once typing also finishes. */
       markStartScreenReady: function() {
         if (loadingDone) return;
         loadingDone = true;
