@@ -3,8 +3,8 @@
  *
  * Prerequisites:
  *   1) Create a Spotify Developer App at https://developer.spotify.com/dashboard
- *   2) Add redirect URI: https://<your-netlify-site>.netlify.app/callback
- *   3) Set env var VITE_SPOTIFY_CLIENT_ID in Netlify
+ *   2) Add redirect URI: https://<your-vercel-site>.vercel.app/callback
+ *   3) Set env var VITE_SPOTIFY_CLIENT_ID in Vercel
  */
 
 import {
@@ -37,20 +37,25 @@ function getRedirectUri(): string {
   return window.location.origin + '/callback';
 }
 
-/** Kick off the Spotify PKCE login flow (navigates away from the page). */
-export async function startLogin(): Promise<void> {
+/**
+ * Kick off the Spotify PKCE login flow in a new tab.
+ * Returns a Promise that resolves to true when auth completes,
+ * or false on timeout / popup blocked fallback.
+ */
+export async function startLogin(): Promise<boolean> {
   const clientId = getClientId();
   if (!clientId) {
     console.warn('SpotifyAuthSystem: VITE_SPOTIFY_CLIENT_ID not set, cannot login');
-    return;
+    return false;
   }
 
   const verifier = generateVerifier();
   const state = generateState();
   const challenge = await challengeFromVerifier(verifier);
 
-  sessionStorage.setItem(SESSION_VERIFIER, verifier);
-  sessionStorage.setItem(SESSION_STATE, state);
+  // Use localStorage (not sessionStorage) so the new tab can read them
+  localStorage.setItem(SESSION_VERIFIER, verifier);
+  localStorage.setItem(SESSION_STATE, state);
 
   const url = buildAuthorizeUrl({
     clientId,
@@ -60,7 +65,43 @@ export async function startLogin(): Promise<void> {
     challenge,
   });
 
-  window.location.href = url;
+  const popup = window.open(url, '_blank');
+  if (!popup) {
+    // Popup blocked — fall back to same-page navigation
+    window.location.href = url;
+    return false;
+  }
+
+  // Wait for the callback tab to write the token to localStorage
+  return new Promise<boolean>((resolve) => {
+    const cleanup = () => {
+      window.removeEventListener('storage', onStorage);
+      clearInterval(pollId);
+      clearTimeout(timeoutId);
+    };
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY && e.newValue) {
+        cleanup();
+        resolve(true);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+
+    // Poll as backup — some browsers don't fire storage for same-origin popups
+    const pollId = setInterval(() => {
+      if (isConnected()) {
+        cleanup();
+        resolve(true);
+      }
+    }, 500);
+
+    // Timeout after 5 minutes
+    const timeoutId = setTimeout(() => {
+      cleanup();
+      resolve(false);
+    }, 5 * 60 * 1000);
+  });
 }
 
 /**
@@ -88,16 +129,16 @@ export async function handleCallback(): Promise<boolean> {
     return true;
   }
 
-  const savedState = sessionStorage.getItem(SESSION_STATE);
+  const savedState = localStorage.getItem(SESSION_STATE);
   if (state !== savedState) {
     console.error('SpotifyAuthSystem: state mismatch (possible CSRF)');
     window.location.replace('/');
     return true;
   }
 
-  const verifier = sessionStorage.getItem(SESSION_VERIFIER);
+  const verifier = localStorage.getItem(SESSION_VERIFIER);
   if (!verifier) {
-    console.error('SpotifyAuthSystem: missing verifier in sessionStorage');
+    console.error('SpotifyAuthSystem: missing verifier in localStorage');
     window.location.replace('/');
     return true;
   }
@@ -130,11 +171,14 @@ export async function handleCallback(): Promise<boolean> {
     console.error('SpotifyAuthSystem: token exchange failed', err);
   }
 
-  // Clean up session
-  sessionStorage.removeItem(SESSION_VERIFIER);
-  sessionStorage.removeItem(SESSION_STATE);
+  // Clean up PKCE temporaries
+  localStorage.removeItem(SESSION_VERIFIER);
+  localStorage.removeItem(SESSION_STATE);
 
-  window.location.replace('/');
+  // Try to close this tab (works when opened via window.open)
+  try { window.close(); } catch {}
+  // Fallback: if window.close() didn't work, redirect home
+  setTimeout(() => window.location.replace('/'), 300);
   return true;
 }
 

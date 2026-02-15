@@ -38,6 +38,9 @@ export class MusicPlayer {
     this.createUI();
     // YouTube API loading is deferred until switchToPlaylist() to speed up initial boot
     this.tryInitSpotify();
+
+    // Re-try Spotify init when user completes auth in a new tab
+    scene.events.on('spotify-auth-changed', () => this.tryInitSpotify());
   }
 
   /** Start the in-game title music. Call from a user gesture handler. */

@@ -192,8 +192,14 @@ export class ProfilePopup {
 
     this.spotifyHit = scene.add.zone(0, this.spotifyY, spotifyW, spotifyH)
       .setInteractive({ useHandCursor: true });
-    this.spotifyHit.on('pointerdown', () => {
-      if (!isConnected()) startLogin();
+    this.spotifyHit.on('pointerdown', async () => {
+      if (!isConnected()) {
+        const success = await startLogin();
+        if (success) {
+          this.updateSpotifyButton();
+          this.scene.events.emit('spotify-auth-changed');
+        }
+      }
     });
     this.container.add(this.spotifyHit);
 
