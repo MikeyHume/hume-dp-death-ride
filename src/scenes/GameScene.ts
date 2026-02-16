@@ -157,6 +157,7 @@ export class GameScene extends Phaser.Scene {
   private startHoldActive: boolean = false; // currently holding at start
   private startHoldRampT: number = 0;      // 0→1 ramp progress after release
   private startHoldText!: Phaser.GameObjects.Text;
+  private startHoldBlinkTween: Phaser.Tweens.Tween | null = null;
 
   // Title loop animation
   private titleLoopSprite!: Phaser.GameObjects.Sprite;
@@ -908,6 +909,7 @@ export class GameScene extends Phaser.Scene {
         this.hudHighScore.setVisible(v);
         this.musicPlayer.setVisible(v);
         this.spectatorLabel.setVisible(v && this.spectatorMode);
+        this.startHoldText.setVisible(v && this.startHoldActive);
         // World objects
         this.obstacleSystem.setVisible(v);
         this.pickupSystem.setVisible(v);
@@ -1580,6 +1582,17 @@ export class GameScene extends Phaser.Scene {
       this.startHoldRampT = 0;
       this.startHoldText.setAlpha(1);
       this.startHoldText.setVisible(true);
+      // Blink: 1s on, 0.33s off, repeating
+      if (this.startHoldBlinkTween) this.startHoldBlinkTween.destroy();
+      this.startHoldBlinkTween = this.tweens.add({
+        targets: this.startHoldText,
+        alpha: 0,
+        duration: 1,          // snap to 0 instantly
+        delay: 1000,          // visible for 1s first
+        hold: 330,            // stay at 0 for 0.33s
+        yoyo: true,
+        repeat: -1,
+      });
     } else {
       // Debug skip: full speed immediately, but still play start animation
       this.startHoldActive = false;
@@ -1710,7 +1723,9 @@ export class GameScene extends Phaser.Scene {
         this.startHoldRampT = 0;
         // Play start animation sequence then transition to ride loop
         this.playerSystem.playStartAnim();
-        // Fade out the text
+        // Stop blink and fade out the text
+        if (this.startHoldBlinkTween) { this.startHoldBlinkTween.destroy(); this.startHoldBlinkTween = null; }
+        this.startHoldText.setAlpha(1);
         this.tweens.add({
           targets: this.startHoldText,
           alpha: 0,
