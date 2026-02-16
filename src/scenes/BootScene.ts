@@ -22,6 +22,10 @@ export class BootScene extends Phaser.Scene {
       const idx = String(i).padStart(2, '0');
       this.load.image(`start-play-${idx}`, `assets/start/start_play/DP_Death_Ride_Title_Start${idx}.jpg`);
     }
+    this.load.spritesheet('player-start', 'assets/dp_player/dp_start.png', {
+      frameWidth: TUNING.START_ANIM_FRAME_WIDTH,
+      frameHeight: TUNING.START_ANIM_FRAME_HEIGHT,
+    });
     this.load.spritesheet('player-ride', 'assets/dp_player/dp_moto_v03.png', {
       frameWidth: TUNING.PLAYER_FRAME_WIDTH,
       frameHeight: TUNING.PLAYER_FRAME_HEIGHT,
@@ -129,6 +133,14 @@ export class BootScene extends Phaser.Scene {
       frameRate: 12,
       repeat: 0,
     });
+    // Player start animation (plays once before ride loop)
+    this.anims.create({
+      key: 'player-start',
+      frames: this.anims.generateFrameNumbers('player-start', { start: 0, end: TUNING.START_ANIM_FRAMES - 1 }),
+      frameRate: TUNING.START_ANIM_FPS,
+      repeat: 0,
+    });
+
     // Player ride animation (looping spritesheet)
     this.anims.create({
       key: 'player-ride',

@@ -59,6 +59,7 @@ const DEBUG_HOTKEYS = {
   hideHud:        { key: 'G',       active: true },  // hide HUD + music UI during gameplay
   showHelp:       { key: 'PLUS',   active: true },  // toggle debug hotkey help overlay
   showCollisions: { key: 'MINUS',  active: true },  // toggle collision hitbox overlay
+  startHold:      { key: 'BACKTICK', active: true }, // debug: skip the start hold phase
 };
 
 // ── Death screen leaderboard: Top 3 group ──
@@ -151,6 +152,11 @@ export class GameScene extends Phaser.Scene {
   private rageZoomProgress: number = 0; // 0 = no zoom, 1 = full zoom (smoothly interpolated)
   private spectatorMode: boolean = false; // debug: invincible + explode obstacles on contact
   private hudHidden: boolean = false; // debug: hide HUD + music UI during gameplay
+  private startHoldMode: boolean = false;  // debug: freeze at start until spacebar
+  private startHoldTimer: number = 0;      // seconds elapsed in hold (must reach 2 before release)
+  private startHoldActive: boolean = false; // currently holding at start
+  private startHoldRampT: number = 0;      // 0→1 ramp progress after release
+  private startHoldText!: Phaser.GameObjects.Text;
 
   // Title loop animation
   private titleLoopSprite!: Phaser.GameObjects.Sprite;
@@ -256,9 +262,9 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       // Debug keys — don't advance game state (map Phaser key names to event.key values)
-      const phaserToEventKey: Record<string, string> = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', plus: '+', minus: '-' };
-      // Also block '='/'_' since +/- share keys on most keyboards
-      if (k === '=' || k === '+' || k === '-' || k === '_') return;
+      const phaserToEventKey: Record<string, string> = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', plus: '+', minus: '-', backtick: '`' };
+      // Also block shared-key variants ('='→'+', '_'→'-', '~'→'`')
+      if (k === '=' || k === '+' || k === '-' || k === '_' || k === '~' || k === '`') return;
       const debugKeys = Object.values(DEBUG_HOTKEYS).map(h => {
         const lk = h.key.toLowerCase();
         return phaserToEventKey[lk] || lk;
@@ -772,6 +778,13 @@ export class GameScene extends Phaser.Scene {
     // Hide player until game starts
     this.playerSystem.setVisible(false);
 
+    // Start hold text — shown during hold phase, hidden when ramp begins
+    this.startHoldText = this.add.text(TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'HOLD SPACEBAR TO GO', {
+      fontFamily: 'Early GameBoy',
+      fontSize: '36px',
+      color: '#ffffff',
+    }).setOrigin(0.5).setDepth(1000).setScrollFactor(0).setVisible(false);
+
     // --- CRT post-processing ---
     this.cameras.main.setPostPipeline(CRTPipeline);
 
@@ -912,6 +925,12 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
+    if (DEBUG_HOTKEYS.startHold.active) {
+      this.input.keyboard?.addKey(DEBUG_HOTKEYS.startHold.key).on('down', () => {
+        this.startHoldMode = !this.startHoldMode; // when true, skips the start hold
+      });
+    }
+
     // Debug help overlay — black box with neon green text listing active hotkeys
     {
       const lines: string[] = [];
@@ -929,6 +948,7 @@ export class GameScene extends Phaser.Scene {
         { label: 'hideHud',         key: DEBUG_HOTKEYS.hideHud.key,         desc: 'Hide HUD + music UI' },
         { label: 'showHelp',        key: '+',                               desc: 'Toggle this help overlay' },
         { label: 'showCollisions',  key: '-',                               desc: 'Toggle collision hitboxes' },
+        { label: 'startHold',       key: '`',                               desc: 'Skip start hold' },
       ];
       // Only include active hotkeys
       const activeLabels = new Set(
@@ -1208,6 +1228,8 @@ export class GameScene extends Phaser.Scene {
     this.slashActiveTimer = 0;
     this.slashCooldownTimer = 0;
     this.slashInvincibilityTimer = 0;
+    this.startHoldActive = false;
+    this.startHoldText.setVisible(false);
     this.obstacleSystem.reset(this.weekSeed);
     this.fxSystem.reset();
     this.audioSystem.silenceEngine();
@@ -1542,11 +1564,30 @@ export class GameScene extends Phaser.Scene {
     this.slashCooldownTimer = 0;
     this.slashInvincibilityTimer = 0;
     this.rocketCooldownTimer = 0;
+    this.startHoldActive = false;
+    this.startHoldText.setVisible(false);
     this.pickupSystem.reset();
     this.pickupSystem.setHUDVisible(true);
     this.rocketSystem.reset();
     this.shieldSystem.reset();
     this.hideWarningPool();
+
+    // Start-hold: freeze everything until spacebar after wait period
+    // (debug backtick toggle skips this when startHoldMode = true)
+    if (!this.startHoldMode) {
+      this.startHoldActive = true;
+      this.startHoldTimer = 0;
+      this.startHoldRampT = 0;
+      this.startHoldText.setAlpha(1);
+      this.startHoldText.setVisible(true);
+    } else {
+      // Debug skip: full speed immediately, but still play start animation
+      this.startHoldActive = false;
+      this.startHoldRampT = 1;
+      this.startHoldText.setVisible(false);
+      this.playerSystem.setCursorBlend(1);
+      this.playerSystem.playStartAnim();
+    }
   }
 
   private drawCollisionDebug(): void {
@@ -1656,8 +1697,53 @@ export class GameScene extends Phaser.Scene {
       this.inputSystem.getSpeedTap();
     }
 
+    // Start-hold: freeze everything until spacebar after minimum 2s
+    if (this.startHoldActive) {
+      this.startHoldTimer += dt;
+      // Drain all inputs so nothing queues
+      this.inputSystem.getAttackPressed();
+      this.inputSystem.getRocketPressed();
+      this.inputSystem.getSpeedTap();
+      const held = this.inputSystem.isSpaceHeld();
+      if (held && this.startHoldTimer >= TUNING.START_HOLD_WAIT) {
+        this.startHoldActive = false;
+        this.startHoldRampT = 0;
+        // Play start animation sequence then transition to ride loop
+        this.playerSystem.playStartAnim();
+        // Fade out the text
+        this.tweens.add({
+          targets: this.startHoldText,
+          alpha: 0,
+          duration: 500,
+          ease: 'Power2',
+          onComplete: () => { this.startHoldText.setVisible(false); },
+        });
+      } else {
+        // Consume the tap so it doesn't queue
+        this.inputSystem.isSpaceHeld();
+      }
+      // Nothing moves — pass 0 speed, skip all updates
+      this.roadSystem.update(0, dt);
+      this.parallaxSystem.update(0, dt);
+      return;
+    }
+    // Ramp from 0 to base speed over START_HOLD_RAMP seconds after hold release
+    if (this.startHoldRampT < 1) {
+      this.startHoldRampT = Math.min(this.startHoldRampT + dt / TUNING.START_HOLD_RAMP, 1);
+    }
+    // Ease in/out: smoothstep (3t² - 2t³) — used for road speed and player Y blend
+    const rampEased = this.startHoldRampT < 1
+      ? (() => { const t = this.startHoldRampT; return t * t * (3 - 2 * t); })()
+      : 1;
+    // Blend player cursor following from center to full
+    this.playerSystem.setCursorBlend(rampEased);
+
     this.elapsed += dt;
-    const baseRoadSpeed = TUNING.ROAD_BASE_SPEED + this.elapsed * TUNING.ROAD_SPEED_RAMP + this.roadSpeedBonus;
+    let baseRoadSpeed = TUNING.ROAD_BASE_SPEED + this.elapsed * TUNING.ROAD_SPEED_RAMP + this.roadSpeedBonus;
+    if (this.startHoldRampT < 1) {
+      const eased = rampEased;
+      baseRoadSpeed *= eased;
+    }
     let rageFactor = 0; // 0 = no rage, 0→1 ramp up, 1 = full, 1→0 ramp down
     if (this.rageTimer > 0) {
       const elapsed = TUNING.RAGE_DURATION - this.rageTimer; // seconds since rage started
@@ -1792,12 +1878,13 @@ export class GameScene extends Phaser.Scene {
     const playerCollY = Math.max(this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y, TUNING.ROAD_TOP_Y);
 
     // Update pickups (scrolling + collection)
-    const pHalfW = TUNING.PLAYER_COLLISION_W / 2;
-    const pHalfH = TUNING.PLAYER_COLLISION_H / 2;
-    this.pickupSystem.update(dt, roadSpeed, playerCollX, playerCollY, pHalfW, pHalfH);
+    this.pickupSystem.update(dt, roadSpeed, playerCollX, playerCollY);
 
     // Update shield pickups (scrolling + collection)
-    this.shieldSystem.update(dt, roadSpeed, playerCollX, playerCollY, pHalfW, pHalfH);
+    this.shieldSystem.update(dt, roadSpeed, playerCollX, playerCollY);
+
+    const pHalfW = TUNING.PLAYER_COLLISION_W / 2;
+    const pHalfH = TUNING.PLAYER_COLLISION_H / 2;
     this.profileHud.setShields(this.shieldSystem.getShields());
 
     if (this.rageTimer > 0 || this.spectatorMode) {
@@ -2266,6 +2353,8 @@ export class GameScene extends Phaser.Scene {
           this.deathExplosion.setVisible(false);
           this.slashSprite.setVisible(false);
           this.slashActiveTimer = 0;
+          this.startHoldActive = false;
+          this.startHoldText.setVisible(false);
           this.rageTimer = 0;
           this.audioSystem.setDistortion(0);
           CRT_TUNING.rageDistortion = 0;

@@ -438,8 +438,7 @@ export class ObstacleSystem {
       const obsH = obs.getData('h') as number;
 
       if (type === ObstacleType.CAR) {
-        // Player ellipse vs car ellipse — use max semi-axis as approximation
-        const pR = Math.max(playerHalfW, playerHalfH);
+        // Player ellipse vs car ellipse — proper ellipse reach in normalized space
         const a = (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2;
         const b = (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
         const coy = (obsH - obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
@@ -457,10 +456,13 @@ export class ObstacleSystem {
           const normDist = Math.sqrt(normDistSq);
           const dirX = nx / normDist;
           const dirY = ny / normDist;
-          const normR = Math.sqrt(
-            (pR * dirX / a) * (pR * dirX / a) +
-            (pR * dirY / b) * (pR * dirY / b)
-          );
+          // Player ellipse semi-axes in normalized space
+          const pNormW = playerHalfW / a;
+          const pNormH = playerHalfH / b;
+          // Player ellipse reach in the center-to-center direction
+          const dw = dirX / pNormW;
+          const dh = dirY / pNormH;
+          const normR = 1 / Math.sqrt(dw * dw + dh * dh);
           colliding = normDist < 1 + normR;
         }
 
@@ -477,7 +479,6 @@ export class ObstacleSystem {
         // Player ellipse vs puddle ellipse
         const a = obsW / 2;
         const b = obsH / 2;
-        const pR = Math.max(playerHalfW, playerHalfH);
         const dx = playerX - obs.x;
         const dy = playerY - obs.y;
         const nx = dx / a;
@@ -490,10 +491,11 @@ export class ObstacleSystem {
           const normDist = Math.sqrt(normDistSq);
           const dirX = nx / normDist;
           const dirY = ny / normDist;
-          const normR = Math.sqrt(
-            (pR * dirX / a) * (pR * dirX / a) +
-            (pR * dirY / b) * (pR * dirY / b)
-          );
+          const pNormW = playerHalfW / a;
+          const pNormH = playerHalfH / b;
+          const dw = dirX / pNormW;
+          const dh = dirY / pNormH;
+          const normR = 1 / Math.sqrt(dw * dw + dh * dh);
           slowHit = normDist < 1 + normR;
         }
         if (slowHit) {
@@ -624,7 +626,6 @@ export class ObstacleSystem {
       let colliding = false;
 
       if (type === ObstacleType.CAR) {
-        const pR = Math.max(playerHalfW, playerHalfH);
         const a = (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2;
         const b = (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
         const coy = (obsH - obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
@@ -639,10 +640,11 @@ export class ObstacleSystem {
           const normDist = Math.sqrt(normDistSq);
           const dirX = nx / normDist;
           const dirY = ny / normDist;
-          const normR = Math.sqrt(
-            (pR * dirX / a) * (pR * dirX / a) +
-            (pR * dirY / b) * (pR * dirY / b)
-          );
+          const pNormW = playerHalfW / a;
+          const pNormH = playerHalfH / b;
+          const dw = dirX / pNormW;
+          const dh = dirY / pNormH;
+          const normR = 1 / Math.sqrt(dw * dw + dh * dh);
           colliding = normDist < 1 + normR;
         }
       } else {

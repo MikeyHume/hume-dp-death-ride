@@ -54,6 +54,15 @@ export const TUNING = {
   SPEEDUP_OFFSET_Y: 6,             // px vertical offset for speed-up sprite (positive = down)
   SPEEDUP_NO_TAP_TIMEOUT: 1.0,    // seconds after last tap before playing outro
 
+  // Start animation (plays once before ride loop on game start)
+  START_ANIM_FRAME_WIDTH: 824,    // px per frame (5768 / 7 cols)
+  START_ANIM_FRAME_HEIGHT: 708,   // px per frame (1416 / 2 rows)
+  START_ANIM_FRAMES: 14,          // total frames (7 cols × 2 rows)
+  START_ANIM_FPS: 12,             // framerate for start animation
+  START_ANIM_SCALE: 1.05,          // extra scale multiplier
+  START_ANIM_OFFSET_X: 0,         // px horizontal offset (positive = right)
+  START_ANIM_OFFSET_Y: 0,         // px vertical offset (positive = down)
+
   // Player dimensions and appearance
   PLAYER_DISPLAY_HEIGHT: 165,    // sprite scaled so height = this; width auto from aspect ratio
   PLAYER_COLLISION_W: 200,        // player hitbox full width (ellipse, fits motorcycle length)
@@ -64,14 +73,18 @@ export const TUNING = {
   PLAYER_ARROW_SPEED: 600,   // px/sec vertical movement when using arrow keys
   PLAYER_MOUSE_FOLLOW_RATE: 15, // exponential approach rate for mouse Y tracking (higher = snappier, 15 ≈ 95% in 0.2s)
 
+  // Start hold — player waits after countdown, then ramps to speed
+  START_HOLD_WAIT: 2.0,        // seconds player must wait before spacebar works
+  START_HOLD_RAMP: 6.9,        // seconds for road speed + player Y to ramp up after release
+
   // Player horizontal position — edit these to move the left/right death boundaries
   PLAYER_START_X: 960,       // where the bike spawns horizontally (960 = center of 1920)
   PLAYER_MIN_X: 0,           // left death boundary (0 = left screen edge)
   PLAYER_MAX_X: 1920,        // right death boundary (1920 = right screen edge)
 
   // Road speed — increases over time
-  ROAD_BASE_SPEED: 690,      // starting road scroll speed (px/sec)
-  ROAD_SPEED_RAMP: 15,       // road speed increase per second of elapsed time (px/sec²)
+  ROAD_BASE_SPEED: 1000,      // starting road scroll speed (px/sec)
+  ROAD_SPEED_RAMP: 5,       // road speed increase per second of elapsed time (px/sec²)
 
   // Player speed model — smooth multiplier-based system
   // speedMultiplier ranges from 0 (stopped) to MAX_SPEED_MULTIPLIER (4x road speed)

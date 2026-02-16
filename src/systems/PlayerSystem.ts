@@ -27,8 +27,15 @@ export class PlayerSystem {
   private tapPressure: number = 0;      // accumulated tap intensity (decays over time)
   private graceTimer: number = 0;       // countdown before decel after releasing space
 
+  // Cursor follow blend (0 = locked at current Y, 1 = normal cursor following)
+  private cursorBlend: number = 1;
+  private blendStartY: number = 0;  // Y position when blend started
+
   // Attack cooldown (blocks all attacks while > 0)
   private attackCooldown: number = 0;
+
+  // Start animation state (plays once before ride loop)
+  private startAnimPlaying: boolean = false;
 
   // Speed-up animation state
   private speedupState: SpeedupState = 'idle';
@@ -50,6 +57,29 @@ export class PlayerSystem {
     this.setBaseDisplaySize(displayW, displayH);
 
     this.sprite.play('player-ride');
+  }
+
+  /** Play the start animation once, then transition to ride loop */
+  playStartAnim(): void {
+    if (this.startAnimPlaying) return;
+    this.startAnimPlaying = true;
+    this.cancelCurrentAnimation();
+    this.applyStartDisplaySize();
+    this.sprite.play('player-start');
+
+    this.sprite.once('animationcomplete', () => {
+      this.startAnimPlaying = false;
+      this.sprite.play('player-ride');
+      this.applyRideDisplaySize();
+    });
+  }
+
+  /** Apply display size for start animation spritesheet frames */
+  private applyStartDisplaySize(): void {
+    const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
+    const s = TUNING.START_ANIM_SCALE;
+    const startW = displayH * s * (TUNING.START_ANIM_FRAME_WIDTH / TUNING.START_ANIM_FRAME_HEIGHT);
+    this.setBaseDisplaySize(startW, displayH * s);
   }
 
   update(dt: number, roadSpeed: number, baseRoadSpeed?: number): void {
@@ -77,9 +107,13 @@ export class PlayerSystem {
     } else {
       // Smooth exponential approach to mouse Y (no snapping)
       const targetY = this.input.getTargetY();
-      const yDiff = targetY - this.sprite.y;
+      // Blend between locked start Y and cursor target during ramp
+      const blendedTarget = this.cursorBlend >= 1
+        ? targetY
+        : this.blendStartY + (targetY - this.blendStartY) * this.cursorBlend;
+      const yDiff = blendedTarget - this.sprite.y;
       if (Math.abs(yDiff) < 0.5) {
-        this.sprite.y = targetY;
+        this.sprite.y = blendedTarget;
       } else {
         this.sprite.y += yDiff * (1 - Math.exp(-TUNING.PLAYER_MOUSE_FOLLOW_RATE * dt));
       }
@@ -174,8 +208,8 @@ export class PlayerSystem {
 
     // Reapply render offsets for display (visual only, stripped next frame)
     const inSpeedup = this.speedupState !== 'idle';
-    this.renderOffsetX = this.rocketLaunching ? TUNING.ROCKET_LAUNCHER_OFFSET_X : (this.attacking ? TUNING.PLAYER_ATTACK_OFFSET_X : (this.poweredUp ? TUNING.POWERED_OFFSET_X : (inSpeedup ? TUNING.SPEEDUP_OFFSET_X : 0)));
-    this.renderOffsetY = this.rocketLaunching ? TUNING.ROCKET_LAUNCHER_OFFSET_Y : (this.attacking ? 0 : (this.poweredUp ? TUNING.POWERED_OFFSET_Y : (inSpeedup ? TUNING.SPEEDUP_OFFSET_Y : 0)));
+    this.renderOffsetX = this.startAnimPlaying ? TUNING.START_ANIM_OFFSET_X : (this.rocketLaunching ? TUNING.ROCKET_LAUNCHER_OFFSET_X : (this.attacking ? TUNING.PLAYER_ATTACK_OFFSET_X : (this.poweredUp ? TUNING.POWERED_OFFSET_X : (inSpeedup ? TUNING.SPEEDUP_OFFSET_X : 0))));
+    this.renderOffsetY = this.startAnimPlaying ? TUNING.START_ANIM_OFFSET_Y : (this.rocketLaunching ? TUNING.ROCKET_LAUNCHER_OFFSET_Y : (this.attacking ? 0 : (this.poweredUp ? TUNING.POWERED_OFFSET_Y : (inSpeedup ? TUNING.SPEEDUP_OFFSET_Y : 0))));
     this.sprite.x += this.renderOffsetX;
     this.sprite.y += this.renderOffsetY;
 
@@ -186,8 +220,8 @@ export class PlayerSystem {
 
   /** Manage speed-up animation transitions based on input and speed state */
   private updateSpeedupAnimation(dt: number, tapped: boolean): void {
-    // Speed-up animation is suppressed during attack or powered-up (rage)
-    if (this.attacking || this.poweredUp) return;
+    // Speed-up animation is suppressed during start anim, attack, or powered-up (rage)
+    if (this.startAnimPlaying || this.attacking || this.poweredUp) return;
 
     // Only actual taps keep the speed-up alive (holding space does not)
     if (tapped) {
@@ -440,8 +474,18 @@ export class PlayerSystem {
     // Don't reset spectator — it persists across restarts (toggled by debug key)
     this.renderOffsetX = 0;
     this.renderOffsetY = 0;
-    this.sprite.play('player-ride');
-    this.applyRideDisplaySize();
+    this.cursorBlend = 0;
+    this.blendStartY = this.sprite.y;
+    this.startAnimPlaying = false;
+    // Show frame 0 of start animation, paused
+    this.applyStartDisplaySize();
+    this.sprite.play({ key: 'player-start', startFrame: 0 });
+    this.sprite.anims.pause();
+  }
+
+  /** Set cursor follow blend (0 = locked at start Y, 1 = full cursor following) */
+  setCursorBlend(t: number): void {
+    this.cursorBlend = t;
   }
 
   isAlive(): boolean {

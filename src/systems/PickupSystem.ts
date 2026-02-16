@@ -39,7 +39,7 @@ export class PickupSystem {
   }
 
   /** Scroll pickups left, check player collection */
-  update(dt: number, roadSpeed: number, playerX: number, playerY: number, playerHalfW: number, playerHalfH: number): void {
+  update(dt: number, roadSpeed: number, playerX: number, playerY: number): void {
     for (let i = 0; i < this.pool.length; i++) {
       const pickup = this.pool[i];
       if (!pickup.active) continue;
@@ -54,12 +54,12 @@ export class PickupSystem {
         continue;
       }
 
-      // Circle-vs-circle collection check
-      if (this.ammo < TUNING.PICKUP_MAX_AMMO) {
-        const dx = playerX - pickup.x;
-        const dy = playerY - pickup.y;
-        const collectRadius = Math.max(playerHalfW, playerHalfH) + TUNING.PICKUP_DIAMETER / 2;
-        if (dx * dx + dy * dy < collectRadius * collectRadius) {
+      // Lane-based collection: same lane + player passed pickup center X
+      if (this.ammo < TUNING.PICKUP_MAX_AMMO && playerX >= pickup.x) {
+        const laneH = (TUNING.ROAD_BOTTOM_Y - TUNING.ROAD_TOP_Y) / TUNING.LANE_COUNT;
+        const playerLane = Math.min(Math.floor((playerY - TUNING.ROAD_TOP_Y) / laneH), TUNING.LANE_COUNT - 1);
+        const pickupLane = Math.min(Math.floor((pickup.y - TUNING.ROAD_TOP_Y) / laneH), TUNING.LANE_COUNT - 1);
+        if (playerLane === pickupLane) {
           pickup.setActive(false).setVisible(false);
           this.ammo++;
         }
