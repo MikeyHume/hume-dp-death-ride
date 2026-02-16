@@ -12,6 +12,8 @@ export enum ObstacleType {
 export interface CollisionResult {
   crashed: boolean;
   slowOverlapping: boolean;
+  hitX: number;
+  hitY: number;
 }
 
 export interface RageHit {
@@ -21,7 +23,7 @@ export interface RageHit {
 }
 
 export interface LaneWarning {
-  type: ObstacleType | 'pickup';
+  type: ObstacleType | 'pickup' | 'shield-pickup';
   textureKey: string;
   timeUntil: number;
 }
@@ -42,7 +44,7 @@ export class ObstacleSystem {
   private barrierDisplayH: number = 0;
 
   // Reused collision result to avoid per-frame allocation
-  private collisionResult: CollisionResult = { crashed: false, slowOverlapping: false };
+  private collisionResult: CollisionResult = { crashed: false, slowOverlapping: false, hitX: 0, hitY: 0 };
   private laneWarningResult: LaneWarning[][] = [];
 
   // Seeded RNG for deterministic obstacle patterns
@@ -53,6 +55,9 @@ export class ObstacleSystem {
 
   // Optional callback fired when a pickup should spawn behind a CRASH obstacle
   public onPickupSpawn: ((x: number, y: number) => void) | null = null;
+
+  // Optional callback fired when a shield pickup should spawn behind a CRASH obstacle
+  public onShieldSpawn: ((x: number, y: number) => void) | null = null;
 
   // Car deck: shuffled list of car skin indices (1–20), dealt one at a time.
   // Shows every car once before reshuffling, never repeats back-to-back.
@@ -392,12 +397,22 @@ export class ObstacleSystem {
         this.onPickupSpawn(pickupX, y);
       }
     }
+
+    // Roll for shield spawn behind CRASH obstacles (separate from rocket)
+    if (type === ObstacleType.CRASH && this.onShieldSpawn) {
+      if (this.rng.next() < TUNING.SHIELD_SPAWN_CHANCE) {
+        const shieldX = x + w / 2 + TUNING.PICKUP_GAP * 2 + TUNING.SHIELD_DIAMETER;
+        this.onShieldSpawn(shieldX, y);
+      }
+    }
   }
 
   /** Check collisions against player. Circle-vs-AABB for crash/slow, circle-vs-ellipse for cars. */
   checkCollision(playerX: number, playerY: number, playerRadius: number): CollisionResult {
     this.collisionResult.crashed = false;
     this.collisionResult.slowOverlapping = false;
+    this.collisionResult.hitX = 0;
+    this.collisionResult.hitY = 0;
 
     for (let i = 0; i < this.pool.length; i++) {
       const obs = this.pool[i];
@@ -439,6 +454,8 @@ export class ObstacleSystem {
 
         if (colliding) {
           this.collisionResult.crashed = true;
+          this.collisionResult.hitX = obs.x;
+          this.collisionResult.hitY = obs.y;
           this.startCarDeath(obs);
           this.spawnExplosion(obs.x, obs.y, TUNING.CAR_EXPLOSION_SCALE);
           if (this.onExplosion) this.onExplosion();
@@ -458,6 +475,8 @@ export class ObstacleSystem {
         if (distSq < playerRadius * playerRadius) {
           if (type === ObstacleType.CRASH) {
             this.collisionResult.crashed = true;
+            this.collisionResult.hitX = obs.x;
+            this.collisionResult.hitY = obs.y;
             obs.setActive(false).setVisible(false);
             return this.collisionResult;
           } else if (type === ObstacleType.SLOW) {

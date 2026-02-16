@@ -244,7 +244,7 @@
     // Drip: reveal one item per tick, only if loading progress allows it
     function drip() {
       dripScheduled = false;
-      if (revealed >= chars.length) { typingDone = true; tryDismiss(); return; }
+      if (revealed >= chars.length) { typingDone = true; syncBar(); tryDismiss(); return; }
       if (chars[revealed].threshold > targetProgress) return; // wait for more progress
 
       var c = chars[revealed];
@@ -252,6 +252,7 @@
         if (!c.el.classList.contains('visible')) c.el.classList.add('visible');
         c.el.textContent = c.fullText.substring(0, c.idx + 1);
         revealed++;
+        syncBar();
         scheduleDrip(DOT_POP_MS);
       } else {
         // Batch all consecutive non-dots whose thresholds are earned
@@ -261,8 +262,15 @@
           ch.el.textContent = ch.fullText.substring(0, ch.idx + 1);
           revealed++;
         }
+        syncBar();
         scheduleDrip(WORD_POP_MS);
       }
+    }
+
+    // Bar tracks typewriter progress, not raw load progress
+    function syncBar() {
+      var pct = chars.length > 0 ? (revealed / chars.length) * 100 : 0;
+      fill.style.width = pct + '%';
     }
 
     function scheduleDrip(delay) {
@@ -301,17 +309,14 @@
       setProgress: function(p) {
         if (dismissed) return;
         targetProgress = p;
-        fill.style.width = (p * 100) + '%';
-        // Kick the drip if new progress unlocks more chars
+        // Bar is updated by syncBar() in drip() — not here
         if (!dripScheduled) scheduleDrip(0);
       },
       markStartScreenReady: function() {
         if (loadingDone) return;
         loadingDone = true;
-        // Fill bar to 100% immediately — loading IS done
-        fill.style.transition = 'width 0.3s ease-out';
-        fill.style.width = '100%';
         // Unlock all remaining chars (use 2 to avoid floating-point edge cases)
+        // Bar will reach 100% naturally as typewriter finishes via syncBar()
         targetProgress = 2;
         if (!typingDone && !dripScheduled) scheduleDrip(0);
         tryDismiss();

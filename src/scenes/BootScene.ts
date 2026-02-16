@@ -39,6 +39,11 @@ export class BootScene extends Phaser.Scene {
     this.load.image('play-music-overlay', 'assets/start/play_music.png');
     this.load.image('obstacle-crash', 'assets/obstacles/road_barrier_01.png');
     this.load.image('road-img', 'assets/background/road.jpg');
+    this.load.image('sky-img', 'assets/background/sky.jpg');
+    this.load.image('buildings-back', 'assets/background/buildings_back_row_dark.png');
+    this.load.image('buildings-front', 'assets/background/buildings_Front_row_dark.png');
+    this.load.image('buildings-big', 'assets/background/buildings_Front_row_dark.png');
+    this.load.image('railing', 'assets/background/railing_dark.jpg');
 
     // Car sprite sheets (20 animated cars)
     for (let c = 1; c <= TUNING.CAR_COUNT; c++) {
@@ -203,6 +208,15 @@ export class BootScene extends Phaser.Scene {
     pickupGfx.strokeCircle(TUNING.PICKUP_DIAMETER / 2, TUNING.PICKUP_DIAMETER / 2, TUNING.PICKUP_DIAMETER / 2);
     pickupGfx.generateTexture('pickup-rocket', TUNING.PICKUP_DIAMETER, TUNING.PICKUP_DIAMETER);
     pickupGfx.destroy();
+
+    // Shield pickup (green sphere placeholder)
+    const shieldGfx = this.add.graphics();
+    shieldGfx.fillStyle(TUNING.SHIELD_COLOR, 0.8);
+    shieldGfx.fillCircle(TUNING.SHIELD_DIAMETER / 2, TUNING.SHIELD_DIAMETER / 2, TUNING.SHIELD_DIAMETER / 2);
+    shieldGfx.lineStyle(3, 0x00aa00, 1);
+    shieldGfx.strokeCircle(TUNING.SHIELD_DIAMETER / 2, TUNING.SHIELD_DIAMETER / 2, TUNING.SHIELD_DIAMETER / 2);
+    shieldGfx.generateTexture('pickup-shield', TUNING.SHIELD_DIAMETER, TUNING.SHIELD_DIAMETER);
+    shieldGfx.destroy();
 
     // Rocket projectile (small yellow ellipse)
     const rocketGfx = this.add.graphics();

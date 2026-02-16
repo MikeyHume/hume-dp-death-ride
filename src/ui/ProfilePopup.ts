@@ -484,7 +484,7 @@ export class ProfilePopup {
       if (event.key === 'Backspace') {
         this.currentName = this.currentName.slice(0, -1);
       } else if (event.key.length === 1 && this.currentName.length < NAME_MAX_LENGTH) {
-        this.currentName += event.key.toUpperCase();
+        this.currentName += event.key;
       }
       this.nameText.setText(this.currentName + '_');
     } else if (event.key === 'Escape') {

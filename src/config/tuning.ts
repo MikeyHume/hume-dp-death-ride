@@ -4,7 +4,7 @@ export const TUNING = {
   GAME_HEIGHT: 1080,
 
   // Road bounds (bottom half of screen)
-  ROAD_TOP_Y: 540,
+  ROAD_TOP_Y: 420,
   ROAD_BOTTOM_Y: 1080,
   LANE_COUNT: 4,                   // number of horizontal lanes
 
@@ -212,6 +212,33 @@ export const TUNING = {
   PICKUP_HUD_SPACING: 30,           // horizontal spacing between ammo circles
   PICKUP_COLOR: 0xffff00,           // yellow
 
+  // Shield pickups
+  SHIELD_MAX: 3,                      // max shields player can hold
+  SHIELD_DIAMETER: 135,               // green sphere diameter (= laneHeight)
+  SHIELD_COLOR: 0x00ff00,             // green
+  SHIELD_SPAWN_CHANCE: 0.15,          // probability a CRASH obstacle spawns a shield behind it
+  LANE_WARNING_PREVIEW_SHIELD: 0.5,   // preview scale in warning circle (shield pickup)
+
+  // Shield HUD pills (top-center of screen)
+  SHIELD_PILL_W: 60,                  // pill width in px
+  SHIELD_PILL_H: 24,                  // pill height in px
+  SHIELD_PILL_GAP: 10,                // gap between pills in px
+  SHIELD_PILL_Y: 40,                  // Y position from top of screen
+  SHIELD_PILL_BG_COLOR: 0x003300,     // dark green background
+  SHIELD_PILL_BG_ALPHA: 0.5,          // background opacity
+  SHIELD_PILL_ACTIVE_COLOR: 0x00ff00, // neon green active color
+  SHIELD_PILL_CORNER_RADIUS: 12,      // rounded corner radius
+
+  // Warning circle colors
+  WARNING_FILL_COLOR: 0x440000,       // deep dark blood red fill
+  WARNING_FILL_ALPHA: 0.69,           // 69% opacity
+  WARNING_STROKE_WIDTH: 3,            // stroke width in px
+  WARNING_STROKE_SLOW: 0x0066ff,      // blue for slow/puddles
+  WARNING_STROKE_CRASH: 0xff8800,     // orange for obstacles/cones
+  WARNING_STROKE_CAR: 0xffffff,       // white for cars
+  WARNING_STROKE_ROCKET: 0xffff00,    // yellow for rocket pickups
+  WARNING_STROKE_SHIELD: 0x00ff00,    // green for shield pickups
+
   // Rockets (projectiles)
   ROCKET_SPEED: 2400,               // px/sec rightward
   ROCKET_RADIUS: 20,                // collision circle radius
@@ -222,7 +249,7 @@ export const TUNING = {
   ROCKET_EXPLOSION_SCALE: 1.5,      // explosion size when rocket hits something
   ROCKET_KILL_POINTS: 50,           // score bonus for destroying obstacle with rocket
 
-  RAGE_BAR_WIDTH: 300,              // HUD bar width in px
+  RAGE_BAR_WIDTH: 1500,              // HUD bar width in px
   RAGE_BAR_HEIGHT: 16,              // HUD bar height in px
   RAGE_BAR_Y: 60,                   // Y position of rage bar (below score)
   LANE_PULSE_SPEED: 5.24,             // lane highlight pulse speed (higher = faster, default was ~15.7)

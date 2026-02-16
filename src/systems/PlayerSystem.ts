@@ -14,6 +14,7 @@ export class PlayerSystem {
   private renderOffsetX: number = 0; // visual-only X shift (attack sprite alignment)
   private renderOffsetY: number = 0; // visual-only Y shift (powered-up alignment)
   private invincible: boolean = false;
+  private spectator: boolean = false;
 
   // Smooth speed model state
   private speedMultiplier: number = 0;  // current smooth multiplier (0 to MAX)
@@ -129,9 +130,16 @@ export class PlayerSystem {
     this.playerSpeed = controlSpeed * this.speedMultiplier;
 
     // --- Horizontal drift ---
-    // At multiplier 1.0: stays put. Below 1.0: drifts left. Above 1.0: moves right.
-    const speedDiff = this.playerSpeed - controlSpeed;
-    this.sprite.x += speedDiff * dt;
+    if (this.spectator) {
+      // Spectator: lock X to road center, force speed to match road
+      this.sprite.x = TUNING.PLAYER_START_X;
+      this.speedMultiplier = TUNING.HOLD_MULTIPLIER;
+      this.playerSpeed = controlSpeed * this.speedMultiplier;
+    } else {
+      // At multiplier 1.0: stays put. Below 1.0: drifts left. Above 1.0: moves right.
+      const speedDiff = this.playerSpeed - controlSpeed;
+      this.sprite.x += speedDiff * dt;
+    }
 
     // Y-based depth: lower on screen = closer to camera = renders in front
     this.sprite.setDepth(this.sprite.y + 0.2);
@@ -153,6 +161,11 @@ export class PlayerSystem {
   }
 
   setInvincible(value: boolean): void {
+    this.invincible = value;
+  }
+
+  setSpectator(value: boolean): void {
+    this.spectator = value;
     this.invincible = value;
   }
 
@@ -234,6 +247,7 @@ export class PlayerSystem {
     this.attacking = false;
     this.poweredUp = false;
     this.invincible = false;
+    // Don't reset spectator — it persists across restarts (toggled by debug key)
     this.renderOffsetX = 0;
     this.renderOffsetY = 0;
     this.sprite.removeAllListeners('animationcomplete');

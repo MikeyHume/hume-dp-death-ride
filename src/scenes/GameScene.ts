@@ -18,6 +18,7 @@ import { CRTPipeline } from '../fx/CRTPipeline';
 import { CRT_TUNING } from '../config/crtTuning';
 import { ProfileHud } from '../ui/ProfileHud';
 import { ProfilePopup, AVATAR_TEXTURE_KEY } from '../ui/ProfilePopup';
+import { ShieldSystem } from '../systems/ShieldSystem';
 import { PerfSystem } from '../systems/PerfSystem';
 import { OrientationOverlay } from '../systems/OrientationOverlay';
 import { GAME_MODE } from '../config/gameMode';
@@ -45,6 +46,16 @@ const DEBUG_HOTKEYS = {
   toggleCRT:      { key: 'O',    active: true },  // toggle CRT shader on/off
   crtDebug:       { key: 'P',    active: false },  // toggle CRT tuning overlay
   instantRage:    { key: 'ZERO',    active: true },  // trigger instant rage mode
+  spectatorMode:  { key: 'I',       active: true },  // toggle spectator: invincible + auto-explode obstacles
+  toggleLayer1:   { key: 'ONE',     active: true },  // toggle parallax layer 1 (railing)
+  toggleLayer2:   { key: 'TWO',     active: true },  // toggle parallax layer 2
+  toggleLayer3:   { key: 'THREE',   active: true },  // toggle parallax layer 3 (buildings-big)
+  toggleLayer4:   { key: 'FOUR',    active: true },  // toggle parallax layer 4 (buildings-front close)
+  toggleLayer5:   { key: 'FIVE',    active: true },  // toggle parallax layer 5 (buildings-front flipped)
+  toggleLayer6:   { key: 'SIX',     active: true },  // toggle parallax layer 6 (buildings-front)
+  toggleLayer7:   { key: 'SEVEN',   active: true },  // toggle parallax layer 7 (buildings-back)
+  toggleSky:      { key: 'EIGHT',   active: true },  // toggle sky background
+  toggleRoad:     { key: 'NINE',    active: true },  // toggle road
 };
 
 // ── Death screen leaderboard: Top 3 group ──
@@ -91,6 +102,7 @@ export class GameScene extends Phaser.Scene {
   private profilePopup!: ProfilePopup;
   private perfSystem!: PerfSystem;
   private orientationOverlay: OrientationOverlay | null = null;
+  private shieldSystem!: ShieldSystem;
 
   // Custom cursor (rendered under CRT)
   private cursorStroke?: Phaser.GameObjects.Image;
@@ -133,6 +145,7 @@ export class GameScene extends Phaser.Scene {
   private rageTimer: number = 0;       // seconds remaining in rage mode (0 = inactive)
   private roadSpeedBonus: number = 0;  // permanent speed increase from katana kills
   private rageZoomProgress: number = 0; // 0 = no zoom, 1 = full zoom (smoothly interpolated)
+  private spectatorMode: boolean = false; // debug: invincible + explode obstacles on contact
 
   // Title loop animation
   private titleLoopSprite!: Phaser.GameObjects.Sprite;
@@ -154,6 +167,7 @@ export class GameScene extends Phaser.Scene {
   private nameTitleText!: Phaser.GameObjects.Text;
   private debugText!: Phaser.GameObjects.Text;
   private debugMusicSourceText: Phaser.GameObjects.Text | null = null;
+  private spectatorLabel!: Phaser.GameObjects.Text;
 
   // Name entry
   private nameEntryContainer!: Phaser.GameObjects.Container;
@@ -279,9 +293,16 @@ export class GameScene extends Phaser.Scene {
     this.pickupSystem = new PickupSystem(this);
     this.rocketSystem = new RocketSystem(this, this.obstacleSystem);
 
+    this.shieldSystem = new ShieldSystem(this);
+
     // Wire obstacle system to spawn pickups behind CRASH obstacles
     this.obstacleSystem.onPickupSpawn = (x: number, y: number) => {
       this.pickupSystem.spawn(x, y);
+    };
+
+    // Wire obstacle system to spawn shield pickups behind CRASH obstacles
+    this.obstacleSystem.onShieldSpawn = (x: number, y: number) => {
+      this.shieldSystem.spawn(x, y);
     };
 
     // Wire rocket hit: explosion sound + score bonus + popup + camera shake
@@ -318,7 +339,7 @@ export class GameScene extends Phaser.Scene {
     const warningRadius = laneH / 3;
     const initialPoolSize = TUNING.LANE_COUNT * 3; // pre-warm enough for multiple per lane
     for (let i = 0; i < initialPoolSize; i++) {
-      const circle = this.add.circle(0, 0, warningRadius, 0xffffff, 0.8)
+      const circle = this.add.circle(0, 0, warningRadius, TUNING.WARNING_FILL_COLOR, TUNING.WARNING_FILL_ALPHA)
         .setDepth(95).setVisible(false);
       const preview = this.add.sprite(0, 0, 'obstacle-crash')
         .setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
@@ -377,6 +398,12 @@ export class GameScene extends Phaser.Scene {
       color: '#ffffff',
       fontFamily: 'monospace',
     }).setDepth(100).setVisible(false);
+
+    this.spectatorLabel = this.add.text(20, TUNING.GAME_HEIGHT - 40, 'SPECTATOR', {
+      fontSize: '18px',
+      color: '#ff4444',
+      fontFamily: 'Early GameBoy',
+    }).setDepth(9999).setScrollFactor(0).setVisible(false);
 
     // --- Title loop animation (fullscreen, behind title text) ---
     this.titleLoopSprite = this.add.sprite(
@@ -806,6 +833,41 @@ export class GameScene extends Phaser.Scene {
         }
       });
     }
+    if (DEBUG_HOTKEYS.spectatorMode.active) {
+      this.input.keyboard?.addKey(DEBUG_HOTKEYS.spectatorMode.key).on('down', () => {
+        this.spectatorMode = !this.spectatorMode;
+        this.playerSystem.setSpectator(this.spectatorMode);
+        this.spectatorLabel.setVisible(this.spectatorMode);
+      });
+    }
+    // Parallax layer toggles (keys 1-7)
+    for (let i = 0; i < 7; i++) {
+      const hotkey = [
+        DEBUG_HOTKEYS.toggleLayer1, DEBUG_HOTKEYS.toggleLayer2, DEBUG_HOTKEYS.toggleLayer3,
+        DEBUG_HOTKEYS.toggleLayer4, DEBUG_HOTKEYS.toggleLayer5, DEBUG_HOTKEYS.toggleLayer6,
+        DEBUG_HOTKEYS.toggleLayer7,
+      ][i];
+      if (hotkey.active) {
+        const layerIdx = i;
+        this.input.keyboard?.addKey(hotkey.key).on('down', () => {
+          this.parallaxSystem.toggleLayer(layerIdx);
+        });
+      }
+    }
+    // Sky toggle (key 8)
+    if (DEBUG_HOTKEYS.toggleSky.active) {
+      this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleSky.key).on('down', () => {
+        this.parallaxSystem.toggleSky();
+      });
+    }
+    // Road toggle (key 9)
+    if (DEBUG_HOTKEYS.toggleRoad.active) {
+      let roadVisible = true;
+      this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleRoad.key).on('down', () => {
+        roadVisible = !roadVisible;
+        this.roadSystem.setVisible(roadVisible);
+      });
+    }
   }
 
   update(_time: number, delta: number) {
@@ -1031,6 +1093,7 @@ export class GameScene extends Phaser.Scene {
     this.pickupSystem.setHUDVisible(false);
     this.rocketSystem.reset();
     this.rocketCooldownTimer = 0;
+    this.shieldSystem.reset();
     this.hideWarningPool();
 
     // Hide all overlays
@@ -1301,6 +1364,7 @@ export class GameScene extends Phaser.Scene {
     this.roadSystem.setVisible(true);
     this.parallaxSystem.setVisible(true);
     this.playerSystem.reset();
+    if (this.spectatorMode) this.playerSystem.setSpectator(true);
     this.playerSystem.setVisible(true);
     this.obstacleSystem.reset(this.weekSeed);
     this.difficultySystem.reset();
@@ -1324,7 +1388,7 @@ export class GameScene extends Phaser.Scene {
     this.hudHighScore.setText(String(weeklyHigh).padStart(7, '0'));
     this.hudLabel.setVisible(true);
     this.hudHighScore.setVisible(true);
-    this.profileHud.showPlayingMode();
+    this.profileHud.showPlayingMode(this.profilePopup.getName());
     this.profileHud.setAlpha(0);
     this.tweens.add({
       targets: this.profileHud.getContainer(),
@@ -1353,6 +1417,7 @@ export class GameScene extends Phaser.Scene {
     this.pickupSystem.reset();
     this.pickupSystem.setHUDVisible(true);
     this.rocketSystem.reset();
+    this.shieldSystem.reset();
     this.hideWarningPool();
   }
 
@@ -1484,8 +1549,12 @@ export class GameScene extends Phaser.Scene {
     // Update pickups (scrolling + collection)
     this.pickupSystem.update(dt, roadSpeed, playerCollX, playerCollY, TUNING.PLAYER_RADIUS);
 
-    if (this.rageTimer > 0) {
-      // Rage mode: destroy obstacles on contact
+    // Update shield pickups (scrolling + collection)
+    this.shieldSystem.update(dt, roadSpeed, playerCollX, playerCollY, TUNING.PLAYER_RADIUS);
+    this.profileHud.setShields(this.shieldSystem.getShields());
+
+    if (this.rageTimer > 0 || this.spectatorMode) {
+      // Rage mode / spectator: destroy obstacles on contact
       const hits = this.obstacleSystem.checkRageCollision(
         playerCollX, playerCollY, TUNING.PLAYER_RADIUS
       );
@@ -1507,7 +1576,15 @@ export class GameScene extends Phaser.Scene {
     } else {
       const result = this.obstacleSystem.checkCollision(playerCollX, playerCollY, TUNING.PLAYER_RADIUS);
       if (result.crashed && this.slashInvincibilityTimer <= 0) {
-        this.playerSystem.kill();
+        if (this.shieldSystem.getShields() > 0) {
+          // Shield absorbs the hit — explode obstacle, lose one shield
+          this.shieldSystem.consumeShield();
+          this.obstacleSystem.spawnExplosion(result.hitX, result.hitY);
+          this.audioSystem.playExplosion();
+          this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 0.5, TUNING.SHAKE_DEATH_INTENSITY * 0.5);
+        } else {
+          this.playerSystem.kill();
+        }
       }
       if (result.slowOverlapping) {
         this.playerSystem.applyLeftwardPush(TUNING.SLOW_PUSH_RATE * dt);
@@ -1661,6 +1738,32 @@ export class GameScene extends Phaser.Scene {
         });
       }
 
+      // Merge shield pickup warnings
+      const shieldPool = this.shieldSystem.getPool();
+      for (let i = 0; i < shieldPool.length; i++) {
+        const pickup = shieldPool[i];
+        if (!pickup.active || pickup.x <= TUNING.GAME_WIDTH) continue;
+
+        const timeUntil = (pickup.x - TUNING.GAME_WIDTH) / roadSpeed;
+        if (timeUntil > TUNING.LANE_WARNING_DURATION) continue;
+
+        let closestLane = 0;
+        let closestDist = Infinity;
+        for (let l = 0; l < TUNING.LANE_COUNT; l++) {
+          const dist = Math.abs(pickup.y - laneCenters[l]);
+          if (dist < closestDist) {
+            closestDist = dist;
+            closestLane = l;
+          }
+        }
+
+        warnings[closestLane].push({
+          type: 'shield-pickup',
+          textureKey: 'pickup-shield',
+          timeUntil,
+        });
+      }
+
       // Re-sort lanes that got pickup entries
       for (let l = 0; l < TUNING.LANE_COUNT; l++) {
         if (warnings[l].length > 1) {
@@ -1682,7 +1785,7 @@ export class GameScene extends Phaser.Scene {
 
         // Grow pool if needed
         if (poolIdx >= this.warningPool.length) {
-          const circle = this.add.circle(0, 0, warningRadius, 0xffffff, 0.8)
+          const circle = this.add.circle(0, 0, warningRadius, TUNING.WARNING_FILL_COLOR, TUNING.WARNING_FILL_ALPHA)
             .setDepth(95).setVisible(false);
           const preview = this.add.sprite(0, 0, 'obstacle-crash')
             .setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
@@ -1707,31 +1810,45 @@ export class GameScene extends Phaser.Scene {
         slot.circle.setAlpha(alpha).setVisible(true);
         slot.preview.setAlpha(alpha).setVisible(true);
 
-        // Determine texture and scale
+        // Determine texture, scale, and stroke color per type
         let scaleMultiplier: number;
         let textureKey: string;
+        let strokeColor: number;
         switch (warning.type) {
           case ObstacleType.CRASH:
             textureKey = 'obstacle-crash';
             scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_CRASH;
+            strokeColor = TUNING.WARNING_STROKE_CRASH;
             break;
           case ObstacleType.CAR:
             textureKey = warning.textureKey;
             scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_CAR;
+            strokeColor = TUNING.WARNING_STROKE_CAR;
             break;
           case ObstacleType.SLOW:
             textureKey = 'obstacle-slow';
             scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_SLOW;
+            strokeColor = TUNING.WARNING_STROKE_SLOW;
             break;
           case 'pickup':
             textureKey = 'pickup-rocket';
             scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_PICKUP;
+            strokeColor = TUNING.WARNING_STROKE_ROCKET;
+            break;
+          case 'shield-pickup':
+            textureKey = 'pickup-shield';
+            scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_SHIELD;
+            strokeColor = TUNING.WARNING_STROKE_SHIELD;
             break;
           default:
             textureKey = 'obstacle-crash';
             scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_CRASH;
+            strokeColor = TUNING.WARNING_STROKE_CRASH;
             break;
         }
+
+        // Apply per-type stroke
+        slot.circle.setStrokeStyle(TUNING.WARNING_STROKE_WIDTH, strokeColor, alpha);
 
         // Only switch texture/animation when key changes
         if (slot.currentKey !== textureKey) {
@@ -1895,6 +2012,7 @@ export class GameScene extends Phaser.Scene {
           this.pickupSystem.hideAll();
           this.pickupSystem.setHUDVisible(false);
           this.rocketSystem.hideAll();
+          this.shieldSystem.hideAll();
           this.fxSystem.reset();
           this.roadSystem.setVisible(false);
           this.parallaxSystem.setVisible(false);
@@ -2043,7 +2161,7 @@ export class GameScene extends Phaser.Scene {
       if (event.key === 'Backspace') {
         this.enteredName = this.enteredName.slice(0, -1);
       } else if (event.key.length === 1 && this.enteredName.length < NAME_MAX_LENGTH) {
-        this.enteredName += event.key.toUpperCase();
+        this.enteredName += event.key;
       }
       this.nameInputText.setText(this.enteredName + '_');
     };
@@ -2053,7 +2171,7 @@ export class GameScene extends Phaser.Scene {
   /** Get the rank text for the current profile name (e.g. "RANKED #3" or "") */
   private getProfileRankText(): string {
     const profileName = this.profilePopup.getName();
-    if (profileName === 'ANON' || profileName.trim() === '') return '';
+    if (profileName === 'ANON' || profileName.trim() === '') return 'UNRANKED';
     const best = this.leaderboardSystem.getBestForName(profileName);
     if (best) return `RANKED #${best.rank}`;
     return 'UNRANKED';

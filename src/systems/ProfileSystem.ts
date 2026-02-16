@@ -112,7 +112,7 @@ export async function loadOrCreateProfile(): Promise<Profile> {
 
 /** Sanitize + persist username. Only writes to DB when Spotify-connected. */
 export async function updateUsername(nameRaw: string): Promise<string> {
-  let name = nameRaw.trim().toUpperCase().slice(0, NAME_MAX_LENGTH);
+  let name = nameRaw.trim().slice(0, NAME_MAX_LENGTH);
   if (name === '') name = 'ANON';
 
   if (linkedSpotifyId) {
