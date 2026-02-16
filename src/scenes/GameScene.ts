@@ -818,10 +818,11 @@ export class GameScene extends Phaser.Scene {
     if (DEBUG_HOTKEYS.toggleCRT.active) {
       this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleCRT.key).on('down', () => {
         this.crtEnabled = !this.crtEnabled;
-        if (this.crtEnabled) {
-          this.cameras.main.setPostPipeline(CRTPipeline);
-        } else {
-          this.cameras.main.removePostPipeline('CRTPipeline');
+        const pipes = this.cameras.main.getPostPipeline(CRTPipeline);
+        if (Array.isArray(pipes)) {
+          pipes.forEach(p => p.active = this.crtEnabled);
+        } else if (pipes) {
+          pipes.active = this.crtEnabled;
         }
       });
     }
