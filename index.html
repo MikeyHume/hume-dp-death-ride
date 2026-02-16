@@ -74,6 +74,7 @@
       animation: bios-flicker var(--bios-flicker-speed) infinite alternate;
     }
     #boot-overlay.hidden { display: none; }
+    #boot-overlay ::selection { background: var(--bios-color); color: #000; }
 
     /* CRT scanlines overlay */
     #boot-overlay::before {

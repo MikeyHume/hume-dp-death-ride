@@ -70,6 +70,12 @@ export class BootScene extends Phaser.Scene {
       frameHeight: TUNING.EXPLOSION_FRAME_SIZE,
     });
 
+    // Slash VFX sprite sheet (8 frames horizontal strip, frame 0 is blank)
+    this.load.spritesheet('slash-vfx', 'assets/vfx/slash.png', {
+      frameWidth: TUNING.SLASH_VFX_FRAME_WIDTH,
+      frameHeight: TUNING.SLASH_VFX_FRAME_HEIGHT,
+    });
+
     // Countdown sprite sheet (3×2 grid, 600×600 per frame, last frame blank)
     this.load.spritesheet('countdown', 'assets/start/countdown.png', {
       frameWidth: TUNING.COUNTDOWN_FRAME_SIZE,
@@ -237,15 +243,16 @@ export class BootScene extends Phaser.Scene {
       repeat: 0,
     });
 
-    // Katana slash (silver arc)
-    const slashGfx = this.add.graphics();
-    slashGfx.fillStyle(TUNING.KATANA_COLOR);
-    // Draw a thin diagonal slash shape
-    slashGfx.fillRect(0, 0, TUNING.KATANA_WIDTH, TUNING.KATANA_HEIGHT);
-    slashGfx.lineStyle(4, 0xffffff, 1);
-    slashGfx.lineBetween(TUNING.KATANA_WIDTH / 2, 0, TUNING.KATANA_WIDTH / 2, TUNING.KATANA_HEIGHT);
-    slashGfx.generateTexture('katana-slash', TUNING.KATANA_WIDTH, TUNING.KATANA_HEIGHT);
-    slashGfx.destroy();
+    // Slash VFX animation (frames 1-7, skipping blank frame 0)
+    this.anims.create({
+      key: 'slash-vfx-play',
+      frames: this.anims.generateFrameNumbers('slash-vfx', {
+        start: 1,
+        end: TUNING.SLASH_VFX_FRAMES,
+      }),
+      frameRate: TUNING.SLASH_VFX_BASE_FPS * TUNING.SLASH_VFX_SPEED,
+      repeat: 0,
+    });
 
     // Rocket launcher pickup (large yellow circle)
     const pickupGfx = this.add.graphics();

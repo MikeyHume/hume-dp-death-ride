@@ -128,7 +128,7 @@ export class GameScene extends Phaser.Scene {
   private dyingTimer: number = 0;
 
   // Katana slash
-  private slashSprite!: Phaser.GameObjects.Image;
+  private slashSprite!: Phaser.GameObjects.Sprite;
   private slashActiveTimer: number = 0;
   private slashCooldownTimer: number = 0;
   private slashInvincibilityTimer: number = 0;
@@ -763,8 +763,8 @@ export class GameScene extends Phaser.Scene {
     this.deathExplosion = this.add.sprite(0, 0, 'explosion');
     this.deathExplosion.setVisible(false);
 
-    // Katana slash sprite (hidden until activated)
-    this.slashSprite = this.add.image(0, 0, 'katana-slash');
+    // Katana slash VFX sprite (hidden until activated)
+    this.slashSprite = this.add.sprite(0, 0, 'slash-vfx');
     this.slashSprite.setVisible(false).setDepth(4);
     this.slashActiveTimer = 0;
     this.slashCooldownTimer = 0;
@@ -1630,14 +1630,20 @@ export class GameScene extends Phaser.Scene {
       g.strokeCircle(r.x, r.y, TUNING.ROCKET_RADIUS);
     }
 
-    // Katana slash (red rectangle, only when active)
+    // Katana slash collision hitbox (red rectangle, only when active)
     if (this.slashActiveTimer > 0) {
-      const sw = this.slashSprite.displayWidth;
-      const sh = this.slashSprite.displayHeight;
+      const roadSpeed = TUNING.ROAD_BASE_SPEED + TUNING.ROAD_SPEED_RAMP * this.elapsed;
+      const speedRatio = roadSpeed > 0 ? this.playerSystem.getPlayerSpeed() / roadSpeed : 1;
+      const sT = Phaser.Math.Clamp((speedRatio - 1) / (TUNING.MAX_SPEED_MULTIPLIER - 1), 0, 1);
+      const sw = TUNING.KATANA_WIDTH * (1 + sT * (TUNING.KATANA_SPEED_WIDTH_SCALE - 1));
+      const sOff = TUNING.KATANA_OFFSET_X * (1 + sT * (TUNING.KATANA_SPEED_OFFSET_SCALE - 1));
+      const cx = this.playerSystem.getX() + sOff;
+      const cy = this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y;
+      const sh = TUNING.PLAYER_COLLISION_H;
       g.lineStyle(2, 0xff0000, 1);
       g.fillStyle(0xff0000, ALPHA);
-      g.fillRect(this.slashSprite.x - sw / 2, this.slashSprite.y - sh / 2, sw, sh);
-      g.strokeRect(this.slashSprite.x - sw / 2, this.slashSprite.y - sh / 2, sw, sh);
+      g.fillRect(cx - sw / 2, cy - sh / 2, sw, sh);
+      g.strokeRect(cx - sw / 2, cy - sh / 2, sw, sh);
     }
   }
 
@@ -1686,19 +1692,14 @@ export class GameScene extends Phaser.Scene {
     const slashWidth = TUNING.KATANA_WIDTH * (1 + speedT * (TUNING.KATANA_SPEED_WIDTH_SCALE - 1));
     const slashOffset = TUNING.KATANA_OFFSET_X * (1 + speedT * (TUNING.KATANA_SPEED_OFFSET_SCALE - 1));
 
-    if (this.slashActiveTimer > 0) {
-      this.slashActiveTimer -= dt;
-      // Position slash to the right of the player
-      this.slashSprite.setPosition(
-        this.playerSystem.getX() + slashOffset,
-        this.playerSystem.getY()
-      );
-      this.slashSprite.setDisplaySize(slashWidth, TUNING.KATANA_HEIGHT);
-      this.slashSprite.setDepth(this.playerSystem.getY() + 0.3);
-      // Check slash vs CRASH obstacles (Y uses player collision circle, not slash visual)
+    // Collision hitbox center (speed-scaled, independent of VFX position)
+    const slashCenterX = this.playerSystem.getX() + slashOffset;
+
+    // Collision hitbox active while slash VFX is visible
+    if (this.slashSprite.visible) {
       const slashCollY = this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y;
       const hitX = this.obstacleSystem.checkSlashCollision(
-        this.slashSprite.x,
+        slashCenterX,
         slashWidth,
         slashCollY,
         TUNING.PLAYER_COLLISION_H / 2
@@ -1732,20 +1733,32 @@ export class GameScene extends Phaser.Scene {
           }
         }
       }
-      if (this.slashActiveTimer <= 0) {
-        this.slashSprite.setVisible(false);
-      }
+    }
+    // VFX sprite follows player while animation is playing
+    if (this.slashSprite.visible) {
+      this.slashSprite.setPosition(
+        this.playerSystem.getX() + TUNING.SLASH_VFX_OFFSET_X,
+        this.playerSystem.getY() + TUNING.SLASH_VFX_OFFSET_Y
+      );
+      // First 3 visible frames render behind player, rest render on top
+      const frameIdx = this.slashSprite.anims.currentFrame?.index ?? 1;
+      const behindPlayer = frameIdx <= 3;
+      this.slashSprite.setDepth(this.playerSystem.getY() + (behindPlayer ? -0.3 : 0.3));
     }
     if (this.inputSystem.getAttackPressed() && this.slashCooldownTimer <= 0 && this.playerSystem.playAttack()) {
       this.slashActiveTimer = TUNING.KATANA_DURATION;
       this.slashCooldownTimer = TUNING.KATANA_COOLDOWN;
       this.slashSprite.setPosition(
-        this.playerSystem.getX() + slashOffset,
-        this.playerSystem.getY()
+        this.playerSystem.getX() + TUNING.SLASH_VFX_OFFSET_X,
+        this.playerSystem.getY() + TUNING.SLASH_VFX_OFFSET_Y
       );
-      this.slashSprite.setDisplaySize(slashWidth, TUNING.KATANA_HEIGHT);
+      this.slashSprite.setScale(TUNING.SLASH_VFX_SCALE);
       this.slashSprite.setVisible(true);
-      this.slashSprite.setDepth(this.playerSystem.getY() + 0.3);
+      this.slashSprite.setDepth(this.playerSystem.getY() - 0.3);
+      this.slashSprite.play('slash-vfx-play');
+      this.slashSprite.once('animationcomplete', () => {
+        this.slashSprite.setVisible(false);
+      });
       this.audioSystem.playSlash();
     }
 

@@ -184,6 +184,16 @@ export const TUNING = {
   KATANA_KILL_POPUP_DURATION: 1.5, // seconds for popup to fade away
   KATANA_INVINCIBILITY: 0.3,       // seconds of invincibility after destroying a barrier with katana
 
+  // Slash VFX sprite sheet (assets/vfx/slash.png — 8 frames, first is blank)
+  SLASH_VFX_FRAME_WIDTH: 140,      // px per frame (1120 / 8)
+  SLASH_VFX_FRAME_HEIGHT: 120,     // px per frame
+  SLASH_VFX_FRAMES: 7,             // usable frames (1-7, frame 0 is blank)
+  SLASH_VFX_BASE_FPS: 12,          // designed playback rate
+  SLASH_VFX_SPEED: 2,            // playback speed multiplier (adjust this to tune)
+  SLASH_VFX_SCALE: 2.0,            // display scale multiplier
+  SLASH_VFX_OFFSET_X: 160,         // px right of player center
+  SLASH_VFX_OFFSET_Y: 0,           // px below player center
+
   // Rage meter
   RAGE_FILL_MULTIPLIER: 6.9,        // scales rage gained per kill (2.0 = double fill rate, 0.5 = half)
   RAGE_MAX: 1000,                   // rage needed to activate (at 1× multiplier: 100pt kill = 10%, 10pt kill = 1%)
