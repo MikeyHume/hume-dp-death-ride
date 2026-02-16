@@ -7,6 +7,9 @@ export class RocketSystem {
   private pool: Phaser.GameObjects.Image[] = [];
   private obstacleSystem: ObstacleSystem;
 
+  // Lane index per rocket (parallel array with pool)
+  private lanes: number[] = [];
+
   // Callbacks
   public onHit: ((x: number, y: number) => void) | null = null;
 
@@ -20,30 +23,36 @@ export class RocketSystem {
       rocket.setDisplaySize(TUNING.ROCKET_DISPLAY_W, TUNING.ROCKET_DISPLAY_H);
       rocket.setActive(false).setVisible(false);
       this.pool.push(rocket);
+      this.lanes.push(0);
     }
   }
 
-  /** Fire a rocket from the given position */
-  fire(x: number, y: number): void {
+  /** Fire a rocket from the given position, locked to the specified lane */
+  fire(x: number, y: number, lane: number): void {
     let rocket: Phaser.GameObjects.Image | null = null;
+    let idx = -1;
     for (let i = 0; i < this.pool.length; i++) {
       if (!this.pool[i].active) {
         rocket = this.pool[i];
+        idx = i;
         break;
       }
     }
     if (!rocket) {
       rocket = this.scene.add.image(0, 0, 'rocket-projectile');
       rocket.setDisplaySize(TUNING.ROCKET_DISPLAY_W, TUNING.ROCKET_DISPLAY_H);
+      idx = this.pool.length;
       this.pool.push(rocket);
+      this.lanes.push(0);
     }
 
     rocket.setPosition(x, y);
     rocket.setActive(true).setVisible(true);
     rocket.setDepth(y + 0.15);
+    this.lanes[idx] = lane;
   }
 
-  /** Move rockets right, check collisions, recycle off-screen */
+  /** Move rockets right, check lane-based collisions, recycle off-screen */
   update(dt: number): void {
     for (let i = 0; i < this.pool.length; i++) {
       const rocket = this.pool[i];
@@ -58,8 +67,8 @@ export class RocketSystem {
         continue;
       }
 
-      // Check collision against obstacles
-      const hitResult = this.obstacleSystem.checkProjectileCollision(rocket.x, rocket.y, TUNING.ROCKET_RADIUS);
+      // Check lane-based collision against obstacles
+      const hitResult = this.obstacleSystem.checkLaneProjectileCollision(rocket.x, this.lanes[i]);
       if (hitResult) {
         rocket.setActive(false).setVisible(false);
         if (this.onHit) this.onHit(hitResult.x, hitResult.y);
@@ -79,10 +88,15 @@ export class RocketSystem {
     }
   }
 
+  getPool(): readonly Phaser.GameObjects.Image[] {
+    return this.pool;
+  }
+
   destroy(): void {
     for (let i = 0; i < this.pool.length; i++) {
       this.pool[i].destroy();
     }
     this.pool.length = 0;
+    this.lanes.length = 0;
   }
 }

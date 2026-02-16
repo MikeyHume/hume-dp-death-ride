@@ -127,7 +127,7 @@ export class BootScene extends Phaser.Scene {
     this.anims.create({
       key: 'player-ride',
       frames: this.anims.generateFrameNumbers('player-ride', { start: 0, end: TUNING.PLAYER_ANIM_FRAMES - 1 }),
-      frameRate: 12,
+      frameRate: TUNING.PLAYER_RIDE_FPS,
       repeat: -1,
     });
 
@@ -135,55 +135,55 @@ export class BootScene extends Phaser.Scene {
     this.anims.create({
       key: 'player-attack',
       frames: this.anims.generateFrameNumbers('player-attack', { start: 0, end: TUNING.PLAYER_ATTACK_ANIM_FRAMES - 1 }),
-      frameRate: 30,
+      frameRate: TUNING.PLAYER_ATTACK_FPS,
       repeat: 0,
     });
 
-    // Player rocket launcher animation (plays once at 12fps)
+    // Player rocket launcher animation (plays once)
     this.anims.create({
       key: 'player-rocket-launch',
       frames: this.anims.generateFrameNumbers('player-rocket-launch', { start: 0, end: TUNING.ROCKET_LAUNCHER_ANIM_FRAMES - 1 }),
-      frameRate: 12,
+      frameRate: TUNING.ROCKET_LAUNCHER_FPS,
       repeat: 0,
     });
 
-    // Powered-up intro (full sequence, plays once at 12fps)
+    // Powered-up intro (full sequence, plays once)
     this.anims.create({
       key: 'player-powered-intro',
       frames: this.anims.generateFrameNumbers('player-powered', { start: 0, end: TUNING.POWERED_ANIM_FRAMES - 1 }),
-      frameRate: 12,
+      frameRate: TUNING.POWERED_FPS,
       repeat: 0,
     });
 
-    // Powered-up loop (last 4 frames, loops at 12fps)
+    // Powered-up loop (last 4 frames, loops)
     this.anims.create({
       key: 'player-powered-loop',
       frames: this.anims.generateFrameNumbers('player-powered', { start: TUNING.POWERED_LOOP_START, end: TUNING.POWERED_ANIM_FRAMES - 1 }),
-      frameRate: 12,
+      frameRate: TUNING.POWERED_FPS,
       repeat: -1,
     });
 
-    // Speed-up intro (frames 0-35, plays once at 12fps)
+    // Speed-up intro
     this.anims.create({
       key: 'player-speedup-intro',
       frames: this.anims.generateFrameNumbers('player-speedup', { start: 0, end: TUNING.SPEEDUP_INTRO_END }),
-      frameRate: 12,
+      frameRate: TUNING.SPEEDUP_FPS,
       repeat: 0,
     });
 
-    // Speed-up loop (frames 36-51, loops at 12fps)
+    // Speed-up loop
     this.anims.create({
       key: 'player-speedup-loop',
       frames: this.anims.generateFrameNumbers('player-speedup', { start: TUNING.SPEEDUP_LOOP_START, end: TUNING.SPEEDUP_LOOP_END }),
-      frameRate: 12,
+      frameRate: TUNING.SPEEDUP_FPS,
       repeat: -1,
     });
 
-    // Speed-up outro (frames 52-63, plays once at 12fps)
+    // Speed-up outro
     this.anims.create({
       key: 'player-speedup-outro',
       frames: this.anims.generateFrameNumbers('player-speedup', { start: TUNING.SPEEDUP_OUTRO_START, end: TUNING.SPEEDUP_OUTRO_END }),
-      frameRate: 12,
+      frameRate: TUNING.SPEEDUP_FPS,
       repeat: 0,
     });
 

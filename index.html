@@ -210,6 +210,14 @@
     var overlay = document.getElementById('boot-overlay');
     var bootLinesEl = document.getElementById('boot-lines');
 
+    // Click sound during BIOS overlay
+    var biosClickAudio = new Audio('assets/audio/sfx/mouse click.mp3');
+    biosClickAudio.volume = 1.0;
+    overlay.addEventListener('pointerdown', function() {
+      biosClickAudio.currentTime = 0;
+      biosClickAudio.play().catch(function() {});
+    });
+
     // Build flat character list, count dots/non-dots, assign progress thresholds
     var chars = [];
     var totalDots = 0;

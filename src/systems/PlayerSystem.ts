@@ -27,6 +27,9 @@ export class PlayerSystem {
   private tapPressure: number = 0;      // accumulated tap intensity (decays over time)
   private graceTimer: number = 0;       // countdown before decel after releasing space
 
+  // Attack cooldown (blocks all attacks while > 0)
+  private attackCooldown: number = 0;
+
   // Speed-up animation state
   private speedupState: SpeedupState = 'idle';
   private noTapTimer: number = 0;       // time since last space tap
@@ -52,6 +55,9 @@ export class PlayerSystem {
   update(dt: number, roadSpeed: number, baseRoadSpeed?: number): void {
     if (!this.alive) return;
 
+    // Tick attack cooldown
+    this.attackCooldown = Math.max(0, this.attackCooldown - dt);
+
     // Strip last frame's render offsets so all logic uses the clean position
     this.sprite.x -= this.renderOffsetX;
     this.sprite.y -= this.renderOffsetY;
@@ -64,7 +70,7 @@ export class PlayerSystem {
         const halfH = TUNING.PLAYER_DISPLAY_HEIGHT / 2;
         this.sprite.y = Phaser.Math.Clamp(
           this.sprite.y + arrowDir * TUNING.PLAYER_ARROW_SPEED * dt,
-          TUNING.ROAD_TOP_Y - TUNING.PLAYER_RADIUS,
+          TUNING.ROAD_TOP_Y - TUNING.PLAYER_TOP_Y_EXTEND,
           TUNING.ROAD_BOTTOM_Y - halfH
         );
       }
@@ -275,6 +281,45 @@ export class PlayerSystem {
     this.setBaseDisplaySize(rideW, displayH);
   }
 
+  /** Cancel whatever animation is currently playing and clean up all state/listeners */
+  private cancelCurrentAnimation(): void {
+    this.sprite.removeAllListeners('animationcomplete');
+    this.sprite.removeAllListeners('animationupdate');
+    this.attacking = false;
+    this.rocketLaunching = false;
+    this.rocketFireCallback = null;
+  }
+
+  /** Return to the correct default animation based on current game state */
+  private restoreDefaultAnimation(): void {
+    this.cancelCurrentAnimation();
+
+    const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
+    if (this.poweredUp) {
+      this.sprite.play('player-powered-loop');
+      const s = TUNING.POWERED_SCALE;
+      const poweredW = displayH * s * (TUNING.POWERED_FRAME_WIDTH / TUNING.POWERED_FRAME_HEIGHT);
+      this.setBaseDisplaySize(poweredW, displayH * s);
+    } else if (this.speedupState === 'intro' || this.speedupState === 'loop') {
+      this.speedupState = 'loop';
+      this.sprite.play('player-speedup-loop');
+      this.applySpeedupDisplaySize();
+    } else if (this.speedupState === 'outro') {
+      this.sprite.play('player-speedup-outro');
+      this.applySpeedupDisplaySize();
+      this.sprite.once('animationcomplete', () => {
+        if (this.speedupState === 'outro') {
+          this.speedupState = 'idle';
+          this.sprite.play('player-ride');
+          this.applyRideDisplaySize();
+        }
+      });
+    } else {
+      this.sprite.play('player-ride');
+      this.applyRideDisplaySize();
+    }
+  }
+
   setInvincible(value: boolean): void {
     this.invincible = value;
   }
@@ -290,49 +335,29 @@ export class PlayerSystem {
     this.speedMultiplier = Math.max(0, this.speedMultiplier - amount / Math.max(1, this.playerSpeed + amount));
   }
 
-  playAttack(): void {
-    if (this.attacking) return;
+  playAttack(): boolean {
+    if (this.attackCooldown > 0) return false;
+    // Cancel any in-progress animation (rocket, previous slash, etc.)
+    this.cancelCurrentAnimation();
     this.attacking = true;
+    this.attackCooldown = TUNING.ATTACK_COOLDOWN_SLASH;
 
     const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
-    this.sprite.removeAllListeners('animationcomplete');
     this.sprite.play('player-attack');
     const attackW = displayH * (TUNING.PLAYER_ATTACK_FRAME_WIDTH / TUNING.PLAYER_ATTACK_FRAME_HEIGHT);
     this.setBaseDisplaySize(attackW, displayH);
 
     this.sprite.once('animationcomplete', () => {
-      this.attacking = false;
-      if (this.poweredUp) {
-        this.sprite.play('player-powered-loop');
-        const s = TUNING.POWERED_SCALE;
-        const poweredW = displayH * s * (TUNING.POWERED_FRAME_WIDTH / TUNING.POWERED_FRAME_HEIGHT);
-        this.setBaseDisplaySize(poweredW, displayH * s);
-      } else if (this.speedupState === 'intro' || this.speedupState === 'loop') {
-        // Resume speed-up loop after attack
-        this.speedupState = 'loop';
-        this.sprite.play('player-speedup-loop');
-        this.applySpeedupDisplaySize();
-      } else if (this.speedupState === 'outro') {
-        // Continue outro after attack
-        this.sprite.play('player-speedup-outro');
-        this.applySpeedupDisplaySize();
-        this.sprite.once('animationcomplete', () => {
-          if (this.speedupState === 'outro') {
-            this.speedupState = 'idle';
-            this.sprite.play('player-ride');
-            this.applyRideDisplaySize();
-          }
-        });
-      } else {
-        this.sprite.play('player-ride');
-        this.applyRideDisplaySize();
-      }
+      this.restoreDefaultAnimation();
     });
+    return true;
   }
 
-  /** Play rocket launcher animation; returns false if already attacking. Fires callback on frame ROCKET_LAUNCHER_FIRE_FRAME. */
+  /** Play rocket launcher animation. Cancels any current animation. Fires callback on frame ROCKET_LAUNCHER_FIRE_FRAME. */
   playRocketLaunch(onFire: () => void): boolean {
-    if (this.attacking) return false;
+    if (this.attackCooldown > 0) return false;
+    // Cancel any in-progress animation (slash, previous rocket, etc.)
+    this.cancelCurrentAnimation();
     this.attacking = true;
     this.rocketLaunching = true;
     this.rocketFireCallback = onFire;
@@ -340,8 +365,6 @@ export class PlayerSystem {
     const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
     const s = TUNING.ROCKET_LAUNCHER_SCALE;
     const launchW = displayH * s * (TUNING.ROCKET_LAUNCHER_FRAME_WIDTH / TUNING.ROCKET_LAUNCHER_FRAME_HEIGHT);
-    this.sprite.removeAllListeners('animationcomplete');
-    this.sprite.removeAllListeners('animationupdate');
     this.sprite.play('player-rocket-launch');
     this.setBaseDisplaySize(launchW, displayH * s);
 
@@ -354,35 +377,9 @@ export class PlayerSystem {
     });
 
     this.sprite.once('animationcomplete', () => {
-      this.attacking = false;
-      this.rocketLaunching = false;
-      this.rocketFireCallback = null;
-      this.sprite.removeAllListeners('animationupdate');
-      if (this.poweredUp) {
-        this.sprite.play('player-powered-loop');
-        const ps = TUNING.POWERED_SCALE;
-        const poweredW = displayH * ps * (TUNING.POWERED_FRAME_WIDTH / TUNING.POWERED_FRAME_HEIGHT);
-        this.setBaseDisplaySize(poweredW, displayH * ps);
-      } else if (this.speedupState === 'intro' || this.speedupState === 'loop') {
-        this.speedupState = 'loop';
-        this.sprite.play('player-speedup-loop');
-        this.applySpeedupDisplaySize();
-      } else if (this.speedupState === 'outro') {
-        this.sprite.play('player-speedup-outro');
-        this.applySpeedupDisplaySize();
-        this.sprite.once('animationcomplete', () => {
-          if (this.speedupState === 'outro') {
-            this.speedupState = 'idle';
-            this.sprite.play('player-ride');
-            this.applyRideDisplaySize();
-          }
-        });
-      } else {
-        this.sprite.play('player-ride');
-        this.applyRideDisplaySize();
-      }
+      this.restoreDefaultAnimation();
     });
-
+    this.attackCooldown = TUNING.ATTACK_COOLDOWN_ROCKET;
     return true;
   }
 
@@ -391,12 +388,13 @@ export class PlayerSystem {
     // Cancel any speed-up state — rage takes priority
     this.speedupState = 'idle';
     this.noTapTimer = 0;
-    if (this.attacking) return; // attack completion will switch to powered-up loop
+
+    // Cancel current animation and start powered intro
+    this.cancelCurrentAnimation();
 
     const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
     const s = TUNING.POWERED_SCALE;
     const poweredW = displayH * s * (TUNING.POWERED_FRAME_WIDTH / TUNING.POWERED_FRAME_HEIGHT);
-    this.sprite.removeAllListeners('animationcomplete');
     this.sprite.play('player-powered-intro');
     this.setBaseDisplaySize(poweredW, displayH * s);
 
@@ -409,18 +407,16 @@ export class PlayerSystem {
 
   stopPoweredUp(): void {
     this.poweredUp = false;
-    if (this.attacking) return; // attack completion will switch to ride
+    if (this.attacking) return; // attack completion will call restoreDefaultAnimation
 
-    this.sprite.removeAllListeners('animationcomplete');
+    this.cancelCurrentAnimation();
     this.sprite.play('player-ride');
     this.applyRideDisplaySize();
   }
 
   kill(): void {
     this.alive = false;
-    this.attacking = false;
-    this.rocketLaunching = false;
-    this.rocketFireCallback = null;
+    this.cancelCurrentAnimation();
     this.poweredUp = false;
     this.speedupState = 'idle';
     this.noTapTimer = 0;
@@ -428,6 +424,7 @@ export class PlayerSystem {
   }
 
   reset(): void {
+    this.cancelCurrentAnimation();
     this.sprite.x = TUNING.PLAYER_START_X;
     this.sprite.y = (TUNING.ROAD_TOP_Y + TUNING.ROAD_BOTTOM_Y) / 2;
     this.playerSpeed = 0;
@@ -435,9 +432,7 @@ export class PlayerSystem {
     this.tapPressure = 0;
     this.graceTimer = 0;
     this.alive = true;
-    this.attacking = false;
-    this.rocketLaunching = false;
-    this.rocketFireCallback = null;
+    this.attackCooldown = 0;
     this.poweredUp = false;
     this.invincible = false;
     this.speedupState = 'idle';
@@ -445,8 +440,6 @@ export class PlayerSystem {
     // Don't reset spectator — it persists across restarts (toggled by debug key)
     this.renderOffsetX = 0;
     this.renderOffsetY = 0;
-    this.sprite.removeAllListeners('animationcomplete');
-    this.sprite.removeAllListeners('animationupdate');
     this.sprite.play('player-ride');
     this.applyRideDisplaySize();
   }
@@ -472,6 +465,9 @@ export class PlayerSystem {
     this.sprite.setDisplaySize(w, h);
     this.baseSpriteScaleX = this.sprite.scaleX;
     this.baseSpriteScaleY = this.sprite.scaleY;
+    // Apply perspective immediately to prevent a 1-frame scale pop
+    const perspScale = this.getPerspectiveScale();
+    this.sprite.setScale(this.baseSpriteScaleX * perspScale, this.baseSpriteScaleY * perspScale);
   }
 
   /** Compute perspective scale from Y position (top of road = SCALE_TOP, bottom = SCALE_BOTTOM) */

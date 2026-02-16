@@ -58,6 +58,7 @@ const DEBUG_HOTKEYS = {
   toggleRoad:     { key: 'NINE',    active: true },  // toggle road
   hideHud:        { key: 'G',       active: true },  // hide HUD + music UI during gameplay
   showHelp:       { key: 'PLUS',   active: true },  // toggle debug hotkey help overlay
+  showCollisions: { key: 'MINUS',  active: true },  // toggle collision hitbox overlay
 };
 
 // ── Death screen leaderboard: Top 3 group ──
@@ -174,6 +175,8 @@ export class GameScene extends Phaser.Scene {
   private spectatorLabel!: Phaser.GameObjects.Text;
   private debugHelpBg!: Phaser.GameObjects.Rectangle;
   private debugHelpText!: Phaser.GameObjects.Text;
+  private collisionDebug: boolean = false;
+  private collisionGfx!: Phaser.GameObjects.Graphics;
 
   // Name entry
   private nameEntryContainer!: Phaser.GameObjects.Container;
@@ -253,9 +256,9 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       // Debug keys — don't advance game state (map Phaser key names to event.key values)
-      const phaserToEventKey: Record<string, string> = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', plus: '+' };
-      // Also block '=' since + and = share a key on most keyboards
-      if (k === '=' || k === '+') return;
+      const phaserToEventKey: Record<string, string> = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', plus: '+', minus: '-' };
+      // Also block '='/'_' since +/- share keys on most keyboards
+      if (k === '=' || k === '+' || k === '-' || k === '_') return;
       const debugKeys = Object.values(DEBUG_HOTKEYS).map(h => {
         const lk = h.key.toLowerCase();
         return phaserToEventKey[lk] || lk;
@@ -924,6 +927,7 @@ export class GameScene extends Phaser.Scene {
         { label: 'toggleRoad',      key: DEBUG_HOTKEYS.toggleRoad.key,      desc: 'Toggle road' },
         { label: 'hideHud',         key: DEBUG_HOTKEYS.hideHud.key,         desc: 'Hide HUD + music UI' },
         { label: 'showHelp',        key: '+',                               desc: 'Toggle this help overlay' },
+        { label: 'showCollisions',  key: '-',                               desc: 'Toggle collision hitboxes' },
       ];
       // Only include active hotkeys
       const activeLabels = new Set(
@@ -961,6 +965,15 @@ export class GameScene extends Phaser.Scene {
           this.debugHelpText.setVisible(show);
         });
       }
+    }
+
+    // Collision debug overlay
+    this.collisionGfx = this.add.graphics().setDepth(9000);
+    if (DEBUG_HOTKEYS.showCollisions.active) {
+      this.input.keyboard?.addKey(DEBUG_HOTKEYS.showCollisions.key).on('down', () => {
+        this.collisionDebug = !this.collisionDebug;
+        if (!this.collisionDebug) this.collisionGfx.clear();
+      });
     }
   }
 
@@ -1051,6 +1064,11 @@ export class GameScene extends Phaser.Scene {
       case GameState.DEAD:
         this.updateDead(dt);
         break;
+    }
+
+    // Collision debug overlay
+    if (this.collisionDebug) {
+      this.drawCollisionDebug();
     }
   }
 
@@ -1530,6 +1548,99 @@ export class GameScene extends Phaser.Scene {
     this.hideWarningPool();
   }
 
+  private drawCollisionDebug(): void {
+    const g = this.collisionGfx;
+    g.clear();
+
+    const ALPHA = 0.4;
+
+    // Player collision ellipse (green)
+    const px = this.playerSystem.getX();
+    const py = Math.max(this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y, TUNING.ROAD_TOP_Y);
+    g.lineStyle(2, 0x00ff00, 1);
+    g.fillStyle(0x00ff00, ALPHA);
+    g.fillEllipse(px, py, TUNING.PLAYER_COLLISION_W, TUNING.PLAYER_COLLISION_H);
+    g.strokeEllipse(px, py, TUNING.PLAYER_COLLISION_W, TUNING.PLAYER_COLLISION_H);
+
+    // Obstacles (crash = orange rect, slow = blue rect, car = white ellipse)
+    const obstacles = this.obstacleSystem.getPool();
+    for (let i = 0; i < obstacles.length; i++) {
+      const obs = obstacles[i];
+      if (!obs.active || obs.getData('dying')) continue;
+      const type = obs.getData('type') as ObstacleType;
+      const w = obs.getData('w') as number;
+      const h = obs.getData('h') as number;
+
+      if (type === ObstacleType.CAR) {
+        // Ellipse: bottom-aligned, width * 0.8, height * 0.667
+        const a = (w * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2;
+        const b = (h * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
+        const coy = (h - h * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
+        g.lineStyle(2, 0xffffff, 1);
+        g.fillStyle(0xffffff, ALPHA);
+        g.fillEllipse(obs.x, obs.y + coy, a * 2, b * 2);
+        g.strokeEllipse(obs.x, obs.y + coy, a * 2, b * 2);
+      } else if (type === ObstacleType.SLOW) {
+        // Blue ellipse
+        g.lineStyle(2, 0x0066ff, 1);
+        g.fillStyle(0x0066ff, ALPHA);
+        g.fillEllipse(obs.x, obs.y, w, h);
+        g.strokeEllipse(obs.x, obs.y, w, h);
+      } else {
+        // Crash: orange rectangle
+        g.lineStyle(2, 0xff8800, 1);
+        g.fillStyle(0xff8800, ALPHA);
+        g.fillRect(obs.x - w / 2, obs.y - h / 2, w, h);
+        g.strokeRect(obs.x - w / 2, obs.y - h / 2, w, h);
+      }
+    }
+
+    // Pickups (yellow circles)
+    const pickups = this.pickupSystem.getPool();
+    for (let i = 0; i < pickups.length; i++) {
+      const p = pickups[i];
+      if (!p.active) continue;
+      const r = TUNING.PICKUP_DIAMETER / 2;
+      g.lineStyle(2, 0xffff00, 1);
+      g.fillStyle(0xffff00, ALPHA);
+      g.fillCircle(p.x, p.y, r);
+      g.strokeCircle(p.x, p.y, r);
+    }
+
+    // Shield pickups (green circles)
+    const shields = this.shieldSystem.getPool();
+    for (let i = 0; i < shields.length; i++) {
+      const s = shields[i];
+      if (!s.active) continue;
+      const r = TUNING.SHIELD_DIAMETER / 2;
+      g.lineStyle(2, 0x00ff00, 1);
+      g.fillStyle(0x00ff00, ALPHA);
+      g.fillCircle(s.x, s.y, r);
+      g.strokeCircle(s.x, s.y, r);
+    }
+
+    // Rocket projectiles (yellow circles)
+    const rockets = this.rocketSystem.getPool();
+    for (let i = 0; i < rockets.length; i++) {
+      const r = rockets[i];
+      if (!r.active) continue;
+      g.lineStyle(2, 0xffff00, 1);
+      g.fillStyle(0xffff00, ALPHA);
+      g.fillCircle(r.x, r.y, TUNING.ROCKET_RADIUS);
+      g.strokeCircle(r.x, r.y, TUNING.ROCKET_RADIUS);
+    }
+
+    // Katana slash (red rectangle, only when active)
+    if (this.slashActiveTimer > 0) {
+      const sw = this.slashSprite.displayWidth;
+      const sh = this.slashSprite.displayHeight;
+      g.lineStyle(2, 0xff0000, 1);
+      g.fillStyle(0xff0000, ALPHA);
+      g.fillRect(this.slashSprite.x - sw / 2, this.slashSprite.y - sh / 2, sw, sh);
+      g.strokeRect(this.slashSprite.x - sw / 2, this.slashSprite.y - sh / 2, sw, sh);
+    }
+  }
+
   private updatePlaying(dt: number): void {
     // Drain gameplay input while popup is open (game world keeps running)
     if (this.profilePopup.isOpen()) {
@@ -1590,7 +1701,7 @@ export class GameScene extends Phaser.Scene {
         this.slashSprite.x,
         slashWidth,
         slashCollY,
-        TUNING.PLAYER_RADIUS
+        TUNING.PLAYER_COLLISION_H / 2
       );
       if (hitX >= 0) {
         this.slashInvincibilityTimer = TUNING.KATANA_INVINCIBILITY;
@@ -1625,7 +1736,7 @@ export class GameScene extends Phaser.Scene {
         this.slashSprite.setVisible(false);
       }
     }
-    if (this.inputSystem.getAttackPressed() && this.slashCooldownTimer <= 0) {
+    if (this.inputSystem.getAttackPressed() && this.slashCooldownTimer <= 0 && this.playerSystem.playAttack()) {
       this.slashActiveTimer = TUNING.KATANA_DURATION;
       this.slashCooldownTimer = TUNING.KATANA_COOLDOWN;
       this.slashSprite.setPosition(
@@ -1636,16 +1747,19 @@ export class GameScene extends Phaser.Scene {
       this.slashSprite.setVisible(true);
       this.slashSprite.setDepth(this.playerSystem.getY() + 0.3);
       this.audioSystem.playSlash();
-      this.playerSystem.playAttack();
     }
 
     // Rocket launcher: right-click fires when ammo > 0 (spectator = infinite ammo)
     this.rocketCooldownTimer = Math.max(0, this.rocketCooldownTimer - dt);
     if (this.inputSystem.getRocketPressed() && this.rocketCooldownTimer <= 0 && (this.spectatorMode || this.pickupSystem.getAmmo() > 0)) {
+      // Lock the lane at fire time using the collision Y (sprite center + offset), same as all other collisions
+      const fireY = Math.max(this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y, TUNING.ROAD_TOP_Y);
+      const fireLane = this.obstacleSystem.getClosestLane(fireY);
       const launched = this.playerSystem.playRocketLaunch(() => {
         this.rocketSystem.fire(
           this.playerSystem.getX() + TUNING.ROCKET_EMIT_X,
-          this.playerSystem.getY() + TUNING.ROCKET_EMIT_Y
+          this.playerSystem.getY() + TUNING.ROCKET_EMIT_Y,
+          fireLane
         );
         this.audioSystem.playRocketLaunch();
       });
@@ -1664,16 +1778,18 @@ export class GameScene extends Phaser.Scene {
     const playerCollY = Math.max(this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y, TUNING.ROAD_TOP_Y);
 
     // Update pickups (scrolling + collection)
-    this.pickupSystem.update(dt, roadSpeed, playerCollX, playerCollY, TUNING.PLAYER_RADIUS);
+    const pHalfW = TUNING.PLAYER_COLLISION_W / 2;
+    const pHalfH = TUNING.PLAYER_COLLISION_H / 2;
+    this.pickupSystem.update(dt, roadSpeed, playerCollX, playerCollY, pHalfW, pHalfH);
 
     // Update shield pickups (scrolling + collection)
-    this.shieldSystem.update(dt, roadSpeed, playerCollX, playerCollY, TUNING.PLAYER_RADIUS);
+    this.shieldSystem.update(dt, roadSpeed, playerCollX, playerCollY, pHalfW, pHalfH);
     this.profileHud.setShields(this.shieldSystem.getShields());
 
     if (this.rageTimer > 0 || this.spectatorMode) {
       // Rage mode / spectator: destroy obstacles on contact
       const hits = this.obstacleSystem.checkRageCollision(
-        playerCollX, playerCollY, TUNING.PLAYER_RADIUS
+        playerCollX, playerCollY, pHalfW, pHalfH
       );
       if (hits.length > 0) {
         this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 0.5, TUNING.SHAKE_DEATH_INTENSITY * 0.3);
@@ -1685,13 +1801,13 @@ export class GameScene extends Phaser.Scene {
         }
       }
       // Still check slow zones
-      const result = this.obstacleSystem.checkCollision(playerCollX, playerCollY, TUNING.PLAYER_RADIUS);
+      const result = this.obstacleSystem.checkCollision(playerCollX, playerCollY, pHalfW, pHalfH);
       if (result.slowOverlapping) {
         this.playerSystem.applyLeftwardPush(TUNING.SLOW_PUSH_RATE * dt);
       }
       this.fxSystem.onSlowOverlap(result.slowOverlapping);
     } else {
-      const result = this.obstacleSystem.checkCollision(playerCollX, playerCollY, TUNING.PLAYER_RADIUS);
+      const result = this.obstacleSystem.checkCollision(playerCollX, playerCollY, pHalfW, pHalfH);
       if (result.crashed && this.slashInvincibilityTimer <= 0) {
         if (this.shieldSystem.getShields() > 0) {
           // Shield absorbs the hit — explode obstacle, lose one shield
@@ -1756,8 +1872,8 @@ export class GameScene extends Phaser.Scene {
 
     // Lane collision highlights
     const collY = this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y;
-    const collTop = collY - TUNING.PLAYER_RADIUS;
-    const collBottom = collY + TUNING.PLAYER_RADIUS;
+    const collTop = collY - TUNING.PLAYER_COLLISION_H / 2;
+    const collBottom = collY + TUNING.PLAYER_COLLISION_H / 2;
     const laneH = (TUNING.ROAD_BOTTOM_Y - TUNING.ROAD_TOP_Y) / TUNING.LANE_COUNT;
     // Pulse alpha: 24-frame cycle (12 out + 12 in at 60fps), cubic easing lingers near 0
     const raw = 0.5 + 0.5 * Math.sin(this.elapsed * TUNING.LANE_PULSE_SPEED);

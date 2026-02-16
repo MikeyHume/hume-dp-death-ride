@@ -39,7 +39,7 @@ export class ShieldSystem {
   }
 
   /** Scroll shield pickups left, check player collection */
-  update(dt: number, roadSpeed: number, playerX: number, playerY: number, playerRadius: number): void {
+  update(dt: number, roadSpeed: number, playerX: number, playerY: number, playerHalfW: number, playerHalfH: number): void {
     for (let i = 0; i < this.pool.length; i++) {
       const pickup = this.pool[i];
       if (!pickup.active) continue;
@@ -58,7 +58,7 @@ export class ShieldSystem {
       if (this.shields < TUNING.SHIELD_MAX) {
         const dx = playerX - pickup.x;
         const dy = playerY - pickup.y;
-        const collectRadius = playerRadius + TUNING.SHIELD_DIAMETER / 2;
+        const collectRadius = Math.max(playerHalfW, playerHalfH) + TUNING.SHIELD_DIAMETER / 2;
         if (dx * dx + dy * dy < collectRadius * collectRadius) {
           pickup.setActive(false).setVisible(false);
           this.shields++;

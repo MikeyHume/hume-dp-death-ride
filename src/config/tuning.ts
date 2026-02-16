@@ -17,14 +17,17 @@ export const TUNING = {
   PLAYER_FRAME_WIDTH: 702,        // px per frame in ride sprite sheet
   PLAYER_FRAME_HEIGHT: 590,       // px per frame in ride sprite sheet
   PLAYER_ANIM_FRAMES: 9,          // usable ride frames (5+4, last slot empty)
+  PLAYER_RIDE_FPS: 12,            // framerate for ride loop animation
   PLAYER_ATTACK_FRAME_WIDTH: 821, // px per frame in attack sprite sheet
   PLAYER_ATTACK_FRAME_HEIGHT: 590,// px per frame in attack sprite sheet
   PLAYER_ATTACK_ANIM_FRAMES: 21,  // usable attack frames (4×5 + 1, last 3 empty)
+  PLAYER_ATTACK_FPS: 30,          // framerate for attack animation
   PLAYER_ATTACK_OFFSET_X: 15,     // px to shift attack sprite right (align sword swing with ride pose)
   POWERED_FRAME_WIDTH: 1076,      // px per frame in powered-up sprite sheet
   POWERED_FRAME_HEIGHT: 697,      // px per frame in powered-up sprite sheet
   POWERED_ANIM_FRAMES: 18,        // total frames (6×3 grid)
   POWERED_LOOP_START: 14,         // first frame of the looping section (last 4 frames: 14-17)
+  POWERED_FPS: 12,                // framerate for powered-up intro and loop animations
   POWERED_SCALE: 1.0,             // extra scale multiplier for powered-up sprite (1.0 = no change, 1.2 = 20% bigger)
   POWERED_OFFSET_X: 0,            // px horizontal offset for powered-up sprite (positive = right)
   POWERED_OFFSET_Y: 0,            // px vertical offset for powered-up sprite (positive = down)
@@ -32,6 +35,7 @@ export const TUNING = {
   ROCKET_LAUNCHER_FRAME_HEIGHT: 488, // px per frame in rocket launcher sheet (1952 / 4 rows)
   ROCKET_LAUNCHER_ANIM_FRAMES: 20,   // total frames (5×4 grid)
   ROCKET_LAUNCHER_FIRE_FRAME: 5,     // 0-based frame index when rocket actually fires (6th frame)
+  ROCKET_LAUNCHER_FPS: 12,            // framerate for rocket launcher animation
   ROCKET_LAUNCHER_SCALE: 1.13,        // scale multiplier for rocket launcher sprite
   ROCKET_LAUNCHER_OFFSET_X: 4,      // px horizontal offset for rocket launcher sprite (positive = right)
   ROCKET_LAUNCHER_OFFSET_Y: -10,      // px vertical offset for rocket launcher sprite (positive = down)
@@ -44,6 +48,7 @@ export const TUNING = {
   SPEEDUP_LOOP_END: 51,           // last frame of loop sequence (frames 36-51)
   SPEEDUP_OUTRO_START: 52,        // first frame of outro sequence
   SPEEDUP_OUTRO_END: 63,          // last frame of outro sequence (frames 52-63)
+  SPEEDUP_FPS: 24,                  // framerate for speed-up intro/loop/outro animations
   SPEEDUP_SCALE: 1.08,              // extra scale multiplier for speed-up sprite (1.0 = no change)
   SPEEDUP_OFFSET_X: -6,             // px horizontal offset for speed-up sprite (positive = right)
   SPEEDUP_OFFSET_Y: 6,             // px vertical offset for speed-up sprite (positive = down)
@@ -51,8 +56,10 @@ export const TUNING = {
 
   // Player dimensions and appearance
   PLAYER_DISPLAY_HEIGHT: 165,    // sprite scaled so height = this; width auto from aspect ratio
-  PLAYER_RADIUS: 2,              // circular collision radius (4px tall, tire-base hitbox)
+  PLAYER_COLLISION_W: 200,        // player hitbox full width (ellipse, fits motorcycle length)
+  PLAYER_COLLISION_H: 6,         // player hitbox full height (ellipse, thin at tire base)
   PLAYER_COLLISION_OFFSET_Y: 80, // px to shift collision circle down (centered on tire base)
+  PLAYER_TOP_Y_EXTEND: 40,  // px the player can travel above ROAD_TOP_Y
 
   PLAYER_ARROW_SPEED: 600,   // px/sec vertical movement when using arrow keys
   PLAYER_MOUSE_FOLLOW_RATE: 15, // exponential approach rate for mouse Y tracking (higher = snappier, 15 ≈ 95% in 0.2s)
@@ -91,7 +98,7 @@ export const TUNING = {
   SLOW_MIN_TILES: 1,              // minimum length in tiles
   SLOW_MAX_TILES: 16,             // maximum length in tiles (16 × 80 = 1280px)
   SLOW_COLOR: 0x0066ff,
-  SLOW_PUSH_RATE: 2000,           // player speed reduced per second while overlapping
+  SLOW_PUSH_RATE: 1200,           // player speed reduced per second while overlapping
 
   // Obstacles — car (animated sprites, instant death, moves slower than road)
   CAR_COUNT: 20,                    // number of car sprite sheets
@@ -279,6 +286,8 @@ export const TUNING = {
   ROCKET_DISPLAY_H: 20,             // visual height
   ROCKET_COLOR: 0xffff00,           // yellow
   ROCKET_COOLDOWN: 0.3,             // seconds between rocket shots
+  ATTACK_COOLDOWN_SLASH: .5,       // seconds after katana before any attack allowed
+  ATTACK_COOLDOWN_ROCKET: 1.0,      // seconds after rocket before any attack allowed
   ROCKET_EXPLOSION_SCALE: 1.5,      // explosion size when rocket hits something
   ROCKET_KILL_POINTS: 50,           // score bonus for destroying obstacle with rocket
 

@@ -396,6 +396,7 @@ export class ObstacleSystem {
     obs.setData('type', type);
     obs.setData('w', w);
     obs.setData('h', h);
+    obs.setData('lane', laneIndex);
     obs.setData('dying', false);
 
     // Start animation for cars
@@ -421,7 +422,7 @@ export class ObstacleSystem {
   }
 
   /** Check collisions against player. Circle-vs-AABB for crash/slow, circle-vs-ellipse for cars. */
-  checkCollision(playerX: number, playerY: number, playerRadius: number): CollisionResult {
+  checkCollision(playerX: number, playerY: number, playerHalfW: number, playerHalfH: number): CollisionResult {
     this.collisionResult.crashed = false;
     this.collisionResult.slowOverlapping = false;
     this.collisionResult.hitX = 0;
@@ -437,30 +438,28 @@ export class ObstacleSystem {
       const obsH = obs.getData('h') as number;
 
       if (type === ObstacleType.CAR) {
-        // Ellipse collision (2/3 height bottom-aligned, 8/10 width centered)
-        const a = (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2;  // semi-axis X
-        const b = (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2; // semi-axis Y
-        const coy = (obsH - obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2; // bottom-align Y offset
+        // Player ellipse vs car ellipse — use max semi-axis as approximation
+        const pR = Math.max(playerHalfW, playerHalfH);
+        const a = (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2;
+        const b = (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
+        const coy = (obsH - obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
 
         const dx = playerX - obs.x;
         const dy = playerY - (obs.y + coy);
-
-        // Transform to unit-circle space (ellipse → circle of radius 1)
         const nx = dx / a;
         const ny = dy / b;
         const normDistSq = nx * nx + ny * ny;
 
         let colliding: boolean;
         if (normDistSq < 0.001) {
-          colliding = true; // player center at/inside ellipse center
+          colliding = true;
         } else {
           const normDist = Math.sqrt(normDistSq);
-          // Player radius in normalized space along direction to player
           const dirX = nx / normDist;
           const dirY = ny / normDist;
           const normR = Math.sqrt(
-            (playerRadius * dirX / a) * (playerRadius * dirX / a) +
-            (playerRadius * dirY / b) * (playerRadius * dirY / b)
+            (pR * dirX / a) * (pR * dirX / a) +
+            (pR * dirY / b) * (pR * dirY / b)
           );
           colliding = normDist < 1 + normR;
         }
@@ -474,27 +473,43 @@ export class ObstacleSystem {
           if (this.onExplosion) this.onExplosion();
           return this.collisionResult;
         }
+      } else if (type === ObstacleType.SLOW) {
+        // Player ellipse vs puddle ellipse
+        const a = obsW / 2;
+        const b = obsH / 2;
+        const pR = Math.max(playerHalfW, playerHalfH);
+        const dx = playerX - obs.x;
+        const dy = playerY - obs.y;
+        const nx = dx / a;
+        const ny = dy / b;
+        const normDistSq = nx * nx + ny * ny;
+        let slowHit: boolean;
+        if (normDistSq < 0.001) {
+          slowHit = true;
+        } else {
+          const normDist = Math.sqrt(normDistSq);
+          const dirX = nx / normDist;
+          const dirY = ny / normDist;
+          const normR = Math.sqrt(
+            (pR * dirX / a) * (pR * dirX / a) +
+            (pR * dirY / b) * (pR * dirY / b)
+          );
+          slowHit = normDist < 1 + normR;
+        }
+        if (slowHit) {
+          this.collisionResult.slowOverlapping = true;
+        }
       } else {
-        // Circle-vs-AABB collision for crash and slow obstacles
-        const halfW = obsW / 2;
-        const halfH = obsH / 2;
-        const closestX = Math.max(obs.x - halfW, Math.min(playerX, obs.x + halfW));
-        const closestY = Math.max(obs.y - halfH, Math.min(playerY, obs.y + halfH));
+        // AABB-vs-AABB collision for crash obstacles
+        const overlapX = Math.abs(playerX - obs.x) < (obsW / 2 + playerHalfW);
+        const overlapY = Math.abs(playerY - obs.y) < (obsH / 2 + playerHalfH);
 
-        const dx = playerX - closestX;
-        const dy = playerY - closestY;
-        const distSq = dx * dx + dy * dy;
-
-        if (distSq < playerRadius * playerRadius) {
-          if (type === ObstacleType.CRASH) {
-            this.collisionResult.crashed = true;
-            this.collisionResult.hitX = obs.x;
-            this.collisionResult.hitY = obs.y;
-            obs.setActive(false).setVisible(false);
-            return this.collisionResult;
-          } else if (type === ObstacleType.SLOW) {
-            this.collisionResult.slowOverlapping = true;
-          }
+        if (overlapX && overlapY) {
+          this.collisionResult.crashed = true;
+          this.collisionResult.hitX = obs.x;
+          this.collisionResult.hitY = obs.y;
+          obs.setActive(false).setVisible(false);
+          return this.collisionResult;
         }
       }
     }
@@ -505,7 +520,7 @@ export class ObstacleSystem {
   /** Check if a slash hitbox overlaps any CRASH obstacle. Despawns + explodes on hit.
    *  Y overlap uses the player's collision circle so you can only slash obstacles in your lane.
    *  Returns the obstacle's X position on hit, or -1 if no hit. */
-  checkSlashCollision(slashX: number, slashW: number, playerCollY: number, playerRadius: number): number {
+  checkSlashCollision(slashX: number, slashW: number, playerCollY: number, playerHalfH: number): number {
     for (let i = 0; i < this.pool.length; i++) {
       const obs = this.pool[i];
       if (!obs.active) continue;
@@ -515,7 +530,7 @@ export class ObstacleSystem {
       const obsH = obs.getData('h') as number;
 
       const overlapX = Math.abs(obs.x - slashX) < (obsW + slashW) / 2;
-      const overlapY = Math.abs(obs.y - playerCollY) < (obsH / 2 + playerRadius);
+      const overlapY = Math.abs(obs.y - playerCollY) < (obsH / 2 + playerHalfH);
 
       if (overlapX && overlapY) {
         const ex = obs.x;
@@ -542,10 +557,11 @@ export class ObstacleSystem {
       const obsH = obs.getData('h') as number;
       let hit = false;
 
-      if (type === ObstacleType.CAR) {
-        const a = (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2;
-        const b = (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
-        const coy = (obsH - obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
+      if (type === ObstacleType.CAR || type === ObstacleType.SLOW) {
+        // Ellipse collision for cars and puddles
+        const a = type === ObstacleType.CAR ? (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2 : obsW / 2;
+        const b = type === ObstacleType.CAR ? (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2 : obsH / 2;
+        const coy = type === ObstacleType.CAR ? (obsH - obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2 : 0;
         const dx = projX - obs.x;
         const dy = projY - (obs.y + coy);
         const nx = dx / a;
@@ -564,6 +580,7 @@ export class ObstacleSystem {
           hit = normDist < 1 + normR;
         }
       } else {
+        // AABB for crash obstacles
         const halfW = obsW / 2;
         const halfH = obsH / 2;
         const closestX = Math.max(obs.x - halfW, Math.min(projX, obs.x + halfW));
@@ -592,7 +609,7 @@ export class ObstacleSystem {
   /** Rage mode collision: destroys any CRASH or CAR obstacle the player touches.
    *  Returns an array of hits with position and type info. */
   private rageHits: RageHit[] = [];
-  checkRageCollision(playerX: number, playerY: number, playerRadius: number): RageHit[] {
+  checkRageCollision(playerX: number, playerY: number, playerHalfW: number, playerHalfH: number): RageHit[] {
     this.rageHits.length = 0;
     for (let i = 0; i < this.pool.length; i++) {
       const obs = this.pool[i];
@@ -607,6 +624,7 @@ export class ObstacleSystem {
       let colliding = false;
 
       if (type === ObstacleType.CAR) {
+        const pR = Math.max(playerHalfW, playerHalfH);
         const a = (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2;
         const b = (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
         const coy = (obsH - obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
@@ -622,19 +640,15 @@ export class ObstacleSystem {
           const dirX = nx / normDist;
           const dirY = ny / normDist;
           const normR = Math.sqrt(
-            (playerRadius * dirX / a) * (playerRadius * dirX / a) +
-            (playerRadius * dirY / b) * (playerRadius * dirY / b)
+            (pR * dirX / a) * (pR * dirX / a) +
+            (pR * dirY / b) * (pR * dirY / b)
           );
           colliding = normDist < 1 + normR;
         }
       } else {
-        const halfW = obsW / 2;
-        const halfH = obsH / 2;
-        const closestX = Math.max(obs.x - halfW, Math.min(playerX, obs.x + halfW));
-        const closestY = Math.max(obs.y - halfH, Math.min(playerY, obs.y + halfH));
-        const dx = playerX - closestX;
-        const dy = playerY - closestY;
-        colliding = dx * dx + dy * dy < playerRadius * playerRadius;
+        const overlapX = Math.abs(playerX - obs.x) < (obsW / 2 + playerHalfW);
+        const overlapY = Math.abs(playerY - obs.y) < (obsH / 2 + playerHalfH);
+        colliding = overlapX && overlapY;
       }
 
       if (colliding) {
@@ -661,11 +675,7 @@ export class ObstacleSystem {
       const obs = this.pool[i];
       if (!obs.active || obs.getData('dying')) continue;
       const type = obs.getData('type') as ObstacleType;
-      if (type === ObstacleType.SLOW) {
-        obs.setActive(false).setVisible(false);
-        count++;
-        continue;
-      }
+      if (type === ObstacleType.SLOW) continue;
       if (type === ObstacleType.CAR) {
         this.startCarDeath(obs);
         this.spawnExplosion(obs.x, obs.y, TUNING.CAR_EXPLOSION_SCALE);
@@ -761,6 +771,67 @@ export class ObstacleSystem {
     }
     // Reshuffle car deck for fresh playthrough
     this.shuffleCarDeck();
+  }
+
+  /** Return the lane index (0-based) closest to the given Y position */
+  getClosestLane(y: number): number {
+    let closest = 0;
+    let closestDist = Infinity;
+    for (let i = 0; i < this.laneCenters.length; i++) {
+      const dist = Math.abs(y - this.laneCenters[i]);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = i;
+      }
+    }
+    return closest;
+  }
+
+  /** Lane-based projectile collision: hits the nearest obstacle in the given lane
+   *  whose center X the rocket has reached. Destroys the obstacle on hit. */
+  checkLaneProjectileCollision(rocketX: number, laneIndex: number): { x: number; y: number } | null {
+    let bestObs: Phaser.GameObjects.Sprite | null = null;
+    let bestDist = Infinity;
+
+    for (let i = 0; i < this.pool.length; i++) {
+      const obs = this.pool[i];
+      if (!obs.active || obs.getData('dying')) continue;
+      if (obs.getData('type') === ObstacleType.SLOW) continue;
+
+      // Use the lane stored at spawn time (not Y, which may be shifted for cars)
+      const obsLane = obs.getData('lane') as number;
+      if (obsLane !== laneIndex) continue;
+
+      // Rocket must have reached the obstacle's center X
+      if (rocketX < obs.x) continue;
+
+      // Pick the closest one the rocket just passed (smallest overshoot)
+      const dist = rocketX - obs.x;
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestObs = obs;
+      }
+    }
+
+    if (bestObs) {
+      const ex = bestObs.x;
+      const ey = bestObs.y;
+      const type = bestObs.getData('type') as ObstacleType;
+      if (type === ObstacleType.CAR) {
+        this.startCarDeath(bestObs);
+      } else {
+        bestObs.setActive(false).setVisible(false);
+      }
+      this.spawnExplosion(ex, ey, TUNING.ROCKET_EXPLOSION_SCALE);
+      if (this.onExplosion) this.onExplosion();
+      return { x: ex, y: ey };
+    }
+    return null;
+  }
+
+  /** Expose pool for debug collision rendering */
+  getPool(): readonly Phaser.GameObjects.Sprite[] {
+    return this.pool;
   }
 
   destroy(): void {
