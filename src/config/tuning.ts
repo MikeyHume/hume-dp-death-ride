@@ -4,9 +4,14 @@ export const TUNING = {
   GAME_HEIGHT: 1080,
 
   // Road bounds (bottom half of screen)
-  ROAD_TOP_Y: 420,
+  ROAD_TOP_Y: 480,
   ROAD_BOTTOM_Y: 1080,
   LANE_COUNT: 4,                   // number of horizontal lanes
+
+  // Perspective scaling (further = smaller, closer = bigger)
+  LANE_SCALES: [1.0, 1.03, 1.1, 1.4] as readonly number[],  // per-lane scale multipliers (top→bottom)
+  PLAYER_SCALE_TOP: 1.0,           // player scale at road top Y
+  PLAYER_SCALE_BOTTOM: 1.420,      // player scale at road bottom Y
 
   // Player sprite sheets
   PLAYER_FRAME_WIDTH: 702,        // px per frame in ride sprite sheet
@@ -23,11 +28,31 @@ export const TUNING = {
   POWERED_SCALE: 1.0,             // extra scale multiplier for powered-up sprite (1.0 = no change, 1.2 = 20% bigger)
   POWERED_OFFSET_X: 0,            // px horizontal offset for powered-up sprite (positive = right)
   POWERED_OFFSET_Y: 0,            // px vertical offset for powered-up sprite (positive = down)
+  ROCKET_LAUNCHER_FRAME_WIDTH: 802,  // px per frame in rocket launcher sheet (4010 / 5 cols)
+  ROCKET_LAUNCHER_FRAME_HEIGHT: 488, // px per frame in rocket launcher sheet (1952 / 4 rows)
+  ROCKET_LAUNCHER_ANIM_FRAMES: 20,   // total frames (5×4 grid)
+  ROCKET_LAUNCHER_FIRE_FRAME: 5,     // 0-based frame index when rocket actually fires (6th frame)
+  ROCKET_LAUNCHER_SCALE: 1.13,        // scale multiplier for rocket launcher sprite
+  ROCKET_LAUNCHER_OFFSET_X: 4,      // px horizontal offset for rocket launcher sprite (positive = right)
+  ROCKET_LAUNCHER_OFFSET_Y: -10,      // px vertical offset for rocket launcher sprite (positive = down)
+  ROCKET_EMIT_X: 0,                  // px offset from player X for rocket spawn (positive = right)
+  ROCKET_EMIT_Y: -69,                  // px offset from player Y for rocket spawn (positive = down)
+  SPEEDUP_FRAME_WIDTH: 655,       // px per frame in speed-up sprite sheet (2620 / 4 cols)
+  SPEEDUP_FRAME_HEIGHT: 469,      // px per frame in speed-up sprite sheet (7504 / 16 rows)
+  SPEEDUP_INTRO_END: 35,          // last frame of intro sequence (frames 0-35)
+  SPEEDUP_LOOP_START: 36,         // first frame of loop sequence
+  SPEEDUP_LOOP_END: 51,           // last frame of loop sequence (frames 36-51)
+  SPEEDUP_OUTRO_START: 52,        // first frame of outro sequence
+  SPEEDUP_OUTRO_END: 63,          // last frame of outro sequence (frames 52-63)
+  SPEEDUP_SCALE: 1.08,              // extra scale multiplier for speed-up sprite (1.0 = no change)
+  SPEEDUP_OFFSET_X: -6,             // px horizontal offset for speed-up sprite (positive = right)
+  SPEEDUP_OFFSET_Y: 6,             // px vertical offset for speed-up sprite (positive = down)
+  SPEEDUP_NO_TAP_TIMEOUT: 1.0,    // seconds after last tap before playing outro
 
   // Player dimensions and appearance
-  PLAYER_DISPLAY_HEIGHT: 150,    // sprite scaled so height = this; width auto from aspect ratio
-  PLAYER_RADIUS: 50,             // circular collision radius (covers bottom 3/4 of sprite)
-  PLAYER_COLLISION_OFFSET_Y: 25, // px to shift collision circle down (skips top 1/4 = rider's head)
+  PLAYER_DISPLAY_HEIGHT: 165,    // sprite scaled so height = this; width auto from aspect ratio
+  PLAYER_RADIUS: 2,              // circular collision radius (4px tall, tire-base hitbox)
+  PLAYER_COLLISION_OFFSET_Y: 80, // px to shift collision circle down (centered on tire base)
 
   PLAYER_ARROW_SPEED: 600,   // px/sec vertical movement when using arrow keys
   PLAYER_MOUSE_FOLLOW_RATE: 15, // exponential approach rate for mouse Y tracking (higher = snappier, 15 ≈ 95% in 0.2s)
@@ -58,6 +83,7 @@ export const TUNING = {
   CRASH_WIDTH: 50,
   CRASH_HEIGHT: 50,
   CRASH_COLOR: 0xff0000,
+  OBSTACLE_DISPLAY_SCALE: 0.85, // visual scale for crash/slow obstacles (collision unchanged)
   OBSTACLE_SPAWN_MARGIN: 120,   // spawn this far off-screen right
 
   // Obstacles — slow (blue, tile-based zone, continuous slowdown while overlapping)
@@ -73,6 +99,7 @@ export const TUNING = {
   CAR_FRAME_HEIGHT: 186,            // px per frame in sprite sheet
   CAR_ANIM_FRAMES: 59,              // usable frames per sheet (61 total, last 2 empty)
   CAR_SPEED_FACTOR: 0.65,           // cars travel at this fraction of road speed (scroll left slower)
+  CAR_DISPLAY_SCALE: 0.80,          // visual scale multiplier for car sprites (1.0 = fill lane)
   CAR_COLLISION_WIDTH_RATIO: 0.8,   // ellipse width = 8/10 of sprite width
   CAR_COLLISION_HEIGHT_RATIO: 0.667, // ellipse height = 2/3 of sprite height, bottom-aligned
 
@@ -171,6 +198,12 @@ export const TUNING = {
   RAGE_EXPLOSION_SPEED_FACTOR: 0.25, // explosions scroll at this fraction of road speed during rage (0.25 = quarter speed)
   CAR_EXPLOSION_SCALE: 1.69,          // car explosions are this many times bigger than normal
   CAR_DEATH_LINGER: 4 / 60,           // seconds car remains visible after dying (4 frames at 60fps)
+  // Music player UI positioning (game-unit values, scaled to canvas)
+  MUSIC_UI_PAD_TOP: 40,            // game-unit padding above the music player group
+  MUSIC_UI_PAD_RIGHT: 40,          // game-unit padding from right edge to music player container
+  MUSIC_UI_THUMB_SCALE: 1.3,       // thumbnail scale factor (1.0 = 96px base height)
+  MUSIC_UI_WIDTH: 620,             // fixed container width in game units
+
   // Intro track (title screen music player display)
   INTRO_TRACK_TITLE: 'Malibu - deathpixie',               // display title for the title screen track
   INTRO_TRACK_THUMBNAIL: 'assets/audio/intro_track_thumbnail.jpg',  // path to square thumbnail
@@ -205,7 +238,7 @@ export const TUNING = {
   PICKUP_DIAMETER: 135,              // yellow circle diameter (= laneHeight)
   PICKUP_GAP: 200,                   // px gap between obstacle right edge and pickup left edge
   PICKUP_SPAWN_CHANCE: 0.2,          // probability a CRASH obstacle spawns a pickup behind it
-  PICKUP_MAX_AMMO: 6,                // max rockets player can carry
+  PICKUP_MAX_AMMO: 3,                // max rockets player can carry
   PICKUP_HUD_CIRCLE_RADIUS: 12,     // small yellow circle radius for HUD ammo indicator
   PICKUP_HUD_X: 30,                 // X position of first ammo circle in HUD
   PICKUP_HUD_Y: 90,                 // Y position of ammo circles (below rage bar at Y=60)

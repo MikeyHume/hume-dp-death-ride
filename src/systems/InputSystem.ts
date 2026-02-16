@@ -84,7 +84,7 @@ export class InputSystem {
 
     const halfScreen = TUNING.GAME_WIDTH / 2;
     const halfH = TUNING.PLAYER_DISPLAY_HEIGHT / 2;
-    const minY = TUNING.ROAD_TOP_Y;
+    const minY = TUNING.ROAD_TOP_Y - TUNING.PLAYER_RADIUS;
     const maxY = TUNING.ROAD_BOTTOM_Y - halfH;
 
     scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -157,7 +157,7 @@ export class InputSystem {
     const halfH = TUNING.PLAYER_DISPLAY_HEIGHT / 2;
     return Phaser.Math.Clamp(
       this.scene.input.activePointer.y,
-      TUNING.ROAD_TOP_Y,
+      TUNING.ROAD_TOP_Y - TUNING.PLAYER_RADIUS,
       TUNING.ROAD_BOTTOM_Y - halfH
     );
   }

@@ -23,6 +23,7 @@ export class MusicPlayer {
   private playlistStarted: boolean = false;
   private container!: HTMLDivElement;
   private muteBtn!: HTMLButtonElement;
+  private muteBtnImg!: HTMLImageElement;
   private titleMuted: boolean = false;
   private thumbnailImg!: HTMLImageElement;
   private titleClip!: HTMLDivElement;
@@ -30,6 +31,22 @@ export class MusicPlayer {
   private scrollAnim: number = 0;
   private canvasOverlay!: HTMLDivElement;
   private overlaySyncAnim: number = 0;
+  private rightColumnEl!: HTMLDivElement;
+  private compact: boolean = true;
+  private hovered: boolean = false;
+  private cursorOver: boolean = false;
+
+  // Phaser sprites that mirror HTML buttons (rendered through CRT shader)
+  private btnSprites: Phaser.GameObjects.Image[] = [];
+  private btnElements: HTMLButtonElement[] = [];
+  private muteBtnSprite!: Phaser.GameObjects.Image;
+
+  // Phaser objects mirroring thumbnail and title (rendered through CRT shader)
+  private thumbSprite!: Phaser.GameObjects.Image;
+  private thumbTextureId: number = 0;
+  private titleText!: Phaser.GameObjects.Text;
+  private titleMaskGfx!: Phaser.GameObjects.Graphics;
+  private lastGameFontSize: number = 0;
 
   // Dual-source
   private source: MusicSource = 'youtube';
@@ -59,13 +76,17 @@ export class MusicPlayer {
     // Show the music player controls
     this.container.style.display = 'flex';
     // Show intro track thumbnail and title
+    const s = TUNING.MUSIC_UI_THUMB_SCALE;
     this.thumbnailImg.src = TUNING.INTRO_TRACK_THUMBNAIL;
-    this.thumbnailImg.style.width = `${YT_THUMB_HEIGHT}px`;
-    this.thumbnailImg.style.height = `${YT_THUMB_HEIGHT}px`;
+    this.thumbnailImg.style.width = `${YT_THUMB_HEIGHT * s}px`;
+    this.thumbnailImg.style.height = `${YT_THUMB_HEIGHT * s}px`;
     this.thumbnailImg.style.display = 'block';
     this.trackTitle.textContent = TUNING.INTRO_TRACK_TITLE;
     this.titleClip.style.display = 'block';
     this.startTitleScroll();
+    if (this.compact) {
+      this.collapseUI(false);
+    }
   }
 
   getSource(): MusicSource { return this.source; }
@@ -90,25 +111,44 @@ export class MusicPlayer {
       this.canvasOverlay.style.left = rect.left + 'px';
       this.canvasOverlay.style.width = rect.width + 'px';
       this.canvasOverlay.style.height = rect.height + 'px';
+      this.syncBtnSprites(rect);
       this.overlaySyncAnim = requestAnimationFrame(syncOverlay);
     };
     this.overlaySyncAnim = requestAnimationFrame(syncOverlay);
 
     this.container = document.createElement('div');
+    const topPct = (TUNING.MUSIC_UI_PAD_TOP / TUNING.GAME_HEIGHT) * 100;
+    const rightPct = (TUNING.MUSIC_UI_PAD_RIGHT / TUNING.GAME_WIDTH) * 100;
+    const widthPct = (TUNING.MUSIC_UI_WIDTH / TUNING.GAME_WIDTH) * 100;
     Object.assign(this.container.style, {
       position: 'absolute',
-      top: '40px',
-      right: '40px',
+      top: `${topPct}%`,
+      right: `${rightPct}%`,
+      width: `${widthPct}%`,
       display: 'none',
       alignItems: 'flex-start',
       gap: '14px',
       pointerEvents: 'auto',
       transform: `scale(${MUSIC_UI_SCALE})`,
       transformOrigin: 'top right',
+      overflow: 'hidden',
+      transition: 'width 0.4s ease, gap 0.4s ease',
     });
     // Prevent clicks from reaching the Phaser canvas
     this.container.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.container.addEventListener('mousedown', (e) => e.stopPropagation());
+    this.container.addEventListener('mouseenter', () => {
+      this.cursorOver = true;
+      if (!this.compact) return;
+      this.hovered = true;
+      this.expandUI();
+    });
+    this.container.addEventListener('mouseleave', () => {
+      this.cursorOver = false;
+      if (!this.compact) return;
+      this.hovered = false;
+      this.collapseUI();
+    });
     this.canvasOverlay.appendChild(this.container);
 
     // Thumbnail (left side) — links to Spotify
@@ -119,33 +159,37 @@ export class MusicPlayer {
     thumbLink.style.display = 'flex';
     thumbLink.style.flexShrink = '0';
 
+    const thumbScale = TUNING.MUSIC_UI_THUMB_SCALE;
     this.thumbnailImg = document.createElement('img');
     Object.assign(this.thumbnailImg.style, {
-      width: `${YT_THUMB_HEIGHT}px`,   // start square for intro track
-      height: `${YT_THUMB_HEIGHT}px`,
+      width: `${YT_THUMB_HEIGHT * thumbScale}px`,   // start square for intro track
+      height: `${YT_THUMB_HEIGHT * thumbScale}px`,
       objectFit: 'cover',
       borderRadius: '4px',
       border: '1px solid rgba(255, 255, 255, 0.3)',
       display: 'none', // hidden until track info available
+      opacity: '0',    // invisible — Phaser sprite renders the visual through CRT
     });
+    this.thumbnailImg.crossOrigin = 'anonymous';
     thumbLink.appendChild(this.thumbnailImg);
 
-    // Right side: track title stacked above controls (fixed width)
+    // Right side: track title stacked above controls (height matches thumbnail)
     const rightColumn = document.createElement('div');
-    const RIGHT_COL_WIDTH = 232; // wide enough for 2x title text
     Object.assign(rightColumn.style, {
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'space-between',
-      width: `${RIGHT_COL_WIDTH}px`,
-      height: `${YT_THUMB_HEIGHT}px`,
-      flexShrink: '0',
+      alignSelf: 'stretch',
+      flex: '1',
+      minWidth: '0',
+      overflow: 'hidden',
+      transition: 'opacity 0.4s ease',
     });
+    this.rightColumnEl = rightColumn;
 
     // Fixed-width clip container for scrolling title
     this.titleClip = document.createElement('div');
     Object.assign(this.titleClip.style, {
-      width: `${RIGHT_COL_WIDTH}px`,
       overflow: 'hidden',
       display: 'none', // hidden until track info available
     });
@@ -155,7 +199,7 @@ export class MusicPlayer {
     this.trackTitle.target = '_blank';
     this.trackTitle.rel = 'noopener noreferrer';
     Object.assign(this.trackTitle.style, {
-      color: 'white',
+      color: 'transparent', // invisible — Phaser text renders the visual through CRT
       fontSize: '24px',
       fontFamily: 'Early GameBoy',
       textDecoration: 'none',
@@ -172,18 +216,45 @@ export class MusicPlayer {
 
     // Control buttons row with source indicator
     const btnContainer = document.createElement('div');
-    Object.assign(btnContainer.style, { display: 'flex', justifyContent: 'center', gap: '14px', alignItems: 'center' });
-    const prevBtn = this.createButton('\u23EE', () => this.prev());
-    const nextBtn = this.createButton('\u23ED', () => this.next());
-    this.muteBtn = this.createButton('\uD83D\uDD0A', () => this.toggleMute());
-    const igBtn = this.createButton('', () => window.open('https://www.instagram.com/deathpixiexx/?hl=en', '_blank'));
-    igBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>';
-    Object.assign(igBtn.style, { display: 'flex', alignItems: 'center', justifyContent: 'center' });
+    Object.assign(btnContainer.style, { display: 'flex', justifyContent: 'flex-end', gap: '14px', alignItems: 'center' });
+    const prevBtn = this.createIconButton('ui/skip.png', () => this.prev(), true);
+    const nextBtn = this.createIconButton('ui/skip.png', () => this.next());
+    this.muteBtn = this.createIconButton('ui/unmuted.png', () => this.toggleMute());
+    this.muteBtnImg = this.muteBtn.querySelector('img') as HTMLImageElement;
+    const igBtn = this.createIconButton('ui/insta.png', () => window.open('https://www.instagram.com/deathpixiexx/?hl=en', '_blank'));
 
     btnContainer.append(prevBtn, nextBtn, this.muteBtn, igBtn);
 
     rightColumn.append(this.titleClip, btnContainer);
     this.container.append(thumbLink, rightColumn);
+
+    // Phaser sprites that render through CRT shader (HTML images stay invisible click targets)
+    const prevSprite = this.scene.add.image(0, 0, 'ui-skip').setFlipX(true);
+    const nextSprite = this.scene.add.image(0, 0, 'ui-skip');
+    this.muteBtnSprite = this.scene.add.image(0, 0, 'ui-unmuted');
+    const igSprite = this.scene.add.image(0, 0, 'ui-insta');
+    this.btnSprites = [prevSprite, nextSprite, this.muteBtnSprite, igSprite];
+    this.btnElements = [prevBtn, nextBtn, this.muteBtn, igBtn];
+    for (let i = 0; i < this.btnSprites.length; i++) {
+      this.btnSprites[i].setDepth(1000).setScrollFactor(0).setVisible(false).setAlpha(0);
+      const sprite = this.btnSprites[i];
+      this.btnElements[i].addEventListener('mouseenter', () => { sprite.setAlpha(0.7); });
+      this.btnElements[i].addEventListener('mouseleave', () => { sprite.setAlpha(this.compact && !this.hovered ? 0 : 1); });
+    }
+
+    // Thumbnail CRT sprite (mirrors HTML thumbnail through CRT shader)
+    this.thumbSprite = this.scene.add.image(0, 0, '__DEFAULT')
+      .setDepth(1000).setScrollFactor(0).setVisible(false);
+    this.thumbnailImg.addEventListener('load', () => this.updateThumbTexture());
+
+    // Song title CRT text (mirrors scrolling track title through CRT shader)
+    this.titleMaskGfx = this.scene.add.graphics().setVisible(false);
+    this.titleText = this.scene.add.text(0, 0, '', {
+      fontFamily: '"Early GameBoy"',
+      fontSize: '24px',
+      color: '#ffffff',
+    }).setDepth(1000).setScrollFactor(0).setOrigin(0, 0.5).setVisible(false).setAlpha(0);
+    this.titleText.setMask(this.titleMaskGfx.createGeometryMask());
 
     // Hidden YouTube player container (1x1 pixel, bottom-right corner)
     const ytDiv = document.createElement('div');
@@ -199,27 +270,36 @@ export class MusicPlayer {
     document.body.appendChild(ytDiv);
   }
 
-  private createButton(label: string, onClick: () => void): HTMLButtonElement {
+  private createIconButton(src: string, onClick: () => void, mirror: boolean = false): HTMLButtonElement {
     const btn = document.createElement('button');
-    btn.textContent = label;
     btn.tabIndex = -1;
     Object.assign(btn.style, {
-      background: 'rgba(0, 0, 0, 0.8)',
-      border: '1px solid rgba(255, 255, 255, 0.3)',
-      color: 'white',
-      fontSize: '20px',
+      background: 'none',
+      border: 'none',
+      padding: '0',
       width: '44px',
       height: '44px',
       cursor: 'pointer',
-      borderRadius: '4px',
-      padding: '0',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
     });
-    btn.addEventListener('click', onClick);
+    const img = document.createElement('img');
+    img.src = src;
+    Object.assign(img.style, {
+      width: '100%',
+      height: '100%',
+      objectFit: 'contain',
+      transform: mirror ? 'scaleX(-1)' : 'none',
+      opacity: '0', // invisible — Phaser sprite renders the visual through CRT
+    });
+    btn.appendChild(img);
+    btn.addEventListener('click', () => {
+      if (this.scene.cache.audio.exists('sfx-click')) this.scene.sound.play('sfx-click');
+      onClick();
+    });
     btn.addEventListener('mouseenter', () => {
-      btn.style.background = 'rgba(60, 60, 60, 0.9)';
-    });
-    btn.addEventListener('mouseleave', () => {
-      btn.style.background = 'rgba(0, 0, 0, 0.8)';
+      if (this.scene.cache.audio.exists('sfx-hover')) this.scene.sound.play('sfx-hover');
     });
     return btn;
   }
@@ -296,8 +376,9 @@ export class MusicPlayer {
       sp.onTrackChanged((track) => {
         if (this.source !== 'spotify') return;
         // Square album art
-        this.thumbnailImg.style.width = `${YT_THUMB_HEIGHT}px`;
-        this.thumbnailImg.style.height = `${YT_THUMB_HEIGHT}px`;
+        const s = TUNING.MUSIC_UI_THUMB_SCALE;
+        this.thumbnailImg.style.width = `${YT_THUMB_HEIGHT * s}px`;
+        this.thumbnailImg.style.height = `${YT_THUMB_HEIGHT * s}px`;
         if (track.albumImageUrl) {
           this.thumbnailImg.src = track.albumImageUrl;
           this.thumbnailImg.style.display = 'block';
@@ -306,6 +387,9 @@ export class MusicPlayer {
         this.trackTitle.textContent = display;
         this.titleClip.style.display = 'block';
         this.startTitleScroll();
+        if (this.compact && !this.hovered) {
+          this.collapseUI(false);
+        }
       });
 
       // If playlist already started, switch now
@@ -454,13 +538,17 @@ export class MusicPlayer {
       const videoData = this.ytPlayer.getVideoData();
       if (videoData && videoData.video_id) {
         // Switch to YouTube 16:9 thumbnail dimensions
-        this.thumbnailImg.style.width = `${YT_THUMB_WIDTH}px`;
-        this.thumbnailImg.style.height = `${YT_THUMB_HEIGHT}px`;
+        const s = TUNING.MUSIC_UI_THUMB_SCALE;
+        this.thumbnailImg.style.width = `${YT_THUMB_WIDTH * s}px`;
+        this.thumbnailImg.style.height = `${YT_THUMB_HEIGHT * s}px`;
         this.thumbnailImg.src = `https://img.youtube.com/vi/${videoData.video_id}/mqdefault.jpg`;
         this.thumbnailImg.style.display = 'block';
         this.trackTitle.textContent = videoData.title || 'Unknown Track';
         this.titleClip.style.display = 'block';
         this.startTitleScroll();
+        if (this.compact && !this.hovered) {
+          this.collapseUI(false);
+        }
       }
     } catch (_) {
       // YouTube API not ready yet
@@ -550,27 +638,203 @@ export class MusicPlayer {
       // toggleMute returns a Promise<boolean> — handle async
       if (muted instanceof Promise) {
         muted.then((m) => {
-          this.muteBtn.textContent = m ? '\uD83D\uDD07' : '\uD83D\uDD0A';
+          this.muteBtnImg.src = m ? 'ui/muted.png' : 'ui/unmuted.png';
+          this.muteBtnSprite.setTexture(m ? 'ui-muted' : 'ui-unmuted');
         });
       }
     } else if (this.playlistStarted && this.ytPlayer) {
       // Toggle YouTube mute
       if (this.ytPlayer.isMuted()) {
         this.ytPlayer.unMute();
-        this.muteBtn.textContent = '\uD83D\uDD0A';
+        this.muteBtnImg.src = 'ui/unmuted.png';
+        this.muteBtnSprite.setTexture('ui-unmuted');
       } else {
         this.ytPlayer.mute();
-        this.muteBtn.textContent = '\uD83D\uDD07';
+        this.muteBtnImg.src = 'ui/muted.png';
+        this.muteBtnSprite.setTexture('ui-muted');
       }
     } else if (this.titleMusic) {
       // Toggle title music mute
       this.titleMuted = !this.titleMuted;
       this.titleMusic.setVolume(this.titleMuted ? 0 : 0.5);
-      this.muteBtn.textContent = this.titleMuted ? '\uD83D\uDD07' : '\uD83D\uDD0A';
+      this.muteBtnImg.src = this.titleMuted ? 'ui/muted.png' : 'ui/unmuted.png';
+      this.muteBtnSprite.setTexture(this.titleMuted ? 'ui-muted' : 'ui-unmuted');
+    }
+  }
+
+  isCursorOverUI(): boolean {
+    return this.cursorOver;
+  }
+
+  setCompact(value: boolean): void {
+    this.compact = value;
+    if (value && !this.hovered) {
+      this.collapseUI();
+    } else {
+      this.expandUI();
+    }
+  }
+
+  private collapseUI(animate: boolean = true): void {
+    if (!animate) {
+      this.container.style.transition = 'none';
+      this.rightColumnEl.style.transition = 'none';
+    }
+
+    const thumbW = parseFloat(this.thumbnailImg.style.width) || (YT_THUMB_HEIGHT * TUNING.MUSIC_UI_THUMB_SCALE);
+    const overlayW = this.canvasOverlay.offsetWidth || 1;
+    const collapsedPct = (thumbW / overlayW) * 100;
+
+    this.container.style.width = `${collapsedPct}%`;
+    this.container.style.gap = '0px';
+    this.rightColumnEl.style.opacity = '0';
+
+    // Fade Phaser button sprites and title text to match
+    for (const s of [...this.btnSprites, this.titleText]) {
+      if (animate) {
+        this.scene.tweens.killTweensOf(s);
+        this.scene.tweens.add({ targets: s, alpha: 0, duration: 400, ease: 'Sine.easeInOut' });
+      } else {
+        s.setAlpha(0);
+      }
+    }
+
+    if (!animate) {
+      void this.container.offsetHeight; // force reflow
+      this.container.style.transition = 'width 0.4s ease, gap 0.4s ease';
+      this.rightColumnEl.style.transition = 'opacity 0.4s ease';
+    }
+  }
+
+  private expandUI(): void {
+    const widthPct = (TUNING.MUSIC_UI_WIDTH / TUNING.GAME_WIDTH) * 100;
+    this.container.style.width = `${widthPct}%`;
+    this.container.style.gap = '14px';
+    this.rightColumnEl.style.opacity = '1';
+
+    // Fade Phaser button sprites and title text in
+    for (const s of [...this.btnSprites, this.titleText]) {
+      this.scene.tweens.killTweensOf(s);
+      this.scene.tweens.add({ targets: s, alpha: 1, duration: 400, ease: 'Sine.easeInOut' });
+    }
+  }
+
+  setVisible(visible: boolean): void {
+    this.container.style.display = visible ? 'flex' : 'none';
+    if (!visible) {
+      for (const s of this.btnSprites) s.setVisible(false);
+      this.thumbSprite.setVisible(false);
+      this.titleText.setVisible(false);
+    }
+  }
+
+  /** Load thumbnail image into a Phaser canvas texture for CRT rendering */
+  private updateThumbTexture(): void {
+    const img = this.thumbnailImg;
+    if (!img.naturalWidth) return;
+
+    try {
+      this.thumbTextureId++;
+      const key = `music-thumb-${this.thumbTextureId}`;
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d')!.drawImage(img, 0, 0);
+
+      this.scene.textures.addCanvas(key, canvas);
+      this.thumbSprite.setTexture(key);
+
+      // Clean up previous texture
+      const oldKey = `music-thumb-${this.thumbTextureId - 1}`;
+      if (this.thumbTextureId > 1 && this.scene.textures.exists(oldKey)) {
+        this.scene.textures.remove(oldKey);
+      }
+    } catch {
+      // CORS tainting — fall back to visible HTML thumbnail
+      this.thumbnailImg.style.opacity = '1';
+    }
+  }
+
+  /** Map HTML element positions to Phaser game coordinates and update CRT sprites */
+  private syncBtnSprites(overlayRect: DOMRect): void {
+    const containerVisible = this.container.style.display !== 'none';
+    const ow = overlayRect.width || 1;
+    const oh = overlayRect.height || 1;
+
+    // --- Button sprites ---
+    for (let i = 0; i < this.btnSprites.length; i++) {
+      if (!containerVisible) {
+        this.btnSprites[i].setVisible(false);
+        continue;
+      }
+      const btnRect = this.btnElements[i].getBoundingClientRect();
+      const cx = btnRect.left + btnRect.width / 2 - overlayRect.left;
+      const cy = btnRect.top + btnRect.height / 2 - overlayRect.top;
+      const gameX = (cx / ow) * TUNING.GAME_WIDTH;
+      const gameY = (cy / oh) * TUNING.GAME_HEIGHT;
+      const gameSize = (btnRect.width / ow) * TUNING.GAME_WIDTH;
+      this.btnSprites[i].setPosition(gameX, gameY);
+      this.btnSprites[i].setDisplaySize(gameSize, gameSize);
+      this.btnSprites[i].setVisible(true);
+    }
+
+    // --- Thumbnail sprite ---
+    const thumbVisible = containerVisible && this.thumbnailImg.style.display !== 'none' && this.thumbTextureId > 0;
+    if (thumbVisible) {
+      const tr = this.thumbnailImg.getBoundingClientRect();
+      const tcx = tr.left + tr.width / 2 - overlayRect.left;
+      const tcy = tr.top + tr.height / 2 - overlayRect.top;
+      this.thumbSprite.setPosition((tcx / ow) * TUNING.GAME_WIDTH, (tcy / oh) * TUNING.GAME_HEIGHT);
+      this.thumbSprite.setDisplaySize((tr.width / ow) * TUNING.GAME_WIDTH, (tr.height / oh) * TUNING.GAME_HEIGHT);
+      this.thumbSprite.setVisible(true);
+    } else {
+      this.thumbSprite.setVisible(false);
+    }
+
+    // --- Title text ---
+    const titleVisible = containerVisible && this.titleClip.style.display !== 'none';
+    if (titleVisible) {
+      // Sync text content
+      const newText = this.trackTitle.textContent || '';
+      if (this.titleText.text !== newText) {
+        this.titleText.setText(newText);
+      }
+
+      // Scale font size to game coordinates (only update when changed)
+      const scale = TUNING.GAME_WIDTH / ow;
+      const gameFontSize = Math.round(24 * scale);
+      if (gameFontSize !== this.lastGameFontSize) {
+        this.lastGameFontSize = gameFontSize;
+        this.titleText.setFontSize(gameFontSize);
+      }
+
+      // Position text from HTML trackTitle bounding rect (includes scroll offset)
+      const titleRect = this.trackTitle.getBoundingClientRect();
+      const titleLeft = (titleRect.left - overlayRect.left) / ow * TUNING.GAME_WIDTH;
+      const titleMidY = (titleRect.top + titleRect.height / 2 - overlayRect.top) / oh * TUNING.GAME_HEIGHT;
+      this.titleText.setPosition(titleLeft, titleMidY);
+      this.titleText.setVisible(true);
+
+      // Update geometry mask to match titleClip bounds
+      const clipRect = this.titleClip.getBoundingClientRect();
+      const clipLeft = (clipRect.left - overlayRect.left) / ow * TUNING.GAME_WIDTH;
+      const clipTop = (clipRect.top - overlayRect.top) / oh * TUNING.GAME_HEIGHT;
+      const clipW = (clipRect.width / ow) * TUNING.GAME_WIDTH;
+      const clipH = (clipRect.height / oh) * TUNING.GAME_HEIGHT;
+      this.titleMaskGfx.clear();
+      this.titleMaskGfx.fillStyle(0xffffff);
+      this.titleMaskGfx.fillRect(clipLeft, clipTop, clipW, clipH);
+    } else {
+      this.titleText.setVisible(false);
     }
   }
 
   destroy(): void {
+    for (const s of this.btnSprites) s.destroy();
+    this.btnSprites.length = 0;
+    this.thumbSprite.destroy();
+    this.titleText.destroy();
+    this.titleMaskGfx.destroy();
     if (this.crossfadeTimer) window.clearTimeout(this.crossfadeTimer);
     if (this.crossfadeAnim) cancelAnimationFrame(this.crossfadeAnim);
     if (this.scrollAnim) cancelAnimationFrame(this.scrollAnim);

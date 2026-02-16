@@ -34,8 +34,18 @@ export class BootScene extends Phaser.Scene {
       frameWidth: TUNING.POWERED_FRAME_WIDTH,
       frameHeight: TUNING.POWERED_FRAME_HEIGHT,
     });
+    this.load.spritesheet('player-speedup', 'assets/dp_player/dp_speed_up.png', {
+      frameWidth: TUNING.SPEEDUP_FRAME_WIDTH,
+      frameHeight: TUNING.SPEEDUP_FRAME_HEIGHT,
+    });
+    this.load.spritesheet('player-rocket-launch', 'assets/dp_player/dp_rocket_lancher_v2.png', {
+      frameWidth: TUNING.ROCKET_LAUNCHER_FRAME_WIDTH,
+      frameHeight: TUNING.ROCKET_LAUNCHER_FRAME_HEIGHT,
+    });
     this.load.audio('title-music', 'assets/audio/music/red malibu 1.5.wav');
     this.load.audio('countdown-music', 'assets/audio/music/hell_girl_countdown.mp3');
+    this.load.audio('sfx-click', 'assets/audio/sfx/mouse click.mp3');
+    this.load.audio('sfx-hover', 'assets/audio/sfx/mouse hover.mp3');
     this.load.image('play-music-overlay', 'assets/start/play_music.png');
     this.load.image('obstacle-crash', 'assets/obstacles/road_barrier_01.png');
     this.load.image('road-img', 'assets/background/road.jpg');
@@ -70,17 +80,22 @@ export class BootScene extends Phaser.Scene {
     this.load.image('spotify-text-logo', 'ui/spotify_text_logo_.png');
     this.load.image('sign-in', 'ui/sign_in.png');
     this.load.image('cursor', 'ui/cursor.png');
+    this.load.image('ui-skip', 'ui/skip.png');
+    this.load.image('ui-unmuted', 'ui/unmuted.png');
+    this.load.image('ui-muted', 'ui/muted.png');
+    this.load.image('ui-insta', 'ui/insta.png');
 
     // Tutorial assets
-    this.load.image('tutorial-skip', 'assets/tutorial/skip.png');
-    this.load.image('tutorial-blank', 'assets/tutorial/how_to_play_blank.jpg');
-    this.load.image('tutorial-obstacles', 'assets/tutorial/obstacles.jpg');
+    this.load.image('tutorial-skip', 'assets/tutorial/skip_v02.png');
+    this.load.image('tutorial-blank', 'assets/tutorial/how_to_play_v2.jpg');
+    this.load.image('tutorial-obstacles', 'assets/tutorial/tut_v2/rules_v2.jpg');
     for (let i = 0; i < TUNING.TUTORIAL_CONTROLS_FRAMES; i++) {
       const idx = String(i).padStart(2, '0');
-      this.load.image(`tutorial-controls-${idx}`, `assets/tutorial/controls_v02/controls_v2_${idx}.jpg`);
+      const fileIdx = String(i).padStart(5, '0');
+      this.load.image(`tutorial-controls-${idx}`, `assets/tutorial/controls_v4/controls_v4__${fileIdx}.jpg`);
     }
     for (let i = 0; i < TUNING.TUTORIAL_RAGE_FRAMES; i++) {
-      this.load.image(`tutorial-rage-${i}`, `assets/tutorial/rage/rage/rage_${i}.jpg`);
+      this.load.image(`tutorial-rage-${i}`, `assets/tutorial/tut_v2/rage_v2/rage_v2_${i}.jpg`);
     }
   }
 
@@ -124,6 +139,14 @@ export class BootScene extends Phaser.Scene {
       repeat: 0,
     });
 
+    // Player rocket launcher animation (plays once at 12fps)
+    this.anims.create({
+      key: 'player-rocket-launch',
+      frames: this.anims.generateFrameNumbers('player-rocket-launch', { start: 0, end: TUNING.ROCKET_LAUNCHER_ANIM_FRAMES - 1 }),
+      frameRate: 12,
+      repeat: 0,
+    });
+
     // Powered-up intro (full sequence, plays once at 12fps)
     this.anims.create({
       key: 'player-powered-intro',
@@ -138,6 +161,30 @@ export class BootScene extends Phaser.Scene {
       frames: this.anims.generateFrameNumbers('player-powered', { start: TUNING.POWERED_LOOP_START, end: TUNING.POWERED_ANIM_FRAMES - 1 }),
       frameRate: 12,
       repeat: -1,
+    });
+
+    // Speed-up intro (frames 0-35, plays once at 12fps)
+    this.anims.create({
+      key: 'player-speedup-intro',
+      frames: this.anims.generateFrameNumbers('player-speedup', { start: 0, end: TUNING.SPEEDUP_INTRO_END }),
+      frameRate: 12,
+      repeat: 0,
+    });
+
+    // Speed-up loop (frames 36-51, loops at 12fps)
+    this.anims.create({
+      key: 'player-speedup-loop',
+      frames: this.anims.generateFrameNumbers('player-speedup', { start: TUNING.SPEEDUP_LOOP_START, end: TUNING.SPEEDUP_LOOP_END }),
+      frameRate: 12,
+      repeat: -1,
+    });
+
+    // Speed-up outro (frames 52-63, plays once at 12fps)
+    this.anims.create({
+      key: 'player-speedup-outro',
+      frames: this.anims.generateFrameNumbers('player-speedup', { start: TUNING.SPEEDUP_OUTRO_START, end: TUNING.SPEEDUP_OUTRO_END }),
+      frameRate: 12,
+      repeat: 0,
     });
 
     // Slow obstacle (blue, single tile — stretched via setDisplaySize at spawn)

@@ -56,6 +56,8 @@ const DEBUG_HOTKEYS = {
   toggleLayer7:   { key: 'SEVEN',   active: true },  // toggle parallax layer 7 (buildings-back)
   toggleSky:      { key: 'EIGHT',   active: true },  // toggle sky background
   toggleRoad:     { key: 'NINE',    active: true },  // toggle road
+  hideHud:        { key: 'G',       active: true },  // hide HUD + music UI during gameplay
+  showHelp:       { key: 'PLUS',   active: true },  // toggle debug hotkey help overlay
 };
 
 // ── Death screen leaderboard: Top 3 group ──
@@ -107,6 +109,7 @@ export class GameScene extends Phaser.Scene {
   // Custom cursor (rendered under CRT)
   private cursorStroke?: Phaser.GameObjects.Image;
   private cursorMain!: Phaser.GameObjects.Image;
+  private cursorOverUI: boolean = false;
 
   // Weekly seed
   private weekKey!: string;
@@ -146,6 +149,7 @@ export class GameScene extends Phaser.Scene {
   private roadSpeedBonus: number = 0;  // permanent speed increase from katana kills
   private rageZoomProgress: number = 0; // 0 = no zoom, 1 = full zoom (smoothly interpolated)
   private spectatorMode: boolean = false; // debug: invincible + explode obstacles on contact
+  private hudHidden: boolean = false; // debug: hide HUD + music UI during gameplay
 
   // Title loop animation
   private titleLoopSprite!: Phaser.GameObjects.Sprite;
@@ -168,6 +172,8 @@ export class GameScene extends Phaser.Scene {
   private debugText!: Phaser.GameObjects.Text;
   private debugMusicSourceText: Phaser.GameObjects.Text | null = null;
   private spectatorLabel!: Phaser.GameObjects.Text;
+  private debugHelpBg!: Phaser.GameObjects.Rectangle;
+  private debugHelpText!: Phaser.GameObjects.Text;
 
   // Name entry
   private nameEntryContainer!: Phaser.GameObjects.Container;
@@ -247,7 +253,9 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       // Debug keys — don't advance game state (map Phaser key names to event.key values)
-      const phaserToEventKey: Record<string, string> = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9' };
+      const phaserToEventKey: Record<string, string> = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', plus: '+' };
+      // Also block '=' since + and = share a key on most keyboards
+      if (k === '=' || k === '+') return;
       const debugKeys = Object.values(DEBUG_HOTKEYS).map(h => {
         const lk = h.key.toLowerCase();
         return phaserToEventKey[lk] || lk;
@@ -270,6 +278,9 @@ export class GameScene extends Phaser.Scene {
     });
     this.input.on('pointerdown', () => {
       if (this.profilePopup?.isOpen()) return;
+      if (this.state === GameState.TUTORIAL || this.state === GameState.TITLE || this.state === GameState.STARTING) {
+        this.sound.play('sfx-click');
+      }
       if (this.state === GameState.TUTORIAL) {
         this.tutorialAdvance = true;
       } else if (this.state === GameState.TITLE) {
@@ -345,12 +356,6 @@ export class GameScene extends Phaser.Scene {
         .setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
       this.warningPool.push({ circle, preview, currentKey: '' });
     }
-
-    // Death boundaries
-    const g = this.add.graphics();
-    g.fillStyle(0xff0000);
-    g.fillRect(TUNING.PLAYER_MIN_X, 0, 4, TUNING.GAME_HEIGHT);
-    g.fillRect(TUNING.PLAYER_MAX_X - 4, 0, 4, TUNING.GAME_HEIGHT);
 
     // --- HUD (visible during PLAYING) ---
     this.hudLabel = this.add.text(TUNING.GAME_WIDTH / 2, 20, 'WEEKLY HIGH SCORE', {
@@ -603,12 +608,14 @@ export class GameScene extends Phaser.Scene {
       }
     ).setOrigin(0.5).setDepth(211).setInteractive({ useHandCursor: true });
     this.nameEnterBtn.on('pointerover', () => {
+      this.sound.play('sfx-hover');
       this.nameEnterBtn.setColor('#ffffff').setBackgroundColor('#006600');
     });
     this.nameEnterBtn.on('pointerout', () => {
       this.nameEnterBtn.setColor('#00ff00').setBackgroundColor('#003300');
     });
     this.nameEnterBtn.on('pointerdown', () => {
+      this.sound.play('sfx-click');
       if (this.state === GameState.NAME_ENTRY) {
         this.confirmNameEntry();
       }
@@ -636,9 +643,10 @@ export class GameScene extends Phaser.Scene {
       TUNING.GAME_WIDTH / 2 - 100, TUNING.GAME_HEIGHT / 2 + 250,
       'YES', { ...btnStyle, color: '#ff4444', backgroundColor: '#330000' }
     ).setOrigin(0.5).setDepth(212).setInteractive({ useHandCursor: true }).setVisible(false);
-    this.emptyNameYesBtn.on('pointerover', () => this.emptyNameYesBtn.setColor('#ffffff').setBackgroundColor('#660000'));
+    this.emptyNameYesBtn.on('pointerover', () => { this.sound.play('sfx-hover'); this.emptyNameYesBtn.setColor('#ffffff').setBackgroundColor('#660000'); });
     this.emptyNameYesBtn.on('pointerout', () => this.emptyNameYesBtn.setColor('#ff4444').setBackgroundColor('#330000'));
     this.emptyNameYesBtn.on('pointerdown', () => {
+      this.sound.play('sfx-click');
       if (this.state === GameState.NAME_ENTRY && this.emptyNameVisible) {
         this.submitAsAnon();
       }
@@ -648,9 +656,10 @@ export class GameScene extends Phaser.Scene {
       TUNING.GAME_WIDTH / 2 + 100, TUNING.GAME_HEIGHT / 2 + 250,
       'NO', { ...btnStyle, color: '#00ff00', backgroundColor: '#003300' }
     ).setOrigin(0.5).setDepth(212).setInteractive({ useHandCursor: true }).setVisible(false);
-    this.emptyNameNoBtn.on('pointerover', () => this.emptyNameNoBtn.setColor('#ffffff').setBackgroundColor('#006600'));
+    this.emptyNameNoBtn.on('pointerover', () => { this.sound.play('sfx-hover'); this.emptyNameNoBtn.setColor('#ffffff').setBackgroundColor('#006600'); });
     this.emptyNameNoBtn.on('pointerout', () => this.emptyNameNoBtn.setColor('#00ff00').setBackgroundColor('#003300'));
     this.emptyNameNoBtn.on('pointerdown', () => {
+      this.sound.play('sfx-click');
       if (this.state === GameState.NAME_ENTRY && this.emptyNameVisible) {
         this.hideEmptyNamePrompt();
       }
@@ -661,14 +670,14 @@ export class GameScene extends Phaser.Scene {
       TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
       TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
       0x000000
-    ).setDepth(249).setVisible(false);
+    ).setDepth(249).setScrollFactor(0).setVisible(false);
 
     // Death exposure white overlay (above everything game-related)
     this.deathWhiteOverlay = this.add.rectangle(
       TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
       TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
       0xffffff
-    ).setDepth(1200).setAlpha(0).setVisible(false);
+    ).setDepth(1200).setScrollFactor(0).setAlpha(0).setVisible(false);
 
     // Countdown sprite (centered, high depth, hidden until enterStarting)
     this.countdownSprite = this.add.sprite(
@@ -695,13 +704,14 @@ export class GameScene extends Phaser.Scene {
 
     // Tutorial skip button (bottom-right, above tutorial content, below black overlay)
     this.tutorialSkipBtn = this.add.image(0, 0, 'tutorial-skip')
-      .setOrigin(0.5, 0.5).setScale(0.5).setAlpha(0.69).setDepth(248).setVisible(false).setInteractive({ useHandCursor: true });
+      .setOrigin(0.5, 0.5).setScale(0.5).setAlpha(0.69).setDepth(248).setVisible(false).setInteractive({ useHandCursor: true }).setTintFill(0xffffff);
     // Position so bottom-right edge sits 30px from screen edges
     this.tutorialSkipBtn.setPosition(
       TUNING.GAME_WIDTH - SKIP_BTN_MARGIN_RIGHT - this.tutorialSkipBtn.displayWidth / 2,
       TUNING.GAME_HEIGHT - SKIP_BTN_MARGIN_BOTTOM - this.tutorialSkipBtn.displayHeight / 2,
     );
     this.tutorialSkipBtn.on('pointerover', () => {
+      this.sound.play('sfx-hover');
       this.tweens.killTweensOf(this.tutorialSkipBtn);
       this.tweens.add({
         targets: this.tutorialSkipBtn,
@@ -722,10 +732,11 @@ export class GameScene extends Phaser.Scene {
       });
     });
     this.tutorialSkipBtn.on('pointerdown', () => {
+      this.sound.play('sfx-click');
       if (this.state === GameState.TUTORIAL && this.tutorialPhase !== 'skip_fade' && this.tutorialPhase !== 'done') {
         // Flash red, shrink smoothly from current scale to base, fade out over 0.5s
         this.tweens.killTweensOf(this.tutorialSkipBtn);
-        this.tutorialSkipBtn.setTint(0xff0000);
+        this.tutorialSkipBtn.setTintFill(0xff0000);
         this.tutorialSkipBtn.disableInteractive();
         this.tweens.add({
           targets: this.tutorialSkipBtn,
@@ -735,7 +746,7 @@ export class GameScene extends Phaser.Scene {
           ease: 'Sine.easeIn',
           onComplete: () => {
             this.tutorialSkipBtn.setVisible(false);
-            this.tutorialSkipBtn.clearTint();
+            this.tutorialSkipBtn.setTintFill(0xffffff);
             this.tutorialSkipBtn.setAlpha(0.69);
             this.tutorialPhase = 'skip_fade';
             this.tutorialTimer = 0;
@@ -868,6 +879,89 @@ export class GameScene extends Phaser.Scene {
         this.roadSystem.setVisible(roadVisible);
       });
     }
+    // Hide HUD (G) — only during gameplay
+    if (DEBUG_HOTKEYS.hideHud.active) {
+      this.input.keyboard?.addKey(DEBUG_HOTKEYS.hideHud.key).on('down', () => {
+        if (this.state !== GameState.PLAYING) return;
+        this.hudHidden = !this.hudHidden;
+        const v = !this.hudHidden;
+        // UI elements
+        this.profileHud.setVisible(v);
+        this.hudLabel.setVisible(v);
+        this.hudHighScore.setVisible(v);
+        this.musicPlayer.setVisible(v);
+        this.spectatorLabel.setVisible(v && this.spectatorMode);
+        // World objects
+        this.obstacleSystem.setVisible(v);
+        this.pickupSystem.setVisible(v);
+        this.shieldSystem.setVisible(v);
+        for (let i = 0; i < this.warningPool.length; i++) {
+          this.warningPool[i].circle.setVisible(v);
+          this.warningPool[i].preview.setVisible(v);
+        }
+        for (let i = 0; i < this.laneHighlights.length; i++) {
+          this.laneHighlights[i].setVisible(false);
+        }
+        // Suppress explosions and screen shakes
+        this.obstacleSystem.setSuppressExplosions(this.hudHidden);
+        this.fxSystem.setSuppressShake(this.hudHidden);
+      });
+    }
+
+    // Debug help overlay — black box with neon green text listing active hotkeys
+    {
+      const lines: string[] = [];
+      const entries: { label: string; key: string; desc: string }[] = [
+        { label: 'gameplayInfo',    key: DEBUG_HOTKEYS.gameplayInfo.key,    desc: 'Toggle gameplay debug info' },
+        { label: 'musicSource',     key: DEBUG_HOTKEYS.musicSource.key,     desc: 'Toggle music source label' },
+        { label: 'jumpLeaderboard', key: DEBUG_HOTKEYS.jumpLeaderboard.key, desc: 'Skip to death/leaderboard' },
+        { label: 'toggleCRT',       key: DEBUG_HOTKEYS.toggleCRT.key,       desc: 'Toggle CRT shader' },
+        { label: 'crtDebug',        key: DEBUG_HOTKEYS.crtDebug.key,        desc: 'Toggle CRT tuning overlay' },
+        { label: 'instantRage',     key: DEBUG_HOTKEYS.instantRage.key,     desc: 'Trigger instant rage' },
+        { label: 'spectatorMode',   key: DEBUG_HOTKEYS.spectatorMode.key,   desc: 'Toggle spectator mode' },
+        { label: 'toggleLayer 1-7', key: '1-7',                             desc: 'Toggle parallax layers' },
+        { label: 'toggleSky',       key: DEBUG_HOTKEYS.toggleSky.key,       desc: 'Toggle sky background' },
+        { label: 'toggleRoad',      key: DEBUG_HOTKEYS.toggleRoad.key,      desc: 'Toggle road' },
+        { label: 'hideHud',         key: DEBUG_HOTKEYS.hideHud.key,         desc: 'Hide HUD + music UI' },
+        { label: 'showHelp',        key: '+',                               desc: 'Toggle this help overlay' },
+      ];
+      // Only include active hotkeys
+      const activeLabels = new Set(
+        Object.entries(DEBUG_HOTKEYS).filter(([, v]) => v.active).map(([k]) => k)
+      );
+      for (const e of entries) {
+        // Layer toggles: show if any layer toggle is active
+        if (e.label === 'toggleLayer 1-7') {
+          const anyLayer = ['toggleLayer1','toggleLayer2','toggleLayer3','toggleLayer4','toggleLayer5','toggleLayer6','toggleLayer7'].some(k => activeLabels.has(k));
+          if (anyLayer) lines.push(`  [${e.key}]  ${e.desc}`);
+        } else if (activeLabels.has(e.label)) {
+          lines.push(`  [${e.key}]  ${e.desc}`);
+        }
+      }
+      const helpStr = '  DEBUG HOTKEYS\n  ─────────────────────────────────────\n' + lines.join('\n');
+      const pad = 40;
+      this.debugHelpText = this.add.text(pad + 30, pad + 30, helpStr, {
+        fontFamily: 'monospace',
+        fontSize: '40px',
+        color: '#00ff00',
+        lineSpacing: 14,
+      }).setDepth(9999).setScrollFactor(0).setVisible(false);
+
+      const bounds = this.debugHelpText.getBounds();
+      this.debugHelpBg = this.add.rectangle(
+        pad, pad,
+        bounds.width + 60, bounds.height + 60,
+        0x000000, 0.92
+      ).setOrigin(0, 0).setDepth(9998).setScrollFactor(0).setVisible(false);
+
+      if (DEBUG_HOTKEYS.showHelp.active) {
+        this.input.keyboard?.addKey(DEBUG_HOTKEYS.showHelp.key).on('down', () => {
+          const show = !this.debugHelpBg.visible;
+          this.debugHelpBg.setVisible(show);
+          this.debugHelpText.setVisible(show);
+        });
+      }
+    }
   }
 
   update(_time: number, delta: number) {
@@ -877,6 +971,19 @@ export class GameScene extends Phaser.Scene {
     const ptr = this.input.activePointer;
     this.cursorMain.setPosition(ptr.x, ptr.y);
     this.cursorStroke?.setPosition(ptr.x, ptr.y);
+
+    // Fade cursor when hovering over music UI overlay
+    const overUI = this.musicPlayer.isCursorOverUI();
+    if (overUI !== this.cursorOverUI) {
+      this.cursorOverUI = overUI;
+      const alpha = overUI ? 0 : 1;
+      this.tweens.killTweensOf(this.cursorMain);
+      this.tweens.add({ targets: this.cursorMain, alpha, duration: 200 });
+      if (this.cursorStroke) {
+        this.tweens.killTweensOf(this.cursorStroke);
+        this.tweens.add({ targets: this.cursorStroke, alpha, duration: 200 });
+      }
+    }
 
     this.perfSystem.update(dt);
     this.inputSystem.update(dt);
@@ -1182,7 +1289,7 @@ export class GameScene extends Phaser.Scene {
     this.tutorialPhase = 'black_reveal';
     this.tutorialTimer = 0;
     this.tutorialAdvance = false;
-    this.tutorialSkipBtn.setVisible(true).setAlpha(0.69).setScale(0.5).clearTint().setInteractive({ useHandCursor: true });
+    this.tutorialSkipBtn.setVisible(true).setAlpha(0.69).setScale(0.5).setTintFill(0xffffff).setInteractive({ useHandCursor: true });
   }
 
   private updateTutorial(dt: number): void {
@@ -1352,10 +1459,12 @@ export class GameScene extends Phaser.Scene {
     this.countdownPhaseTimer = 0;
     this.countdownPhase = 'delay';
     this.countdownSprite.setVisible(false);
+    this.musicPlayer.setCompact(false);
   }
 
   private startGame(): void {
     this.state = GameState.PLAYING;
+    this.musicPlayer.setCompact(false);
     this.elapsed = 0;
     this.spawnGraceTimer = 0;
     this.blackOverlay.setVisible(false);
@@ -1530,13 +1639,21 @@ export class GameScene extends Phaser.Scene {
       this.playerSystem.playAttack();
     }
 
-    // Rocket launcher: right-click fires when ammo > 0
+    // Rocket launcher: right-click fires when ammo > 0 (spectator = infinite ammo)
     this.rocketCooldownTimer = Math.max(0, this.rocketCooldownTimer - dt);
-    if (this.inputSystem.getRocketPressed() && this.rocketCooldownTimer <= 0 && this.pickupSystem.getAmmo() > 0) {
-      if (this.pickupSystem.consumeAmmo()) {
-        this.rocketSystem.fire(this.playerSystem.getX(), this.playerSystem.getY());
-        this.rocketCooldownTimer = TUNING.ROCKET_COOLDOWN;
+    if (this.inputSystem.getRocketPressed() && this.rocketCooldownTimer <= 0 && (this.spectatorMode || this.pickupSystem.getAmmo() > 0)) {
+      const launched = this.playerSystem.playRocketLaunch(() => {
+        this.rocketSystem.fire(
+          this.playerSystem.getX() + TUNING.ROCKET_EMIT_X,
+          this.playerSystem.getY() + TUNING.ROCKET_EMIT_Y
+        );
         this.audioSystem.playRocketLaunch();
+      });
+      if (launched && !this.spectatorMode) {
+        this.pickupSystem.consumeAmmo();
+      }
+      if (launched) {
+        this.rocketCooldownTimer = TUNING.ROCKET_COOLDOWN;
       }
     }
     this.rocketSystem.update(dt);
@@ -1544,7 +1661,7 @@ export class GameScene extends Phaser.Scene {
     // Player collisions (after slash so destroyed obstacles are already gone)
     // NOTE: rage timer is ticked AFTER collisions so it can't expire mid-frame
     const playerCollX = this.playerSystem.getX();
-    const playerCollY = this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y;
+    const playerCollY = Math.max(this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y, TUNING.ROAD_TOP_Y);
 
     // Update pickups (scrolling + collection)
     this.pickupSystem.update(dt, roadSpeed, playerCollX, playerCollY, TUNING.PLAYER_RADIUS);
@@ -1581,7 +1698,7 @@ export class GameScene extends Phaser.Scene {
           this.shieldSystem.consumeShield();
           this.obstacleSystem.spawnExplosion(result.hitX, result.hitY);
           this.audioSystem.playExplosion();
-          this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 0.5, TUNING.SHAKE_DEATH_INTENSITY * 0.5);
+          if (!this.hudHidden) this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 0.5, TUNING.SHAKE_DEATH_INTENSITY * 0.5);
         } else {
           this.playerSystem.kill();
         }
@@ -1607,7 +1724,7 @@ export class GameScene extends Phaser.Scene {
         this.obstacleSystem.destroyAllOnScreen(TUNING.RAGE_END_EXPLOSION_SCALE);
         this.obstacleSystem.spawnExplosion(this.playerSystem.getX(), this.playerSystem.getY(), TUNING.RAGE_END_EXPLOSION_SCALE);
         this.audioSystem.playExplosion();
-        this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 2, TUNING.SHAKE_DEATH_INTENSITY * 1.5);
+        if (!this.hudHidden) this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 2, TUNING.SHAKE_DEATH_INTENSITY * 1.5);
       } else {
         this.rageAmount = TUNING.RAGE_MAX * (this.rageTimer / TUNING.RAGE_DURATION);
       }
@@ -1671,6 +1788,20 @@ export class GameScene extends Phaser.Scene {
         `diff: ${diff.toFixed(2)}  ` +
         `time: ${Math.round(this.elapsed)}s`
       );
+    }
+
+    // Re-hide world objects each frame when hudHidden (systems re-show on spawn)
+    if (this.hudHidden) {
+      this.obstacleSystem.setVisible(false);
+      this.pickupSystem.setVisible(false);
+      this.shieldSystem.setVisible(false);
+      for (let i = 0; i < this.warningPool.length; i++) {
+        this.warningPool[i].circle.setVisible(false);
+        this.warningPool[i].preview.setVisible(false);
+      }
+      for (let i = 0; i < this.laneHighlights.length; i++) {
+        this.laneHighlights[i].setVisible(false);
+      }
     }
 
     // CRT debug overlay
@@ -2083,6 +2214,15 @@ export class GameScene extends Phaser.Scene {
     this.state = GameState.DYING;
     this.autoSubmitted = false;
 
+    // Restore HUD visibility if hidden by debug key
+    if (this.hudHidden) {
+      this.hudHidden = false;
+      this.profileHud.setVisible(true);
+      this.musicPlayer.setVisible(true);
+      this.obstacleSystem.setSuppressExplosions(false);
+      this.fxSystem.setSuppressShake(false);
+    }
+
     // Close profile popup if open
     if (this.profilePopup.isOpen()) this.profilePopup.close();
 
@@ -2091,6 +2231,9 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setZoom(1);
     this.cameras.main.setScroll(0, 0);
     this.adjustHudForZoom(1);
+
+    // Collapse music player to thumbnail-only
+    this.musicPlayer.setCompact(true);
 
     // Juice: shake, flash, impact sound
     this.fxSystem.triggerDeath();

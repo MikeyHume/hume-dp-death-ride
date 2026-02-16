@@ -65,6 +65,9 @@ export class ObstacleSystem {
   private carDeckIndex: number = 0;
   private lastCarSkin: number = -1;
 
+  // Debug: suppress explosion visuals (G key clean-screen mode)
+  private suppressExplosions: boolean = false;
+
   constructor(scene: Phaser.Scene, seed: number) {
     this.scene = scene;
     this.rng = new SeededRNG(seed);
@@ -251,7 +254,12 @@ export class ObstacleSystem {
     car.setData('deathTimer', TUNING.CAR_DEATH_LINGER);
   }
 
+  setSuppressExplosions(suppress: boolean): void {
+    this.suppressExplosions = suppress;
+  }
+
   spawnExplosion(x: number, y: number, scale: number = 1): void {
+    if (this.suppressExplosions) return;
     let expl: Phaser.GameObjects.Sprite | null = null;
     for (let i = 0; i < this.explosions.length; i++) {
       if (!this.explosions[i].active) {
@@ -315,11 +323,11 @@ export class ObstacleSystem {
       const carWarningDist = roadSpeed * (1 - TUNING.CAR_SPEED_FACTOR) * (TUNING.LANE_WARNING_DURATION + TUNING.LANE_WARNING_CAR_EXTRA);
       const defaultWarningDist = roadSpeed * TUNING.LANE_WARNING_DURATION;
       const spawnMargin = Math.max(TUNING.OBSTACLE_SPAWN_MARGIN, defaultWarningDist, carWarningDist);
-      this.spawn(TUNING.GAME_WIDTH + spawnMargin, y, type);
+      this.spawn(TUNING.GAME_WIDTH + spawnMargin, y, type, laneIndex);
     }
   }
 
-  private spawn(x: number, y: number, type: ObstacleType): void {
+  private spawn(x: number, y: number, type: ObstacleType, laneIndex: number = 0): void {
     let obs: Phaser.GameObjects.Sprite | null = null;
     for (let i = 0; i < this.pool.length; i++) {
       if (!this.pool[i].active) {
@@ -362,13 +370,18 @@ export class ObstacleSystem {
     }
 
     obs.setTexture(textureKey);
+    const obsScale = TUNING.OBSTACLE_DISPLAY_SCALE;
+    const laneScale = TUNING.LANE_SCALES[laneIndex] ?? 1;
     if (type === ObstacleType.CRASH) {
       // Bottom 3/4 fills the lane, top 1/4 extends above — origin at center of bottom 3/4
       obs.setOrigin(0.5, 0.625);
-      obs.setDisplaySize(w, this.barrierDisplayH);
+      obs.setDisplaySize(w * obsScale * laneScale, this.barrierDisplayH * obsScale * laneScale);
+    } else if (type === ObstacleType.CAR) {
+      obs.setOrigin(0.5, 0.5);
+      obs.setDisplaySize(w * TUNING.CAR_DISPLAY_SCALE * laneScale, h * TUNING.CAR_DISPLAY_SCALE * laneScale);
     } else {
       obs.setOrigin(0.5, 0.5);
-      obs.setDisplaySize(w, h);
+      obs.setDisplaySize(w * obsScale * laneScale, h * obsScale * laneScale);
     }
     obs.setPosition(x, y);
 
@@ -720,6 +733,15 @@ export class ObstacleSystem {
     }
     for (let i = 0; i < this.explosions.length; i++) {
       this.explosions[i].setVisible(false);
+    }
+  }
+
+  setVisible(visible: boolean): void {
+    for (let i = 0; i < this.pool.length; i++) {
+      this.pool[i].setVisible(visible && this.pool[i].active);
+    }
+    for (let i = 0; i < this.explosions.length; i++) {
+      this.explosions[i].setVisible(visible && this.explosions[i].active);
     }
   }
 

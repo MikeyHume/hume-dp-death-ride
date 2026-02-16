@@ -9,11 +9,13 @@ const BTN_H = 50;
 const BTN_GAP = 40;
 
 export class DisconnectModal {
+  private scene: Phaser.Scene;
   private backdrop: Phaser.GameObjects.Rectangle;
   private container: Phaser.GameObjects.Container;
   private resolvePromise: ((confirmed: boolean) => void) | null = null;
 
   constructor(scene: Phaser.Scene) {
+    this.scene = scene;
     const cx = TUNING.GAME_WIDTH / 2;
     const cy = TUNING.GAME_HEIGHT / 2;
 
@@ -65,7 +67,8 @@ export class DisconnectModal {
 
     const yesHit = scene.add.zone(yesX, btnY, BTN_W, BTN_H)
       .setInteractive({ useHandCursor: true });
-    yesHit.on('pointerdown', () => this.answer(true));
+    yesHit.on('pointerover', () => this.scene.sound.play('sfx-hover'));
+    yesHit.on('pointerdown', () => { this.scene.sound.play('sfx-click'); this.answer(true); });
     this.container.add(yesHit);
 
     // NO button
@@ -85,7 +88,8 @@ export class DisconnectModal {
 
     const noHit = scene.add.zone(noX, btnY, BTN_W, BTN_H)
       .setInteractive({ useHandCursor: true });
-    noHit.on('pointerdown', () => this.answer(false));
+    noHit.on('pointerover', () => this.scene.sound.play('sfx-hover'));
+    noHit.on('pointerdown', () => { this.scene.sound.play('sfx-click'); this.answer(false); });
     this.container.add(noHit);
   }
 

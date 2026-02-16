@@ -18,6 +18,9 @@ export class FXSystem {
   // Track slow overlap to fire shake only on first contact
   private wasSlowOverlapping: boolean = false;
 
+  // Debug: suppress camera shakes (G key clean-screen mode)
+  private suppressShake: boolean = false;
+
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
 
@@ -115,9 +118,13 @@ export class FXSystem {
     }
   }
 
+  setSuppressShake(suppress: boolean): void {
+    this.suppressShake = suppress;
+  }
+
   /** Shake + flash on player death */
   triggerDeath(): void {
-    this.scene.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION, TUNING.SHAKE_DEATH_INTENSITY);
+    if (!this.suppressShake) this.scene.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION, TUNING.SHAKE_DEATH_INTENSITY);
     this.flashOverlay.setAlpha(1);
     this.scene.tweens.add({
       targets: this.flashOverlay,
@@ -129,7 +136,7 @@ export class FXSystem {
 
   /** Brief shake when first entering a slow zone */
   onSlowOverlap(isOverlapping: boolean): void {
-    if (isOverlapping && !this.wasSlowOverlapping) {
+    if (isOverlapping && !this.wasSlowOverlapping && !this.suppressShake) {
       this.scene.cameras.main.shake(TUNING.SHAKE_SLOW_DURATION, TUNING.SHAKE_SLOW_INTENSITY);
     }
     this.wasSlowOverlapping = isOverlapping;

@@ -14,9 +14,14 @@ const BAR_W = 500;                        // rage bar width in px (1.5x)
 const BAR_H = 28;                         // rage bar height in px
 const BAR_SEGMENTS = 10;                  // number of retro segment divisions
 const BAR_GAP_Y = 4;                      // vertical gap between score bottom and rage bar
-const PIP_RADIUS = 6;                     // rocket pip circle radius
 const PIP_GAP = 8;                        // vertical gap below rage bar to pips
 const PIP_AREA_W = 200;                   // width used for pip layout (keeps original spacing)
+
+// Rocket pill tuning (under rage bar, left-justified)
+const ROCKET_PILL_BG_COLOR = 0x333300;    // dark yellow background
+const ROCKET_PILL_BG_ALPHA = 0.5;
+const ROCKET_PILL_ACTIVE_COLOR = 0xffff00; // bright yellow active
+const ROCKET_PILL_ACTIVE_ALPHA = 0.9;
 const SIGN_IN_SCALE = 0.4;               // sign-in image scale
 const SIGN_IN_OFFSET_X = 96;             // sign-in X offset from avatar center
 const SIGN_IN_OFFSET_Y = 50;             // sign-in Y offset below avatar bottom
@@ -48,8 +53,8 @@ export class ProfileHud {
   private rageBg: Phaser.GameObjects.Rectangle;
   private rageFill: Phaser.GameObjects.Rectangle;
   private rageSegments: Phaser.GameObjects.Rectangle[] = [];
-  private pips: Phaser.GameObjects.Arc[] = [];
-  private maxPips: number = 0;
+  private rocketBgPills: Phaser.GameObjects.Graphics[] = [];
+  private rocketActivePills: Phaser.GameObjects.Graphics[] = [];
   private barBottomY: number = 0;
   private barY: number = 0;
   private scoreScale: number = 1;
@@ -83,7 +88,9 @@ export class ProfileHud {
       new Phaser.Geom.Circle(AVATAR_RADIUS, AVATAR_RADIUS, AVATAR_RADIUS),
       Phaser.Geom.Circle.Contains
     );
+    hitZone.on('pointerover', () => scene.sound.play('sfx-hover'));
     hitZone.on('pointerdown', () => {
+      scene.sound.play('sfx-click');
       if (this.clickCallback) this.clickCallback();
     });
     this.container.add(hitZone);
@@ -129,24 +136,40 @@ export class ProfileHud {
       this.container.add(seg);
     }
 
+    // --- Rocket pills (left-justified under rage bar) ---
+    const pillY = this.barBottomY + PIP_GAP;
+    for (let i = 0; i < TUNING.PICKUP_MAX_AMMO; i++) {
+      const px = BAR_X + i * (SHIELD_PILL_W + SHIELD_PILL_GAP);
+
+      const bg = scene.add.graphics();
+      bg.fillStyle(ROCKET_PILL_BG_COLOR, ROCKET_PILL_BG_ALPHA);
+      bg.fillRoundedRect(px, pillY, SHIELD_PILL_W, SHIELD_PILL_H, SHIELD_PILL_RADIUS);
+      this.container.add(bg);
+      this.rocketBgPills.push(bg);
+
+      const active = scene.add.graphics();
+      active.fillStyle(ROCKET_PILL_ACTIVE_COLOR, ROCKET_PILL_ACTIVE_ALPHA);
+      active.fillRoundedRect(px, pillY, SHIELD_PILL_W, SHIELD_PILL_H, SHIELD_PILL_RADIUS);
+      active.setVisible(false);
+      this.container.add(active);
+      this.rocketActivePills.push(active);
+    }
+
     // --- Shield pills (right-justified under rage bar) ---
-    const shieldPillY = this.barBottomY + PIP_GAP;
     const shieldTotalW = SHIELD_PILL_W * TUNING.SHIELD_MAX + SHIELD_PILL_GAP * (TUNING.SHIELD_MAX - 1);
     const shieldStartX = BAR_X + BAR_W - shieldTotalW; // right-justified
     for (let i = 0; i < TUNING.SHIELD_MAX; i++) {
       const px = shieldStartX + i * (SHIELD_PILL_W + SHIELD_PILL_GAP);
 
-      // Background pill (always visible during gameplay)
       const bg = scene.add.graphics();
       bg.fillStyle(SHIELD_BG_COLOR, SHIELD_BG_ALPHA);
-      bg.fillRoundedRect(px, shieldPillY, SHIELD_PILL_W, SHIELD_PILL_H, SHIELD_PILL_RADIUS);
+      bg.fillRoundedRect(px, pillY, SHIELD_PILL_W, SHIELD_PILL_H, SHIELD_PILL_RADIUS);
       this.container.add(bg);
       this.shieldBgPills.push(bg);
 
-      // Active pill overlay (neon green, shown when shield is held)
       const active = scene.add.graphics();
       active.fillStyle(SHIELD_ACTIVE_COLOR, SHIELD_ACTIVE_ALPHA);
-      active.fillRoundedRect(px, shieldPillY, SHIELD_PILL_W, SHIELD_PILL_H, SHIELD_PILL_RADIUS);
+      active.fillRoundedRect(px, pillY, SHIELD_PILL_W, SHIELD_PILL_H, SHIELD_PILL_RADIUS);
       active.setVisible(false);
       this.container.add(active);
       this.shieldActivePills.push(active);
@@ -197,30 +220,9 @@ export class ProfileHud {
     this.rageFill.setFillStyle(color, 1);
   }
 
-  setRockets(count: number, max: number): void {
-    const scene = this.container.scene;
-
-    // Rebuild pips if max changed
-    if (max !== this.maxPips) {
-      for (const p of this.pips) p.destroy();
-      this.pips.length = 0;
-      this.maxPips = max;
-      const pipY = this.barBottomY + PIP_GAP + PIP_RADIUS;
-      for (let i = 0; i < max; i++) {
-        const pipX = BAR_X + (i + 0.5) * (PIP_AREA_W / max);
-        const pip = scene.add.circle(
-          pipX, pipY,
-          PIP_RADIUS, 0xffff00, 1
-        );
-        pip.setStrokeStyle(1, 0xffaa00, 0.8);
-        pip.setVisible(false);
-        this.pips.push(pip);
-        this.container.add(pip);
-      }
-    }
-
-    for (let i = 0; i < this.maxPips; i++) {
-      this.pips[i].setVisible(i < count);
+  setRockets(count: number, _max: number): void {
+    for (let i = 0; i < this.rocketActivePills.length; i++) {
+      this.rocketActivePills[i].setVisible(i < count);
     }
   }
 
@@ -284,7 +286,8 @@ export class ProfileHud {
     this.rageBg.setVisible(false);
     this.rageFill.setVisible(false);
     for (let i = 0; i < this.rageSegments.length; i++) this.rageSegments[i].setVisible(false);
-    for (let i = 0; i < this.pips.length; i++) this.pips[i].setVisible(false);
+    for (let i = 0; i < this.rocketBgPills.length; i++) this.rocketBgPills[i].setVisible(false);
+    for (let i = 0; i < this.rocketActivePills.length; i++) this.rocketActivePills[i].setVisible(false);
     for (let i = 0; i < this.shieldBgPills.length; i++) this.shieldBgPills[i].setVisible(false);
     for (let i = 0; i < this.shieldActivePills.length; i++) this.shieldActivePills[i].setVisible(false);
     this.playingNameText.setVisible(false);
@@ -307,6 +310,7 @@ export class ProfileHud {
     this.rageBg.setVisible(true);
     this.rageFill.setVisible(true);
     for (let i = 0; i < this.rageSegments.length; i++) this.rageSegments[i].setVisible(true);
+    for (let i = 0; i < this.rocketBgPills.length; i++) this.rocketBgPills[i].setVisible(true);
     for (let i = 0; i < this.shieldBgPills.length; i++) this.shieldBgPills[i].setVisible(true);
 
     // Show player name left-justified above rage bar

@@ -238,7 +238,8 @@ export class ProfilePopup {
         new Phaser.Geom.Circle(AVATAR_RADIUS, AVATAR_RADIUS, AVATAR_RADIUS),
         Phaser.Geom.Circle.Contains,
       );
-    avatarHit.on('pointerdown', () => this.openFilePicker());
+    avatarHit.on('pointerover', () => this.scene.sound.play('sfx-hover'));
+    avatarHit.on('pointerdown', () => { this.scene.sound.play('sfx-click'); this.openFilePicker(); });
     this.container.add(avatarHit);
 
     /* ---- Right side: Name ---- */
@@ -272,7 +273,8 @@ export class ProfilePopup {
 
     const nameHit = scene.add.zone(RIGHT_CENTER_X, nameBoxY, RIGHT_BOX_W, NAME_BOX_H)
       .setInteractive({ useHandCursor: true });
-    nameHit.on('pointerdown', () => this.startNameEditing());
+    nameHit.on('pointerover', () => this.scene.sound.play('sfx-hover'));
+    nameHit.on('pointerdown', () => { this.scene.sound.play('sfx-click'); this.startNameEditing(); });
     this.container.add(nameHit);
 
     /* ---- Right side: Spotify button ---- */
@@ -298,7 +300,9 @@ export class ProfilePopup {
     this.spotifyHit = scene.add.zone(cx + RIGHT_CENTER_X, cy + this.spotifyBtnY, RIGHT_BOX_W, SPOTIFY_BTN_H)
       .setDepth(POPUP_DEPTH + 2).setScrollFactor(0)
       .setInteractive({ useHandCursor: true }).setVisible(false);
+    this.spotifyHit.on('pointerover', () => this.scene.sound.play('sfx-hover'));
     this.spotifyHit.on('pointerdown', async () => {
+      this.scene.sound.play('sfx-click');
       if (isConnected()) {
         const confirmed = await this.disconnectModal.show();
         if (confirmed) {
@@ -407,7 +411,8 @@ export class ProfilePopup {
 
     const exitHit = scene.add.zone(0, EXIT_Y, EXIT_BTN_W, EXIT_BTN_H)
       .setInteractive({ useHandCursor: true });
-    exitHit.on('pointerdown', () => this.close());
+    exitHit.on('pointerover', () => this.scene.sound.play('sfx-hover'));
+    exitHit.on('pointerdown', () => { this.scene.sound.play('sfx-click'); this.close(); });
     this.container.add(exitHit);
 
     /* ---- Misc ---- */

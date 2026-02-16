@@ -93,6 +93,12 @@ export class PickupSystem {
     }
   }
 
+  setVisible(visible: boolean): void {
+    for (let i = 0; i < this.pool.length; i++) {
+      this.pool[i].setVisible(visible && this.pool[i].active);
+    }
+  }
+
   reset(): void {
     this.ammo = 0;
     for (let i = 0; i < this.pool.length; i++) {

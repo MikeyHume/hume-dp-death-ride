@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
 import { InputSystem } from './InputSystem';
 
+type SpeedupState = 'idle' | 'intro' | 'loop' | 'outro';
+
 export class PlayerSystem {
   private scene: Phaser.Scene;
   private input: InputSystem;
@@ -10,16 +12,24 @@ export class PlayerSystem {
   private playerSpeed: number = 0;  // the bike's forward speed
   private alive: boolean = true;
   private attacking: boolean = false;
+  private rocketLaunching: boolean = false;
+  private rocketFireCallback: (() => void) | null = null;
   private poweredUp: boolean = false;
   private renderOffsetX: number = 0; // visual-only X shift (attack sprite alignment)
   private renderOffsetY: number = 0; // visual-only Y shift (powered-up alignment)
   private invincible: boolean = false;
   private spectator: boolean = false;
+  private baseSpriteScaleX: number = 1; // base scale from setDisplaySize (before perspective)
+  private baseSpriteScaleY: number = 1;
 
   // Smooth speed model state
   private speedMultiplier: number = 0;  // current smooth multiplier (0 to MAX)
   private tapPressure: number = 0;      // accumulated tap intensity (decays over time)
   private graceTimer: number = 0;       // countdown before decel after releasing space
+
+  // Speed-up animation state
+  private speedupState: SpeedupState = 'idle';
+  private noTapTimer: number = 0;       // time since last space tap
 
   constructor(scene: Phaser.Scene, input: InputSystem) {
     this.scene = scene;
@@ -34,7 +44,7 @@ export class PlayerSystem {
     // Scale sprite to PLAYER_DISPLAY_HEIGHT, preserving frame aspect ratio
     const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
     const displayW = displayH * (TUNING.PLAYER_FRAME_WIDTH / TUNING.PLAYER_FRAME_HEIGHT);
-    this.sprite.setDisplaySize(displayW, displayH);
+    this.setBaseDisplaySize(displayW, displayH);
 
     this.sprite.play('player-ride');
   }
@@ -54,7 +64,7 @@ export class PlayerSystem {
         const halfH = TUNING.PLAYER_DISPLAY_HEIGHT / 2;
         this.sprite.y = Phaser.Math.Clamp(
           this.sprite.y + arrowDir * TUNING.PLAYER_ARROW_SPEED * dt,
-          TUNING.ROAD_TOP_Y,
+          TUNING.ROAD_TOP_Y - TUNING.PLAYER_RADIUS,
           TUNING.ROAD_BOTTOM_Y - halfH
         );
       }
@@ -129,6 +139,9 @@ export class PlayerSystem {
     // Convert multiplier to actual player speed
     this.playerSpeed = controlSpeed * this.speedMultiplier;
 
+    // --- Speed-up animation state machine ---
+    this.updateSpeedupAnimation(dt, tapped);
+
     // --- Horizontal drift ---
     if (this.spectator) {
       // Spectator: lock X to road center, force speed to match road
@@ -154,10 +167,112 @@ export class PlayerSystem {
     }
 
     // Reapply render offsets for display (visual only, stripped next frame)
-    this.renderOffsetX = this.attacking ? TUNING.PLAYER_ATTACK_OFFSET_X : (this.poweredUp ? TUNING.POWERED_OFFSET_X : 0);
-    this.renderOffsetY = this.poweredUp && !this.attacking ? TUNING.POWERED_OFFSET_Y : 0;
+    const inSpeedup = this.speedupState !== 'idle';
+    this.renderOffsetX = this.rocketLaunching ? TUNING.ROCKET_LAUNCHER_OFFSET_X : (this.attacking ? TUNING.PLAYER_ATTACK_OFFSET_X : (this.poweredUp ? TUNING.POWERED_OFFSET_X : (inSpeedup ? TUNING.SPEEDUP_OFFSET_X : 0)));
+    this.renderOffsetY = this.rocketLaunching ? TUNING.ROCKET_LAUNCHER_OFFSET_Y : (this.attacking ? 0 : (this.poweredUp ? TUNING.POWERED_OFFSET_Y : (inSpeedup ? TUNING.SPEEDUP_OFFSET_Y : 0)));
     this.sprite.x += this.renderOffsetX;
     this.sprite.y += this.renderOffsetY;
+
+    // Apply perspective scale based on Y position
+    const perspScale = this.getPerspectiveScale();
+    this.sprite.setScale(this.baseSpriteScaleX * perspScale, this.baseSpriteScaleY * perspScale);
+  }
+
+  /** Manage speed-up animation transitions based on input and speed state */
+  private updateSpeedupAnimation(dt: number, tapped: boolean): void {
+    // Speed-up animation is suppressed during attack or powered-up (rage)
+    if (this.attacking || this.poweredUp) return;
+
+    // Only actual taps keep the speed-up alive (holding space does not)
+    if (tapped) {
+      this.noTapTimer = 0;
+    } else {
+      this.noTapTimer += dt;
+    }
+
+    const timedOut = this.noTapTimer >= TUNING.SPEEDUP_NO_TAP_TIMEOUT;
+
+    switch (this.speedupState) {
+      case 'idle': {
+        // Start speed-up intro on first tap
+        if (tapped) {
+          this.speedupState = 'intro';
+          this.sprite.removeAllListeners('animationcomplete');
+          this.sprite.play('player-speedup-intro');
+          this.applySpeedupDisplaySize();
+
+          this.sprite.once('animationcomplete', () => {
+            if (this.speedupState === 'intro') {
+              this.speedupState = 'loop';
+              this.sprite.play('player-speedup-loop');
+            }
+          });
+        }
+        break;
+      }
+      case 'intro': {
+        // Stop tapping → play outro
+        if (timedOut) {
+          this.transitionToOutro();
+        }
+        break;
+      }
+      case 'loop': {
+        // Stop tapping → play outro
+        if (timedOut) {
+          this.transitionToOutro();
+        }
+        break;
+      }
+      case 'outro': {
+        // Outro plays to completion via animationcomplete listener
+        // If player taps again during outro, restart speed-up
+        if (tapped) {
+          this.speedupState = 'intro';
+          this.sprite.removeAllListeners('animationcomplete');
+          this.sprite.play('player-speedup-intro');
+          this.applySpeedupDisplaySize();
+
+          this.sprite.once('animationcomplete', () => {
+            if (this.speedupState === 'intro') {
+              this.speedupState = 'loop';
+              this.sprite.play('player-speedup-loop');
+            }
+          });
+        }
+        break;
+      }
+    }
+  }
+
+  /** Transition from intro/loop to outro, then back to ride */
+  private transitionToOutro(): void {
+    this.speedupState = 'outro';
+    this.sprite.removeAllListeners('animationcomplete');
+    this.sprite.play('player-speedup-outro');
+
+    this.sprite.once('animationcomplete', () => {
+      if (this.speedupState === 'outro') {
+        this.speedupState = 'idle';
+        this.sprite.play('player-ride');
+        this.applyRideDisplaySize();
+      }
+    });
+  }
+
+  /** Apply display size for speed-up spritesheet frames */
+  private applySpeedupDisplaySize(): void {
+    const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
+    const s = TUNING.SPEEDUP_SCALE;
+    const speedupW = displayH * s * (TUNING.SPEEDUP_FRAME_WIDTH / TUNING.SPEEDUP_FRAME_HEIGHT);
+    this.setBaseDisplaySize(speedupW, displayH * s);
+  }
+
+  /** Apply display size for normal ride spritesheet frames */
+  private applyRideDisplaySize(): void {
+    const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
+    const rideW = displayH * (TUNING.PLAYER_FRAME_WIDTH / TUNING.PLAYER_FRAME_HEIGHT);
+    this.setBaseDisplaySize(rideW, displayH);
   }
 
   setInvincible(value: boolean): void {
@@ -183,7 +298,7 @@ export class PlayerSystem {
     this.sprite.removeAllListeners('animationcomplete');
     this.sprite.play('player-attack');
     const attackW = displayH * (TUNING.PLAYER_ATTACK_FRAME_WIDTH / TUNING.PLAYER_ATTACK_FRAME_HEIGHT);
-    this.sprite.setDisplaySize(attackW, displayH);
+    this.setBaseDisplaySize(attackW, displayH);
 
     this.sprite.once('animationcomplete', () => {
       this.attacking = false;
@@ -191,17 +306,91 @@ export class PlayerSystem {
         this.sprite.play('player-powered-loop');
         const s = TUNING.POWERED_SCALE;
         const poweredW = displayH * s * (TUNING.POWERED_FRAME_WIDTH / TUNING.POWERED_FRAME_HEIGHT);
-        this.sprite.setDisplaySize(poweredW, displayH * s);
+        this.setBaseDisplaySize(poweredW, displayH * s);
+      } else if (this.speedupState === 'intro' || this.speedupState === 'loop') {
+        // Resume speed-up loop after attack
+        this.speedupState = 'loop';
+        this.sprite.play('player-speedup-loop');
+        this.applySpeedupDisplaySize();
+      } else if (this.speedupState === 'outro') {
+        // Continue outro after attack
+        this.sprite.play('player-speedup-outro');
+        this.applySpeedupDisplaySize();
+        this.sprite.once('animationcomplete', () => {
+          if (this.speedupState === 'outro') {
+            this.speedupState = 'idle';
+            this.sprite.play('player-ride');
+            this.applyRideDisplaySize();
+          }
+        });
       } else {
         this.sprite.play('player-ride');
-        const rideW = displayH * (TUNING.PLAYER_FRAME_WIDTH / TUNING.PLAYER_FRAME_HEIGHT);
-        this.sprite.setDisplaySize(rideW, displayH);
+        this.applyRideDisplaySize();
       }
     });
   }
 
+  /** Play rocket launcher animation; returns false if already attacking. Fires callback on frame ROCKET_LAUNCHER_FIRE_FRAME. */
+  playRocketLaunch(onFire: () => void): boolean {
+    if (this.attacking) return false;
+    this.attacking = true;
+    this.rocketLaunching = true;
+    this.rocketFireCallback = onFire;
+
+    const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
+    const s = TUNING.ROCKET_LAUNCHER_SCALE;
+    const launchW = displayH * s * (TUNING.ROCKET_LAUNCHER_FRAME_WIDTH / TUNING.ROCKET_LAUNCHER_FRAME_HEIGHT);
+    this.sprite.removeAllListeners('animationcomplete');
+    this.sprite.removeAllListeners('animationupdate');
+    this.sprite.play('player-rocket-launch');
+    this.setBaseDisplaySize(launchW, displayH * s);
+
+    // Fire the rocket when the target frame plays
+    this.sprite.on('animationupdate', (_anim: Phaser.Animations.Animation, frame: Phaser.Animations.AnimationFrame) => {
+      if (this.rocketLaunching && frame.index === TUNING.ROCKET_LAUNCHER_FIRE_FRAME && this.rocketFireCallback) {
+        this.rocketFireCallback();
+        this.rocketFireCallback = null;
+      }
+    });
+
+    this.sprite.once('animationcomplete', () => {
+      this.attacking = false;
+      this.rocketLaunching = false;
+      this.rocketFireCallback = null;
+      this.sprite.removeAllListeners('animationupdate');
+      if (this.poweredUp) {
+        this.sprite.play('player-powered-loop');
+        const ps = TUNING.POWERED_SCALE;
+        const poweredW = displayH * ps * (TUNING.POWERED_FRAME_WIDTH / TUNING.POWERED_FRAME_HEIGHT);
+        this.setBaseDisplaySize(poweredW, displayH * ps);
+      } else if (this.speedupState === 'intro' || this.speedupState === 'loop') {
+        this.speedupState = 'loop';
+        this.sprite.play('player-speedup-loop');
+        this.applySpeedupDisplaySize();
+      } else if (this.speedupState === 'outro') {
+        this.sprite.play('player-speedup-outro');
+        this.applySpeedupDisplaySize();
+        this.sprite.once('animationcomplete', () => {
+          if (this.speedupState === 'outro') {
+            this.speedupState = 'idle';
+            this.sprite.play('player-ride');
+            this.applyRideDisplaySize();
+          }
+        });
+      } else {
+        this.sprite.play('player-ride');
+        this.applyRideDisplaySize();
+      }
+    });
+
+    return true;
+  }
+
   playPoweredUp(): void {
     this.poweredUp = true;
+    // Cancel any speed-up state — rage takes priority
+    this.speedupState = 'idle';
+    this.noTapTimer = 0;
     if (this.attacking) return; // attack completion will switch to powered-up loop
 
     const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
@@ -209,7 +398,7 @@ export class PlayerSystem {
     const poweredW = displayH * s * (TUNING.POWERED_FRAME_WIDTH / TUNING.POWERED_FRAME_HEIGHT);
     this.sprite.removeAllListeners('animationcomplete');
     this.sprite.play('player-powered-intro');
-    this.sprite.setDisplaySize(poweredW, displayH * s);
+    this.setBaseDisplaySize(poweredW, displayH * s);
 
     this.sprite.once('animationcomplete', () => {
       if (this.poweredUp && !this.attacking) {
@@ -224,15 +413,17 @@ export class PlayerSystem {
 
     this.sprite.removeAllListeners('animationcomplete');
     this.sprite.play('player-ride');
-    const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
-    const rideW = displayH * (TUNING.PLAYER_FRAME_WIDTH / TUNING.PLAYER_FRAME_HEIGHT);
-    this.sprite.setDisplaySize(rideW, displayH);
+    this.applyRideDisplaySize();
   }
 
   kill(): void {
     this.alive = false;
     this.attacking = false;
+    this.rocketLaunching = false;
+    this.rocketFireCallback = null;
     this.poweredUp = false;
+    this.speedupState = 'idle';
+    this.noTapTimer = 0;
     console.log(`DEATH at X=${Math.round(this.sprite.x)}`);
   }
 
@@ -245,16 +436,19 @@ export class PlayerSystem {
     this.graceTimer = 0;
     this.alive = true;
     this.attacking = false;
+    this.rocketLaunching = false;
+    this.rocketFireCallback = null;
     this.poweredUp = false;
     this.invincible = false;
+    this.speedupState = 'idle';
+    this.noTapTimer = 0;
     // Don't reset spectator — it persists across restarts (toggled by debug key)
     this.renderOffsetX = 0;
     this.renderOffsetY = 0;
     this.sprite.removeAllListeners('animationcomplete');
+    this.sprite.removeAllListeners('animationupdate');
     this.sprite.play('player-ride');
-    const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
-    const rideW = displayH * (TUNING.PLAYER_FRAME_WIDTH / TUNING.PLAYER_FRAME_HEIGHT);
-    this.sprite.setDisplaySize(rideW, displayH);
+    this.applyRideDisplaySize();
   }
 
   isAlive(): boolean {
@@ -271,6 +465,22 @@ export class PlayerSystem {
 
   getPlayerSpeed(): number {
     return this.playerSpeed;
+  }
+
+  /** Set display size and store base scales (before perspective multiplier) */
+  private setBaseDisplaySize(w: number, h: number): void {
+    this.sprite.setDisplaySize(w, h);
+    this.baseSpriteScaleX = this.sprite.scaleX;
+    this.baseSpriteScaleY = this.sprite.scaleY;
+  }
+
+  /** Compute perspective scale from Y position (top of road = SCALE_TOP, bottom = SCALE_BOTTOM) */
+  private getPerspectiveScale(): number {
+    const t = Phaser.Math.Clamp(
+      (this.sprite.y - TUNING.ROAD_TOP_Y) / (TUNING.ROAD_BOTTOM_Y - TUNING.ROAD_TOP_Y),
+      0, 1
+    );
+    return TUNING.PLAYER_SCALE_TOP + t * (TUNING.PLAYER_SCALE_BOTTOM - TUNING.PLAYER_SCALE_TOP);
   }
 
   setVisible(visible: boolean): void {
