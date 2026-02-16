@@ -64,6 +64,7 @@ export class BootScene extends Phaser.Scene {
     // UI assets
     this.load.image('spotify-text-logo', 'ui/spotify_text_logo_.png');
     this.load.image('sign-in', 'ui/sign_in.png');
+    this.load.image('cursor', 'ui/cursor.png');
 
     // Tutorial assets
     this.load.image('tutorial-skip', 'assets/tutorial/skip.png');
@@ -71,7 +72,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('tutorial-obstacles', 'assets/tutorial/obstacles.jpg');
     for (let i = 0; i < TUNING.TUTORIAL_CONTROLS_FRAMES; i++) {
       const idx = String(i).padStart(2, '0');
-      this.load.image(`tutorial-controls-${idx}`, `assets/tutorial/controls/controls/controls_${idx}.jpg`);
+      this.load.image(`tutorial-controls-${idx}`, `assets/tutorial/controls_v02/controls_v2_${idx}.jpg`);
     }
     for (let i = 0; i < TUNING.TUTORIAL_RAGE_FRAMES; i++) {
       this.load.image(`tutorial-rage-${i}`, `assets/tutorial/rage/rage/rage_${i}.jpg`);

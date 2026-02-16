@@ -32,6 +32,7 @@
       height: 100%;
       background: #000;
       overflow: hidden;
+      cursor: none;
     }
     #game-container {
       width: 100%;
@@ -56,6 +57,11 @@
       --bios-jitter-amount:     1px;     /* px of vertical jitter            */
       --bios-font-size:         clamp(12px, 2vw, 18px);
       --bios-line-height:       1.8;
+      --bios-title-font:        'Alagard', 'Courier New', monospace;
+      --bios-title-size:        clamp(16px, 3vw, 42px);
+      --bios-scale:             3;             /* scale multiplier for entire BIOS group */
+      --bios-bar-bottom:        200px;          /* bar distance from bottom of screen     */
+      --bios-text-gap:          30px;          /* gap between text bottom and bar top    */
     }
 
     #boot-overlay {
@@ -63,10 +69,6 @@
       inset: 0;
       z-index: 99999;
       background: #000;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
       font-family: 'Early GameBoy', 'Courier New', monospace;
       color: var(--bios-color);
       animation: bios-flicker var(--bios-flicker-speed) infinite alternate;
@@ -109,30 +111,46 @@
       100% { transform: translateY(var(--bios-jitter-amount)); }
     }
 
+    #boot-content {
+      position: absolute;
+      bottom: var(--bios-bar-bottom);
+      left: 0;
+      right: 0;
+      width: clamp(240px, 40vw, 420px);
+      margin: 0 auto;
+      transform: scale(var(--bios-scale));
+      transform-origin: bottom center;
+      z-index: 1;
+    }
     #boot-lines {
       text-align: left;
       font-size: var(--bios-font-size);
       line-height: var(--bios-line-height);
       text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow),
                    0 0 2px var(--bios-color);
-      z-index: 1;
       animation: bios-jitter var(--bios-jitter-speed) infinite alternate;
-      min-width: 280px;
-      padding: 0 24px;
+      margin-bottom: var(--bios-text-gap);
     }
     #boot-lines .line {
-      opacity: 0;
       white-space: pre;
+      height: 0;
+      overflow: hidden;
     }
-    #boot-lines .line.visible { opacity: 1; }
+    #boot-lines .line.visible {
+      height: auto;
+      overflow: visible;
+    }
+    #boot-lines .line:first-child {
+      font-family: var(--bios-title-font);
+      font-size: var(--bios-title-size);
+    }
 
     #boot-bar-wrap {
-      margin-top: 24px;
-      width: clamp(240px, 40vw, 420px);
+      width: 100%;
       height: 14px;
+      animation: bios-jitter var(--bios-jitter-speed) infinite alternate;
       border: 1px solid var(--bios-color);
       background: #111;
-      z-index: 1;
       box-shadow: 0 0 6px var(--bios-glow);
       overflow: hidden;
     }
@@ -148,18 +166,28 @@
 <body>
   <!-- BIOS boot overlay — renders instantly before any JS -->
   <div id="boot-overlay">
-    <div id="boot-lines">
-      <div class="line" data-text="DP MOTO BIOS v0.1"></div>
-      <div class="line" data-text="VIDEO  .......... OK"></div>
-      <div class="line" data-text="AUDIO  .......... OK"></div>
-      <div class="line" data-text="LOADING GAME ....."></div>
-    </div>
-    <div id="boot-bar-wrap">
-      <div id="boot-bar-fill"></div>
+    <div id="boot-content">
+      <div id="boot-lines">
+        <div class="line" data-text="DP MOTO BIOS      v0.1"></div>
+        <div class="line" data-text="VIDEO  ............... OK"></div>
+        <div class="line" data-text="AUDIO  ............... OK"></div>
+        <div class="line" data-text="LOADING GAME ............"></div>
+      </div>
+      <div id="boot-bar-wrap">
+        <div id="boot-bar-fill"></div>
+      </div>
     </div>
   </div>
 
   <script>
+  // ---- CURSOR TUNING (shared between BIOS overlay & in-game) ----
+  window.__cursorConfig = {
+    size: 48,              // display height in px
+    strokeW: 0,            // stroke thickness in px (0 = no stroke)
+    tint: 0xff0000,        // fill color (red)
+    strokeColor: 0xffffff, // stroke color (white)
+  };
+
   // Prevent unhandled errors from crashing iOS Safari (which reloads the page)
   window.addEventListener('error', function(e) {
     console.error('Uncaught error:', e.error || e.message);
@@ -180,6 +208,7 @@
     var fill = document.getElementById('boot-bar-fill');
     var lineEls = document.querySelectorAll('#boot-lines .line');
     var overlay = document.getElementById('boot-overlay');
+    var bootLinesEl = document.getElementById('boot-lines');
 
     // Build flat character list, count dots/non-dots, assign progress thresholds
     var chars = [];
@@ -188,7 +217,6 @@
     for (var i = 0; i < lineEls.length; i++) {
       var text = lineEls[i].getAttribute('data-text') || '';
       lineEls[i].textContent = '';
-      lineEls[i].classList.add('visible');
       for (var j = 0; j < text.length; j++) {
         var isDot = text[j] === '.';
         chars.push({ el: lineEls[i], idx: j, fullText: text, isDot: isDot, threshold: 0 });
@@ -221,6 +249,7 @@
 
       var c = chars[revealed];
       if (c.isDot) {
+        if (!c.el.classList.contains('visible')) c.el.classList.add('visible');
         c.el.textContent = c.fullText.substring(0, c.idx + 1);
         revealed++;
         scheduleDrip(DOT_POP_MS);
@@ -228,6 +257,7 @@
         // Batch all consecutive non-dots whose thresholds are earned
         while (revealed < chars.length && !chars[revealed].isDot && chars[revealed].threshold <= targetProgress) {
           var ch = chars[revealed];
+          if (!ch.el.classList.contains('visible')) ch.el.classList.add('visible');
           ch.el.textContent = ch.fullText.substring(0, ch.idx + 1);
           revealed++;
         }
@@ -246,6 +276,7 @@
 
     function revealAll() {
       for (var m = 0; m < lineEls.length; m++) {
+        lineEls[m].classList.add('visible');
         lineEls[m].textContent = lineEls[m].getAttribute('data-text') || '';
       }
       revealed = chars.length;
@@ -261,6 +292,7 @@
         overlay.style.opacity = '0';
         setTimeout(function() {
           overlay.classList.add('hidden');
+          if (bootCursor && bootCursor.parentNode) bootCursor.parentNode.removeChild(bootCursor);
         }, 320);
       }, 350);
     }
@@ -285,6 +317,43 @@
         tryDismiss();
       }
     };
+
+    // --- Custom cursor (reads from window.__cursorConfig) ---
+    var cc = window.__cursorConfig;
+    var bootCursor = document.createElement('div');
+    bootCursor.style.cssText = 'position:fixed;pointer-events:none;z-index:1;display:none;' +
+      'animation:bios-jitter var(--bios-jitter-speed) infinite alternate;';
+    var cursorImg = new Image();
+    cursorImg.onload = function() {
+      var aspect = cursorImg.naturalWidth / cursorImg.naturalHeight;
+      var h = cc.size;
+      var sw = cc.strokeW;
+      var mainH = h, mainW = Math.round(h * aspect);
+      var tintHex = '#' + cc.tint.toString(16).padStart(6, '0');
+      var strokeHex = '#' + cc.strokeColor.toString(16).padStart(6, '0');
+      var mask = '-webkit-mask-image:url(ui/cursor.png);mask-image:url(ui/cursor.png);' +
+        '-webkit-mask-size:contain;mask-size:contain;' +
+        '-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;' +
+        '-webkit-mask-position:center;mask-position:center;' +
+        'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);';
+      if (sw > 0) {
+        var sH = h + sw * 2, sW = Math.round(sH * aspect);
+        var strokeDiv = document.createElement('div');
+        strokeDiv.style.cssText = mask + 'width:' + sW + 'px;height:' + sH + 'px;background:' + strokeHex + ';';
+        bootCursor.appendChild(strokeDiv);
+      }
+      var mainDiv = document.createElement('div');
+      mainDiv.style.cssText = mask + 'width:' + mainW + 'px;height:' + mainH + 'px;background:' + tintHex + ';';
+      bootCursor.appendChild(mainDiv);
+      overlay.appendChild(bootCursor);
+    };
+    cursorImg.src = 'ui/cursor.png';
+    document.addEventListener('mousemove', function(e) {
+      if (dismissed) return;
+      bootCursor.style.display = '';
+      bootCursor.style.left = e.clientX + 'px';
+      bootCursor.style.top = e.clientY + 'px';
+    });
   })();
   </script>
 

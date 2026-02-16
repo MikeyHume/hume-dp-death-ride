@@ -20,6 +20,9 @@ export const TUNING = {
   POWERED_FRAME_HEIGHT: 697,      // px per frame in powered-up sprite sheet
   POWERED_ANIM_FRAMES: 18,        // total frames (6×3 grid)
   POWERED_LOOP_START: 14,         // first frame of the looping section (last 4 frames: 14-17)
+  POWERED_SCALE: 1.0,             // extra scale multiplier for powered-up sprite (1.0 = no change, 1.2 = 20% bigger)
+  POWERED_OFFSET_X: 0,            // px horizontal offset for powered-up sprite (positive = right)
+  POWERED_OFFSET_Y: 0,            // px vertical offset for powered-up sprite (positive = down)
 
   // Player dimensions and appearance
   PLAYER_DISPLAY_HEIGHT: 150,    // sprite scaled so height = this; width auto from aspect ratio
@@ -160,7 +163,6 @@ export const TUNING = {
   RAGE_CAR_KILL_BONUS: 250,         // score bonus per car destroyed during rage mode
   RAGE_SPEED_BOOST_PER_KILL: 0,     // permanent road speed increase (px/sec) per obstacle destroyed with katana
   RAGE_MUSIC_VOLUME_BOOST: 1.4,      // music volume multiplied by this during rage (1.0 = no change)
-  RAGE_VISUAL_DISTORTION: 0.7,      // CRT glitch intensity during rage (0 = off, 1 = max gnarly)
   RAGE_AUDIO_DISTORTION: 0.5,       // engine audio distortion during rage (0 = clean, 1 = full fuzz)
   RAGE_END_EXPLOSION_SCALE: 5.0,     // explosion size multiplier when rage ends (covers player)
   RAGE_ZOOM_LEVEL: 1.35,              // camera zoom during rage (1.0 = no zoom, higher = more zoomed)
@@ -233,6 +235,13 @@ export const TUNING = {
   MOBILE_TAP_THRESHOLD: 180,       // ms — touch shorter than this = tap (boost)
   MOBILE_ROCKET_HOLD: 1000,        // ms — hold right side this long to fire rocket
   MOBILE_SAFE_TOP: 20,             // px safe area padding when mobile
+
+  // Custom cursor — values read from window.__cursorConfig (defined in index.html)
+  CURSOR_SIZE: ((window as any).__cursorConfig?.size ?? 48) as number,
+  CURSOR_TINT: ((window as any).__cursorConfig?.tint ?? 0xff0000) as number,
+  CURSOR_STROKE_W: ((window as any).__cursorConfig?.strokeW ?? 0) as number,
+  CURSOR_STROKE_COLOR: ((window as any).__cursorConfig?.strokeColor ?? 0xffffff) as number,
+  CURSOR_DEPTH: 9998,              // render depth (on top of game, under debug)
 
   // Debug — set to true to enable hotkeys (0 = instant rage)
   DEBUG_KEYS: true,

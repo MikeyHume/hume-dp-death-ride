@@ -42,9 +42,9 @@ const DEBUG_HOTKEYS = {
   gameplayInfo:   { key: 'E',    active: false },  // toggle gameplay debug text (pos, speed, diff, time)
   musicSource:    { key: 'W',    active: false },  // toggle music source label (SPOTIFY / YOUTUBE)
   jumpLeaderboard:{ key: 'Q',    active: false },  // skip straight to death/leaderboard screen
-  toggleCRT:      { key: 'O',    active: false },  // toggle CRT shader on/off
+  toggleCRT:      { key: 'O',    active: true },  // toggle CRT shader on/off
   crtDebug:       { key: 'P',    active: false },  // toggle CRT tuning overlay
-  instantRage:    { key: 'ZERO', active: false },  // trigger instant rage mode
+  instantRage:    { key: 'ZERO',    active: true },  // trigger instant rage mode
 };
 
 // ── Death screen leaderboard: Top 3 group ──
@@ -91,6 +91,10 @@ export class GameScene extends Phaser.Scene {
   private profilePopup!: ProfilePopup;
   private perfSystem!: PerfSystem;
   private orientationOverlay: OrientationOverlay | null = null;
+
+  // Custom cursor (rendered under CRT)
+  private cursorStroke?: Phaser.GameObjects.Image;
+  private cursorMain!: Phaser.GameObjects.Image;
 
   // Weekly seed
   private weekKey!: string;
@@ -228,8 +232,12 @@ export class GameScene extends Phaser.Scene {
         }
         return;
       }
-      // Debug keys — don't advance game state
-      const debugKeys = Object.values(DEBUG_HOTKEYS).map(h => h.key.toLowerCase());
+      // Debug keys — don't advance game state (map Phaser key names to event.key values)
+      const phaserToEventKey: Record<string, string> = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9' };
+      const debugKeys = Object.values(DEBUG_HOTKEYS).map(h => {
+        const lk = h.key.toLowerCase();
+        return phaserToEventKey[lk] || lk;
+      });
       if (debugKeys.includes(k)) return;
       // Any non-Escape key dismisses the skip warning
       if (this.nameSkipConfirmPending) {
@@ -726,6 +734,27 @@ export class GameScene extends Phaser.Scene {
     // --- CRT post-processing ---
     this.cameras.main.setPostPipeline(CRTPipeline);
 
+    // --- Custom cursor (under CRT shader) ---
+    this.game.canvas.style.cursor = 'none';
+    const cursorTex = this.textures.get('cursor').getSourceImage();
+    const aspect = cursorTex.width / cursorTex.height;
+    const curH = TUNING.CURSOR_SIZE;
+    const curW = curH * aspect;
+    if (TUNING.CURSOR_STROKE_W > 0) {
+      const strokeH = curH + TUNING.CURSOR_STROKE_W * 2;
+      const strokeW = strokeH * aspect;
+      this.cursorStroke = this.add.image(0, 0, 'cursor')
+        .setDisplaySize(strokeW, strokeH)
+        .setTintFill(TUNING.CURSOR_STROKE_COLOR)
+        .setDepth(TUNING.CURSOR_DEPTH)
+        .setScrollFactor(0);
+    }
+    this.cursorMain = this.add.image(0, 0, 'cursor')
+      .setDisplaySize(curW, curH)
+      .setTintFill(TUNING.CURSOR_TINT)
+      .setDepth(TUNING.CURSOR_DEPTH + 1)
+      .setScrollFactor(0);
+
     // CRT debug overlay (DOM element — not affected by CRT shader)
     this.crtDebugEl = document.createElement('pre');
     Object.assign(this.crtDebugEl.style, {
@@ -774,7 +803,6 @@ export class GameScene extends Phaser.Scene {
           this.playerSystem.playPoweredUp();
           this.musicPlayer.setVolumeBoost(TUNING.RAGE_MUSIC_VOLUME_BOOST);
           this.audioSystem.setDistortion(TUNING.RAGE_AUDIO_DISTORTION);
-          CRT_TUNING.rageDistortion = TUNING.RAGE_VISUAL_DISTORTION;
         }
       });
     }
@@ -782,6 +810,11 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number) {
     const dt = delta / 1000;
+
+    // Custom cursor follows pointer
+    const ptr = this.input.activePointer;
+    this.cursorMain.setPosition(ptr.x, ptr.y);
+    this.cursorStroke?.setPosition(ptr.x, ptr.y);
 
     this.perfSystem.update(dt);
     this.inputSystem.update(dt);
@@ -934,8 +967,15 @@ export class GameScene extends Phaser.Scene {
       const t = Math.min(this.countdownPhaseTimer / dur, 1);
       this.blackOverlay.setAlpha(1 - t);
 
+      // Fade cursor out as game is revealed
+      const cursorAlpha = 1 - t;
+      this.cursorMain.setAlpha(cursorAlpha);
+      this.cursorStroke?.setAlpha(cursorAlpha);
+
       if (t >= 1) {
         this.blackOverlay.setVisible(false);
+        this.cursorMain.setVisible(false);
+        this.cursorStroke?.setVisible(false);
         this.countdownPhase = 'grace';
         this.countdownPhaseTimer = 0;
       }
@@ -963,6 +1003,10 @@ export class GameScene extends Phaser.Scene {
     this.tutorialRageSprite.setVisible(false);
     this.tutorialRageSprite.stop();
     this.tutorialSkipBtn.setVisible(false);
+
+    // Restore cursor visibility
+    this.cursorMain.setVisible(true).setAlpha(1);
+    this.cursorStroke?.setVisible(true).setAlpha(1);
 
     // Clean up any active game state
     this.countdownPhase = 'done';
@@ -1329,6 +1373,7 @@ export class GameScene extends Phaser.Scene {
       const rampDown = Math.min(this.rageTimer / TUNING.RAGE_SPEED_RAMP_DOWN, 1); // 1→0 over ramp-down
       rageFactor = Math.min(rampUp, rampDown); // whichever is lower
     }
+    CRT_TUNING.rageDistortion = CRT_TUNING.rageDistortionMax * rageFactor;
     const rageSpeedFactor = 1 + (TUNING.RAGE_SPEED_MULTIPLIER - 1) * rageFactor;
     const roadSpeed = baseRoadSpeed * rageSpeedFactor;
 
@@ -1399,7 +1444,6 @@ export class GameScene extends Phaser.Scene {
             this.playerSystem.playPoweredUp();
             this.musicPlayer.setVolumeBoost(TUNING.RAGE_MUSIC_VOLUME_BOOST);
             this.audioSystem.setDistortion(TUNING.RAGE_AUDIO_DISTORTION);
-            CRT_TUNING.rageDistortion = TUNING.RAGE_VISUAL_DISTORTION;
           }
         }
       }
@@ -1481,7 +1525,6 @@ export class GameScene extends Phaser.Scene {
         this.playerSystem.stopPoweredUp();
         this.musicPlayer.setVolumeBoost(1.0);
         this.audioSystem.setDistortion(0);
-        CRT_TUNING.rageDistortion = 0;
 
         // End-of-rage shockwave: big explosion + destroy all obstacles to protect player
         this.obstacleSystem.destroyAllOnScreen(TUNING.RAGE_END_EXPLOSION_SCALE);

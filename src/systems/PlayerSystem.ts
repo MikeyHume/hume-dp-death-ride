@@ -12,6 +12,7 @@ export class PlayerSystem {
   private attacking: boolean = false;
   private poweredUp: boolean = false;
   private renderOffsetX: number = 0; // visual-only X shift (attack sprite alignment)
+  private renderOffsetY: number = 0; // visual-only Y shift (powered-up alignment)
   private invincible: boolean = false;
 
   // Smooth speed model state
@@ -40,8 +41,9 @@ export class PlayerSystem {
   update(dt: number, roadSpeed: number, baseRoadSpeed?: number): void {
     if (!this.alive) return;
 
-    // Strip last frame's render offset so all logic uses the clean position
+    // Strip last frame's render offsets so all logic uses the clean position
     this.sprite.x -= this.renderOffsetX;
+    this.sprite.y -= this.renderOffsetY;
 
     // Vertical: arrow keys (incremental) or mouse Y (absolute)
     // Arrow keys take over; mouse reclaims when moved
@@ -143,9 +145,11 @@ export class PlayerSystem {
       if (!this.invincible) this.kill();
     }
 
-    // Reapply render offset for display (visual only, stripped next frame)
-    this.renderOffsetX = this.attacking ? TUNING.PLAYER_ATTACK_OFFSET_X : 0;
+    // Reapply render offsets for display (visual only, stripped next frame)
+    this.renderOffsetX = this.attacking ? TUNING.PLAYER_ATTACK_OFFSET_X : (this.poweredUp ? TUNING.POWERED_OFFSET_X : 0);
+    this.renderOffsetY = this.poweredUp && !this.attacking ? TUNING.POWERED_OFFSET_Y : 0;
     this.sprite.x += this.renderOffsetX;
+    this.sprite.y += this.renderOffsetY;
   }
 
   setInvincible(value: boolean): void {
@@ -172,8 +176,9 @@ export class PlayerSystem {
       this.attacking = false;
       if (this.poweredUp) {
         this.sprite.play('player-powered-loop');
-        const poweredW = displayH * (TUNING.POWERED_FRAME_WIDTH / TUNING.POWERED_FRAME_HEIGHT);
-        this.sprite.setDisplaySize(poweredW, displayH);
+        const s = TUNING.POWERED_SCALE;
+        const poweredW = displayH * s * (TUNING.POWERED_FRAME_WIDTH / TUNING.POWERED_FRAME_HEIGHT);
+        this.sprite.setDisplaySize(poweredW, displayH * s);
       } else {
         this.sprite.play('player-ride');
         const rideW = displayH * (TUNING.PLAYER_FRAME_WIDTH / TUNING.PLAYER_FRAME_HEIGHT);
@@ -187,10 +192,11 @@ export class PlayerSystem {
     if (this.attacking) return; // attack completion will switch to powered-up loop
 
     const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
-    const poweredW = displayH * (TUNING.POWERED_FRAME_WIDTH / TUNING.POWERED_FRAME_HEIGHT);
+    const s = TUNING.POWERED_SCALE;
+    const poweredW = displayH * s * (TUNING.POWERED_FRAME_WIDTH / TUNING.POWERED_FRAME_HEIGHT);
     this.sprite.removeAllListeners('animationcomplete');
     this.sprite.play('player-powered-intro');
-    this.sprite.setDisplaySize(poweredW, displayH);
+    this.sprite.setDisplaySize(poweredW, displayH * s);
 
     this.sprite.once('animationcomplete', () => {
       if (this.poweredUp && !this.attacking) {
@@ -229,6 +235,7 @@ export class PlayerSystem {
     this.poweredUp = false;
     this.invincible = false;
     this.renderOffsetX = 0;
+    this.renderOffsetY = 0;
     this.sprite.removeAllListeners('animationcomplete');
     this.sprite.play('player-ride');
     const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;

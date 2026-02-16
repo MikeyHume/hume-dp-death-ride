@@ -2,55 +2,138 @@ import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
 import { loadOrCreateProfile, updateUsername, uploadAvatarAndSave, disconnectProfile } from '../systems/ProfileSystem';
 import { startLogin, isConnected, disconnect } from '../systems/SpotifyAuthSystem';
-import { fetchPlayerTop10, fetchWeeklyHistory } from '../systems/LeaderboardService';
+import { fetchPlayerTop10, fetchWeeklyHistory, type PlayerScore, type WeeklyHistoryEntry } from '../systems/LeaderboardService';
 import { getCurrentWeekKey } from '../util/time';
 import { DisconnectModal } from './DisconnectModal';
 
-// ---- Popup chrome ----
+// ── Popup chrome ──
 const POPUP_W = 690;
 const POPUP_H = 900;
 const POPUP_DEPTH = 1400;
+const POPUP_RADIUS = 20;
+const POPUP_BG = 0x1a1a2e;
+const POPUP_BG_ALPHA = 0.95;
+const POPUP_BORDER = 0x444466;
+const POPUP_BORDER_ALPHA = 0.8;
 const BACKDROP_ALPHA = 0.6;
+
+// ── Title ──
+const TITLE_Y = -POPUP_H / 2 + 50;
+const TITLE_FONT = '36px';
+const TITLE_COLOR = '#ffffff';
+
+// ── Avatar ──
 const AVATAR_RADIUS = 100;
 const AVATAR_TEX_SIZE = 512;
-const NAME_MAX_LENGTH = 10;
+const AVATAR_RING_WIDTH = 3;
+const AVATAR_RING_COLOR = 0xffffff;
+const AVATAR_RING_ALPHA = 0.8;
+const AVATAR_HINT_FONT = '22px';
+const AVATAR_HINT_COLOR = '#666666';
+const AVATAR_HINT_GAP = 40;              // space below avatar to "click to change"
 export const AVATAR_TEXTURE_KEY = 'profile-avatar';
 
-// ---- Header layout (avatar left, name+spotify right) ----
+// ── Header layout (avatar left, name+spotify right) ──
 const AVATAR_X = -190;                                    // avatar center, popup-relative
 const HEADER_Y = -POPUP_H / 2 + 200;                     // vertical center of header row
-const RIGHT_CENTER_X = 105;                               // center of right-side boxes
-const RIGHT_BOX_W = 300;                                  // name box / spotify btn width
-const NAME_BOX_H = 50;
-const SPOTIFY_BTN_H = 50;
-const NAME_LABEL_OFFSET_Y = -60;                          // from HEADER_Y
+const RIGHT_CENTER_X = 125;                               // center of right-side boxes
+const RIGHT_BOX_W = 350;                                  // name box / spotify btn width
+const SPOTIFY_BTN_H = 80;
+const NAME_LABEL_OFFSET_Y = -90;                          // from HEADER_Y (aligns NAME top with avatar top)
 const NAME_BOX_OFFSET_Y = NAME_LABEL_OFFSET_Y + 46;
-const SPOTIFY_BTN_OFFSET_Y = NAME_BOX_OFFSET_Y + 75;
-const SPOTIFY_CONTENT_SCALE = 1.0;
+const SPOTIFY_BTN_OFFSET_Y = AVATAR_RADIUS - SPOTIFY_BTN_H / 2;  // aligns spotify btn bottom with avatar bottom
+const SPOTIFY_CONTENT_SCALE =1.5;
 
-// ---- Save-progress hint ----
+// ── Name box ──
+const NAME_MAX_LENGTH = 10;
+const NAME_BOX_H = 50;
+const NAME_BOX_RADIUS = 8;
+const NAME_BOX_BG = 0x222244;
+const NAME_BOX_BG_ALPHA = 0.9;
+const NAME_BOX_BORDER = 0x666688;
+const NAME_BOX_BORDER_ALPHA = 0.6;
+const NAME_BOX_FOCUS_COLOR = 0x8888ff;
+const NAME_BOX_FOCUS_ALPHA = 0.9;
+const NAME_LABEL_FONT = '20px';
+const NAME_LABEL_COLOR = '#888888';
+const NAME_TEXT_FONT = '28px';
+const NAME_TEXT_COLOR = '#ffffff';
+
+// ── Save-progress hint ──
 const SAVE_HINT_FONT_SIZE = 30;
 const SAVE_HINT_TEXT = 'login to spotify to\nsave your progress';
 const SAVE_HINT_COLOR = '#888888';
 
-// ---- Scroll panel (easy-to-edit padding) ----
-const SCROLL_AREA_TOP = HEADER_Y + AVATAR_RADIUS + 50;   // below avatar + hint gap
-const SCROLL_AREA_BOTTOM = POPUP_H / 2 - 100;            // above exit btn
-const SCROLL_PADDING_TOP = 10;
+// ── Scroll panel ──
+const SCROLL_AREA_TOP = HEADER_Y + AVATAR_RADIUS + 69;   // below avatar + hint gap
+const SCROLL_AREA_BOTTOM = POPUP_H / 2 - 120;            // above exit btn
+const SCROLL_PADDING_TOP = 30;
 const SCROLL_PADDING_RIGHT = 30;
-const SCROLL_PADDING_BOTTOM = 10;
+const SCROLL_PADDING_BOTTOM = 30;
 const SCROLL_PADDING_LEFT = 30;
+const SCROLL_BG = 0x060608;
+const SCROLL_BG_ALPHA = 0.92;
+const SCROLL_BG_RADIUS = 12;
 
-// ---- Score styling ----
-const SECTION_HEADER_FONT = '22px';
-const SECTION_HEADER_COLOR = '#ffcc00';
-const SCORE_ROW_FONT = '20px';
-const SCORE_ROW_COLOR = '#cccccc';
-const SCORE_ROW_HEIGHT = 32;
-const SECTION_GAP = 30;
+// ── Scrollbar ──
+const SCROLLBAR_W = 6;
+const SCROLLBAR_TRACK_COLOR = 0x222233;
+const SCROLLBAR_TRACK_ALPHA = 0.5;
+const SCROLLBAR_THUMB_COLOR = 0x666688;
+const SCROLLBAR_THUMB_ALPHA = 0.8;
+const SCROLLBAR_THUMB_MIN_H = 30;
+const SCROLLBAR_INSET = 6;               // inset from edges of scroll area
 
-// ---- Exit button ----
+// ── Rainbow highlight for top-ranked scores ──
+const RAINBOW_COLORS = ['#FF0000', '#FF8800', '#FFFF00', '#00FF00', '#00CCFF', '#0044FF', '#FF00FF'];
+const RAINBOW_INTERVAL = 80;              // ms between color changes
+const RAINBOW_RANK_THRESHOLD = 10;        // ranks <= this get rainbow effect
+
+// ── High scores section — yellow headers ──
+const SCORES_HEADER_FONT = '22px';
+const SCORES_HEADER_COLOR = '#ffcc00';
+const SCORES_HEADER_GAP = 40;             // space below header text
+
+// ── High scores section — white row text ──
+const SCORES_ROW_FONT = '40px';
+const SCORES_ROW_COLOR = '#cccccc';
+const SCORES_ROW_H = 64;
+const SCORES_EMPTY_COLOR = '#666666';
+const SCORES_SECTION_GAP = 30;            // vertical gap between sections
+
+// ── Score row columns (X positions within scrollContent) ──
+const SCORES_LEFT_PAD = 20;              // padding from left edge of scroll area to place numbers
+const SCORES_RIGHT_PAD = SCORES_LEFT_PAD; // right padding matches left padding
+const SCORES_PLACE_W = 80;              // reserved width for place text ("10.")
+const SCORES_PLACE_X = -POPUP_W / 2 + SCROLL_PADDING_LEFT + SCORES_LEFT_PAD + SCORES_PLACE_W; // right edge — dots align here
+const SCORES_SCORE_COL_W = 280;         // estimated width of score column for centering
+const SCORES_SCORE_X = SCORES_SCORE_COL_W / 2; // right edge — centers scores in scroll area
+const SCORES_RANK_W = 120;              // reserved width for rank text ("#9999")
+const SCORES_RANK_X = POPUP_W / 2 - SCROLL_PADDING_RIGHT - SCORES_RIGHT_PAD - SCORES_RANK_W; // left edge of "#"
+const SCORES_WEEK_X = -POPUP_W / 2 + SCROLL_PADDING_LEFT + SCORES_LEFT_PAD; // left edge — same padding as place numbers
+
+// ── Exit button ──
 const EXIT_Y = POPUP_H / 2 - 60;
+const EXIT_BTN_W = 200;
+const EXIT_BTN_H = 50;
+const EXIT_BTN_RADIUS = 10;
+const EXIT_BTN_BG = 0x442222;
+const EXIT_BTN_STROKE = 0xff4444;
+const EXIT_BTN_STROKE_ALPHA = 0.6;
+
+// ── Exit button text ──
+const EXIT_TEXT_FONT = '28px';
+const EXIT_TEXT_COLOR = '#ff4444';
+
+// ── Spotify button ──
+const SPOTIFY_BTN_RADIUS =10;
+const SPOTIFY_BTN_BG_LOGIN = 0x1DB954;
+const SPOTIFY_BTN_BG_CONNECTED = 0x5a0b0b;
+
+// ── Spotify button text ──
+const SPOTIFY_TEXT_FONT = 22;
+const SPOTIFY_LOGO_H = 26;
+const SPOTIFY_LOGO_GAP = 8;
 
 export class ProfilePopup {
   private scene: Phaser.Scene;
@@ -89,6 +172,16 @@ export class ProfilePopup {
   private scrollAreaHeight: number;
   private wheelHandler: (e: WheelEvent) => void;
 
+  // Scrollbar
+  private scrollbarTrackGfx!: Phaser.GameObjects.Graphics;
+  private scrollbarThumbGfx!: Phaser.GameObjects.Graphics;
+  private scrollbarHit!: Phaser.GameObjects.Zone;
+  private scrollbarDragging = false;
+
+  // Rainbow highlight
+  private rainbowTexts: Phaser.GameObjects.Text[] = [];
+  private rainbowTimer: Phaser.Time.TimerEvent | null = null;
+
   // Disconnect modal
   private disconnectModal: DisconnectModal;
 
@@ -111,16 +204,16 @@ export class ProfilePopup {
 
     /* ---------- Panel BG ---------- */
     const panel = scene.add.graphics();
-    panel.fillStyle(0x1a1a2e, 0.95);
-    panel.fillRoundedRect(-POPUP_W / 2, -POPUP_H / 2, POPUP_W, POPUP_H, 20);
-    panel.lineStyle(2, 0x444466, 0.8);
-    panel.strokeRoundedRect(-POPUP_W / 2, -POPUP_H / 2, POPUP_W, POPUP_H, 20);
+    panel.fillStyle(POPUP_BG, POPUP_BG_ALPHA);
+    panel.fillRoundedRect(-POPUP_W / 2, -POPUP_H / 2, POPUP_W, POPUP_H, POPUP_RADIUS);
+    panel.lineStyle(2, POPUP_BORDER, POPUP_BORDER_ALPHA);
+    panel.strokeRoundedRect(-POPUP_W / 2, -POPUP_H / 2, POPUP_W, POPUP_H, POPUP_RADIUS);
     this.container.add(panel);
 
     /* ---------- Title ---------- */
     this.container.add(
-      scene.add.text(0, -POPUP_H / 2 + 50, 'PROFILE', {
-        fontSize: '36px', fontFamily: 'Early GameBoy', color: '#ffffff',
+      scene.add.text(0, TITLE_Y, 'PROFILE', {
+        fontSize: TITLE_FONT, fontFamily: 'Early GameBoy', color: TITLE_COLOR,
       }).setOrigin(0.5),
     );
 
@@ -130,13 +223,13 @@ export class ProfilePopup {
     this.avatarPlaceholder = scene.add.circle(AVATAR_X, avatarY, AVATAR_RADIUS, 0x000000, 1);
     this.container.add(this.avatarPlaceholder);
 
-    this.avatarRing = scene.add.circle(AVATAR_X, avatarY, AVATAR_RADIUS + 3, 0x000000, 0);
-    this.avatarRing.setStrokeStyle(3, 0xffffff, 0.8);
+    this.avatarRing = scene.add.circle(AVATAR_X, avatarY, AVATAR_RADIUS + AVATAR_RING_WIDTH, 0x000000, 0);
+    this.avatarRing.setStrokeStyle(AVATAR_RING_WIDTH, AVATAR_RING_COLOR, AVATAR_RING_ALPHA);
     this.container.add(this.avatarRing);
 
     this.container.add(
-      scene.add.text(AVATAR_X, avatarY + AVATAR_RADIUS + 20, 'click to change', {
-        fontSize: '16px', fontFamily: 'monospace', color: '#666666',
+      scene.add.text(AVATAR_X, avatarY + AVATAR_RADIUS + AVATAR_HINT_GAP, 'click to change', {
+        fontSize: AVATAR_HINT_FONT, fontFamily: 'monospace', color: AVATAR_HINT_COLOR,
       }).setOrigin(0.5),
     );
 
@@ -155,25 +248,25 @@ export class ProfilePopup {
 
     this.container.add(
       scene.add.text(RIGHT_CENTER_X, nameLabelY, 'NAME', {
-        fontSize: '20px', fontFamily: 'monospace', color: '#888888',
+        fontSize: NAME_LABEL_FONT, fontFamily: 'monospace', color: NAME_LABEL_COLOR,
       }).setOrigin(0.5),
     );
 
     const nameBox = scene.add.graphics();
-    nameBox.fillStyle(0x222244, 0.9);
-    nameBox.fillRoundedRect(RIGHT_CENTER_X - RIGHT_BOX_W / 2, nameBoxY - NAME_BOX_H / 2, RIGHT_BOX_W, NAME_BOX_H, 8);
-    nameBox.lineStyle(1, 0x666688, 0.6);
-    nameBox.strokeRoundedRect(RIGHT_CENTER_X - RIGHT_BOX_W / 2, nameBoxY - NAME_BOX_H / 2, RIGHT_BOX_W, NAME_BOX_H, 8);
+    nameBox.fillStyle(NAME_BOX_BG, NAME_BOX_BG_ALPHA);
+    nameBox.fillRoundedRect(RIGHT_CENTER_X - RIGHT_BOX_W / 2, nameBoxY - NAME_BOX_H / 2, RIGHT_BOX_W, NAME_BOX_H, NAME_BOX_RADIUS);
+    nameBox.lineStyle(1, NAME_BOX_BORDER, NAME_BOX_BORDER_ALPHA);
+    nameBox.strokeRoundedRect(RIGHT_CENTER_X - RIGHT_BOX_W / 2, nameBoxY - NAME_BOX_H / 2, RIGHT_BOX_W, NAME_BOX_H, NAME_BOX_RADIUS);
     this.container.add(nameBox);
 
     this.nameBoxFocus = scene.add.graphics();
-    this.nameBoxFocus.lineStyle(2, 0x8888ff, 0.9);
-    this.nameBoxFocus.strokeRoundedRect(RIGHT_CENTER_X - RIGHT_BOX_W / 2, nameBoxY - NAME_BOX_H / 2, RIGHT_BOX_W, NAME_BOX_H, 8);
+    this.nameBoxFocus.lineStyle(2, NAME_BOX_FOCUS_COLOR, NAME_BOX_FOCUS_ALPHA);
+    this.nameBoxFocus.strokeRoundedRect(RIGHT_CENTER_X - RIGHT_BOX_W / 2, nameBoxY - NAME_BOX_H / 2, RIGHT_BOX_W, NAME_BOX_H, NAME_BOX_RADIUS);
     this.nameBoxFocus.setVisible(false);
     this.container.add(this.nameBoxFocus);
 
     this.nameText = scene.add.text(RIGHT_CENTER_X, nameBoxY, 'ANON', {
-      fontSize: '28px', fontFamily: 'monospace', color: '#ffffff',
+      fontSize: NAME_TEXT_FONT, fontFamily: 'monospace', color: NAME_TEXT_COLOR,
     }).setOrigin(0.5);
     this.container.add(this.nameText);
 
@@ -186,14 +279,14 @@ export class ProfilePopup {
     this.spotifyBg = scene.add.graphics();
     this.container.add(this.spotifyBg);
 
-    const sFontSize = Math.round(22 * SPOTIFY_CONTENT_SCALE);
+    const sFontSize = Math.round(SPOTIFY_TEXT_FONT * SPOTIFY_CONTENT_SCALE);
     this.spotifyLoginText = scene.add.text(0, this.spotifyBtnY, 'Login to ', {
       fontSize: `${sFontSize}px`, fontFamily: 'monospace', color: '#ffffff',
     }).setOrigin(0, 0.5);
     this.container.add(this.spotifyLoginText);
 
     this.spotifyLogo = scene.add.image(0, this.spotifyBtnY, 'spotify-text-logo').setOrigin(0, 0.5);
-    this.spotifyLogo.setScale((26 * SPOTIFY_CONTENT_SCALE) / this.spotifyLogo.height);
+    this.spotifyLogo.setScale((SPOTIFY_LOGO_H * SPOTIFY_CONTENT_SCALE) / this.spotifyLogo.height);
     this.container.add(this.spotifyLogo);
 
     this.spotifyConnectedText = scene.add.text(0, this.spotifyBtnY, 'Connected', {
@@ -234,23 +327,60 @@ export class ProfilePopup {
     this.container.add(this.spotifySaveHint);
 
     /* ======== SCROLL PANEL ======== */
-    const divGfx = scene.add.graphics();
-    divGfx.lineStyle(1, 0x444466, 0.5);
-    divGfx.lineBetween(-POPUP_W / 2 + 30, SCROLL_AREA_TOP - 8, POPUP_W / 2 - 30, SCROLL_AREA_TOP - 8);
-    this.container.add(divGfx);
+    const scrollBgX = -POPUP_W / 2 + SCROLL_PADDING_LEFT;
+    const scrollBgW = POPUP_W - SCROLL_PADDING_LEFT - SCROLL_PADDING_RIGHT;
 
+    // Dark rounded background
+    const scrollBg = scene.add.graphics();
+    scrollBg.fillStyle(SCROLL_BG, SCROLL_BG_ALPHA);
+    scrollBg.fillRoundedRect(scrollBgX, SCROLL_AREA_TOP, scrollBgW, this.scrollAreaHeight, SCROLL_BG_RADIUS);
+    this.container.add(scrollBg);
+
+    // Scrollable content container
     this.scrollContent = scene.add.container(0, SCROLL_AREA_TOP);
     this.container.add(this.scrollContent);
 
-    const scrollW = POPUP_W - SCROLL_PADDING_LEFT - SCROLL_PADDING_RIGHT;
+    // Rounded mask (clips content to rounded bg shape)
     this.scrollMaskGfx = scene.make.graphics({});
-    this.scrollMaskGfx.fillRect(
-      cx - POPUP_W / 2 + SCROLL_PADDING_LEFT,
+    this.scrollMaskGfx.fillRoundedRect(
+      cx + scrollBgX,
       cy + SCROLL_AREA_TOP,
-      scrollW,
+      scrollBgW,
       this.scrollAreaHeight,
+      SCROLL_BG_RADIUS,
     );
     this.scrollContent.setMask(this.scrollMaskGfx.createGeometryMask());
+
+    // Scrollbar track
+    const trackX = POPUP_W / 2 - SCROLL_PADDING_RIGHT - SCROLLBAR_INSET;
+    const trackTop = SCROLL_AREA_TOP + SCROLLBAR_INSET;
+    const trackH = this.scrollAreaHeight - SCROLLBAR_INSET * 2;
+    this.scrollbarTrackGfx = scene.add.graphics();
+    this.scrollbarTrackGfx.fillStyle(SCROLLBAR_TRACK_COLOR, SCROLLBAR_TRACK_ALPHA);
+    this.scrollbarTrackGfx.fillRoundedRect(trackX - SCROLLBAR_W, trackTop, SCROLLBAR_W, trackH, SCROLLBAR_W / 2);
+    this.container.add(this.scrollbarTrackGfx);
+
+    // Scrollbar thumb (redrawn dynamically)
+    this.scrollbarThumbGfx = scene.add.graphics();
+    this.container.add(this.scrollbarThumbGfx);
+
+    // Scrollbar hit zone (scene-level for reliable input)
+    this.scrollbarHit = scene.add.zone(
+      cx + trackX - SCROLLBAR_W / 2,
+      cy + SCROLL_AREA_TOP + this.scrollAreaHeight / 2,
+      SCROLLBAR_W + 20,
+      this.scrollAreaHeight,
+    ).setDepth(POPUP_DEPTH + 2).setScrollFactor(0)
+      .setInteractive({ useHandCursor: true }).setVisible(false);
+
+    this.scrollbarHit.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      this.scrollbarDragging = true;
+      this.applyScrollFromPointer(pointer.y);
+    });
+    scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.scrollbarDragging) this.applyScrollFromPointer(pointer.y);
+    });
+    scene.input.on('pointerup', () => { this.scrollbarDragging = false; });
 
     this.wheelHandler = (e: WheelEvent) => {
       if (!this._isOpen) return;
@@ -258,26 +388,24 @@ export class ProfilePopup {
       const maxScroll = Math.max(0, this.totalContentHeight - this.scrollAreaHeight);
       this.scrollOffset = Phaser.Math.Clamp(this.scrollOffset + e.deltaY * 0.5, 0, maxScroll);
       this.scrollContent.y = SCROLL_AREA_TOP - this.scrollOffset;
+      this.updateScrollbar();
     };
 
     /* ======== EXIT BUTTON ======== */
-    const exitBtnW = 200;
-    const exitBtnH = 50;
-
     const exitBg = scene.add.graphics();
-    exitBg.fillStyle(0x442222, 0.9);
-    exitBg.fillRoundedRect(-exitBtnW / 2, EXIT_Y - exitBtnH / 2, exitBtnW, exitBtnH, 10);
-    exitBg.lineStyle(2, 0xff4444, 0.6);
-    exitBg.strokeRoundedRect(-exitBtnW / 2, EXIT_Y - exitBtnH / 2, exitBtnW, exitBtnH, 10);
+    exitBg.fillStyle(EXIT_BTN_BG, 0.9);
+    exitBg.fillRoundedRect(-EXIT_BTN_W / 2, EXIT_Y - EXIT_BTN_H / 2, EXIT_BTN_W, EXIT_BTN_H, EXIT_BTN_RADIUS);
+    exitBg.lineStyle(2, EXIT_BTN_STROKE, EXIT_BTN_STROKE_ALPHA);
+    exitBg.strokeRoundedRect(-EXIT_BTN_W / 2, EXIT_Y - EXIT_BTN_H / 2, EXIT_BTN_W, EXIT_BTN_H, EXIT_BTN_RADIUS);
     this.container.add(exitBg);
 
     this.container.add(
       scene.add.text(0, EXIT_Y, 'EXIT', {
-        fontSize: '28px', fontFamily: 'monospace', fontStyle: 'bold', color: '#ff4444',
+        fontSize: EXIT_TEXT_FONT, fontFamily: 'monospace', fontStyle: 'bold', color: EXIT_TEXT_COLOR,
       }).setOrigin(0.5),
     );
 
-    const exitHit = scene.add.zone(0, EXIT_Y, exitBtnW, exitBtnH)
+    const exitHit = scene.add.zone(0, EXIT_Y, EXIT_BTN_W, EXIT_BTN_H)
       .setInteractive({ useHandCursor: true });
     exitHit.on('pointerdown', () => this.close());
     this.container.add(exitHit);
@@ -322,6 +450,7 @@ export class ProfilePopup {
     this.backdrop.setVisible(true);
     this.container.setVisible(true);
     this.spotifyHit.setVisible(true);
+    this.scrollbarHit.setVisible(true);
     this.updateSpotifyButton();
     this.loadScoreData();
     this.scene.game.canvas.addEventListener('wheel', this.wheelHandler, { passive: false });
@@ -335,6 +464,9 @@ export class ProfilePopup {
     this.backdrop.setVisible(false);
     this.container.setVisible(false);
     this.spotifyHit.setVisible(false);
+    this.scrollbarHit.setVisible(false);
+    this.scrollbarDragging = false;
+    this.stopRainbow();
     this.scene.game.canvas.removeEventListener('wheel', this.wheelHandler);
     if (this.closeCallback) this.closeCallback();
   }
@@ -372,15 +504,68 @@ export class ProfilePopup {
 
   /* ============ Private ============ */
 
+  private updateScrollbar(): void {
+    this.scrollbarThumbGfx.clear();
+    const maxScroll = Math.max(0, this.totalContentHeight - this.scrollAreaHeight);
+    if (maxScroll <= 0) {
+      this.scrollbarThumbGfx.setVisible(false);
+      this.scrollbarTrackGfx.setVisible(false);
+      return;
+    }
+    this.scrollbarThumbGfx.setVisible(true);
+    this.scrollbarTrackGfx.setVisible(true);
+
+    const trackX = POPUP_W / 2 - SCROLL_PADDING_RIGHT - SCROLLBAR_INSET;
+    const trackTop = SCROLL_AREA_TOP + SCROLLBAR_INSET;
+    const trackH = this.scrollAreaHeight - SCROLLBAR_INSET * 2;
+    const thumbH = Math.max(SCROLLBAR_THUMB_MIN_H, (this.scrollAreaHeight / this.totalContentHeight) * trackH);
+    const scrollFraction = this.scrollOffset / maxScroll;
+    const thumbY = trackTop + scrollFraction * (trackH - thumbH);
+
+    this.scrollbarThumbGfx.fillStyle(SCROLLBAR_THUMB_COLOR, SCROLLBAR_THUMB_ALPHA);
+    this.scrollbarThumbGfx.fillRoundedRect(trackX - SCROLLBAR_W, thumbY, SCROLLBAR_W, thumbH, SCROLLBAR_W / 2);
+  }
+
+  private applyScrollFromPointer(worldY: number): void {
+    const cy = TUNING.GAME_HEIGHT / 2;
+    const trackTop = cy + SCROLL_AREA_TOP + SCROLLBAR_INSET;
+    const trackH = this.scrollAreaHeight - SCROLLBAR_INSET * 2;
+    const fraction = Phaser.Math.Clamp((worldY - trackTop) / trackH, 0, 1);
+    const maxScroll = Math.max(0, this.totalContentHeight - this.scrollAreaHeight);
+    this.scrollOffset = fraction * maxScroll;
+    this.scrollContent.y = SCROLL_AREA_TOP - this.scrollOffset;
+    this.updateScrollbar();
+  }
+
+  private startRainbow(): void {
+    this.stopRainbow();
+    if (this.rainbowTexts.length === 0) return;
+    this.rainbowTimer = this.scene.time.addEvent({
+      delay: RAINBOW_INTERVAL,
+      loop: true,
+      callback: () => {
+        const idx = Math.floor(Date.now() / RAINBOW_INTERVAL) % RAINBOW_COLORS.length;
+        for (const t of this.rainbowTexts) t.setColor(RAINBOW_COLORS[idx]);
+      },
+    });
+  }
+
+  private stopRainbow(): void {
+    if (this.rainbowTimer) {
+      this.rainbowTimer.destroy();
+      this.rainbowTimer = null;
+    }
+  }
+
   private updateSpotifyButton(): void {
     const connected = isConnected();
 
     this.spotifyBg.clear();
-    this.spotifyBg.fillStyle(connected ? 0x5a0b0b : 0x1DB954, 1);
+    this.spotifyBg.fillStyle(connected ? SPOTIFY_BTN_BG_CONNECTED : SPOTIFY_BTN_BG_LOGIN, 1);
     this.spotifyBg.fillRoundedRect(
       RIGHT_CENTER_X - RIGHT_BOX_W / 2,
       this.spotifyBtnY - SPOTIFY_BTN_H / 2,
-      RIGHT_BOX_W, SPOTIFY_BTN_H, 10,
+      RIGHT_BOX_W, SPOTIFY_BTN_H, SPOTIFY_BTN_RADIUS,
     );
 
     this.spotifySaveHint.setVisible(!connected);
@@ -389,11 +574,10 @@ export class ProfilePopup {
       this.spotifyLoginText.setVisible(false);
       this.spotifyConnectedText.setVisible(true);
       const logoW = this.spotifyLogo.width * this.spotifyLogo.scaleX;
-      const gap = 8;
-      const totalW = logoW + gap + this.spotifyConnectedText.width;
+      const totalW = logoW + SPOTIFY_LOGO_GAP + this.spotifyConnectedText.width;
       const startX = RIGHT_CENTER_X - totalW / 2;
       this.spotifyLogo.setPosition(startX, this.spotifyBtnY);
-      this.spotifyConnectedText.setPosition(startX + logoW + gap, this.spotifyBtnY);
+      this.spotifyConnectedText.setPosition(startX + logoW + SPOTIFY_LOGO_GAP, this.spotifyBtnY);
     } else {
       this.spotifyLoginText.setVisible(true);
       this.spotifyConnectedText.setVisible(false);
@@ -408,19 +592,50 @@ export class ProfilePopup {
   /** Fetch and render score data in the scroll panel. */
   private async loadScoreData(): Promise<void> {
     this.scrollContent.removeAll(true);
+    this.rainbowTexts = [];
+    this.stopRainbow();
     this.scrollOffset = 0;
     this.scrollContent.y = SCROLL_AREA_TOP;
 
-    if (!isConnected()) {
+    const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+
+    if (!isLocal && !isConnected()) {
       this.spotifySaveHint.setVisible(true);
       return;
     }
     this.spotifySaveHint.setVisible(false);
 
-    const [top10, history] = await Promise.all([
-      fetchPlayerTop10(),
-      fetchWeeklyHistory(),
-    ]);
+    let top10: PlayerScore[];
+    let history: WeeklyHistoryEntry[];
+
+    if (isLocal) {
+      top10 = [
+        { score: 9999999999, rank: 1 },
+        { score: 8750420, rank: 3 },
+        { score: 7231085, rank: 7 },
+        { score: 5900312, rank: 12 },
+        { score: 4480099, rank: 25 },
+        { score: 3120777, rank: 48 },
+        { score: 2005614, rank: 99 },
+        { score: 1450230, rank: 184 },
+        { score: 870045, rank: 302 },
+        { score: 123456, rank: 9999 },
+      ];
+      history = [
+        { weekId: '2026-W07', bestScore: 9999999999, rank: 1 },
+        { weekId: '2026-W06', bestScore: 6543210, rank: 5 },
+        { weekId: '2026-W05', bestScore: 4321098, rank: 14 },
+        { weekId: '2026-W04', bestScore: 2109876, rank: 42 },
+        { weekId: '2026-W03', bestScore: 987654, rank: 128 },
+        { weekId: '2026-W02', bestScore: 543210, rank: 256 },
+        { weekId: '2026-W01', bestScore: 100000, rank: 9999 },
+      ];
+    } else {
+      [top10, history] = await Promise.all([
+        fetchPlayerTop10(),
+        fetchWeeklyHistory(),
+      ]);
+    }
 
     let y = SCROLL_PADDING_TOP;
     const weekId = getCurrentWeekKey();
@@ -428,62 +643,68 @@ export class ProfilePopup {
     // ---- TOP 10 THIS WEEK ----
     this.scrollContent.add(
       this.scene.add.text(0, y, `TOP 10 — ${weekId}`, {
-        fontSize: SECTION_HEADER_FONT, fontFamily: 'Early GameBoy', color: SECTION_HEADER_COLOR,
+        fontSize: SCORES_HEADER_FONT, fontFamily: 'Early GameBoy', color: SCORES_HEADER_COLOR,
       }).setOrigin(0.5, 0),
     );
-    y += 36;
+    y += SCORES_HEADER_GAP;
+
+    const rowStyle = { fontSize: SCORES_ROW_FONT, fontFamily: 'monospace', color: SCORES_ROW_COLOR };
 
     if (top10.length === 0) {
       this.scrollContent.add(
         this.scene.add.text(0, y, 'No scores yet', {
-          fontSize: SCORE_ROW_FONT, fontFamily: 'monospace', color: '#666666',
+          fontSize: SCORES_ROW_FONT, fontFamily: 'monospace', color: SCORES_EMPTY_COLOR,
         }).setOrigin(0.5, 0),
       );
-      y += SCORE_ROW_HEIGHT;
+      y += SCORES_ROW_H;
     } else {
       for (let i = 0; i < top10.length; i++) {
         const e = top10[i];
-        this.scrollContent.add(
-          this.scene.add.text(0, y,
-            `${String(i + 1).padStart(2)}.  ${e.score.toLocaleString().padStart(8)}   #${e.rank}`,
-            { fontSize: SCORE_ROW_FONT, fontFamily: 'monospace', color: SCORE_ROW_COLOR },
-          ).setOrigin(0.5, 0),
-        );
-        y += SCORE_ROW_HEIGHT;
+        const placeT = this.scene.add.text(SCORES_PLACE_X, y, `${i + 1}.`, rowStyle).setOrigin(1, 0);
+        const scoreT = this.scene.add.text(SCORES_SCORE_X, y, e.score.toLocaleString(), rowStyle).setOrigin(1, 0);
+        const rankT = this.scene.add.text(SCORES_RANK_X, y, `#${e.rank}`, rowStyle).setOrigin(0, 0);
+        this.scrollContent.add([placeT, scoreT, rankT]);
+        if (e.rank <= RAINBOW_RANK_THRESHOLD) {
+          this.rainbowTexts.push(placeT, scoreT, rankT);
+        }
+        y += SCORES_ROW_H;
       }
     }
 
-    y += SECTION_GAP;
+    y += SCORES_SECTION_GAP;
 
     // ---- WEEKLY HISTORY ----
     this.scrollContent.add(
       this.scene.add.text(0, y, 'WEEKLY HISTORY', {
-        fontSize: SECTION_HEADER_FONT, fontFamily: 'Early GameBoy', color: SECTION_HEADER_COLOR,
+        fontSize: SCORES_HEADER_FONT, fontFamily: 'Early GameBoy', color: SCORES_HEADER_COLOR,
       }).setOrigin(0.5, 0),
     );
-    y += 36;
+    y += SCORES_HEADER_GAP;
 
     if (history.length === 0) {
       this.scrollContent.add(
         this.scene.add.text(0, y, 'No history yet', {
-          fontSize: SCORE_ROW_FONT, fontFamily: 'monospace', color: '#666666',
+          fontSize: SCORES_ROW_FONT, fontFamily: 'monospace', color: SCORES_EMPTY_COLOR,
         }).setOrigin(0.5, 0),
       );
-      y += SCORE_ROW_HEIGHT;
+      y += SCORES_ROW_H;
     } else {
       for (const h of history) {
-        this.scrollContent.add(
-          this.scene.add.text(0, y,
-            `${h.weekId}   ${h.bestScore.toLocaleString().padStart(8)}   #${h.rank}`,
-            { fontSize: SCORE_ROW_FONT, fontFamily: 'monospace', color: SCORE_ROW_COLOR },
-          ).setOrigin(0.5, 0),
-        );
-        y += SCORE_ROW_HEIGHT;
+        const weekT = this.scene.add.text(SCORES_WEEK_X, y, `Y${h.weekId.slice(2, 4)}-W${parseInt(h.weekId.split('W')[1])}`, rowStyle).setOrigin(0, 0);
+        const scoreT = this.scene.add.text(SCORES_SCORE_X, y, h.bestScore.toLocaleString(), rowStyle).setOrigin(1, 0);
+        const rankT = this.scene.add.text(SCORES_RANK_X, y, `#${h.rank}`, rowStyle).setOrigin(0, 0);
+        this.scrollContent.add([weekT, scoreT, rankT]);
+        if (h.rank <= RAINBOW_RANK_THRESHOLD) {
+          this.rainbowTexts.push(weekT, scoreT, rankT);
+        }
+        y += SCORES_ROW_H;
       }
     }
 
     y += SCROLL_PADDING_BOTTOM;
     this.totalContentHeight = y;
+    this.updateScrollbar();
+    this.startRainbow();
   }
 
   private startNameEditing(): void {
@@ -593,9 +814,11 @@ export class ProfilePopup {
   }
 
   destroy(): void {
+    this.stopRainbow();
     this.scene.game.canvas.removeEventListener('wheel', this.wheelHandler);
     this.disconnectModal.destroy();
     this.scrollMaskGfx.destroy();
+    this.scrollbarHit.destroy();
     this.spotifyHit.destroy();
     this.container.destroy();
     this.backdrop.destroy();

@@ -17,7 +17,7 @@ export const CRT_TUNING = {
   // ── Bloom / Glow ──
   bloomStrength: 1,          // glow amount on bright areas (0 = off) — helps phosphors bleed into gaps
   bloomRadius: 5.0,            // blur radius in pixels for bloom sampling
-  bloomThreshold: 0.35,        // brightness threshold where bloom begins (0–1) — lower = more dreamy glow
+  bloomThreshold: 0.25,        // brightness threshold where bloom begins (0–1) — lower = more dreamy glow
 
   // ── Curvature / Geometry ──
   curvature: 0.001,             // barrel distortion strength (0 = flat, 0.1 = heavy)
@@ -36,8 +36,9 @@ export const CRT_TUNING = {
   jitterAmount: 0.3,           // horizontal jitter / wobbly sync in pixels (0 = off)
   vignette: 0,              // vignette strength (0 = off, darkens edges)
 
-  // ── Rage distortion (set at runtime by GameScene) ──
-  rageDistortion: 0,           // 0 = off, >0 = gnarly digital glitch (noise, jitter, chroma, bit-crush)
+  // ── Rage distortion ──
+  rageDistortionMax: 1,        // target intensity during rage (tune this — higher = more gnarly)
+  rageDistortion: 0,           // runtime value (driven by GameScene — do not edit)
 };
 
 /** Convert maskType string to shader uniform float */
