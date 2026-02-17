@@ -19,6 +19,7 @@ import { CRT_TUNING } from '../config/crtTuning';
 import { ProfileHud } from '../ui/ProfileHud';
 import { ProfilePopup, AVATAR_TEXTURE_KEY } from '../ui/ProfilePopup';
 import { ShieldSystem } from '../systems/ShieldSystem';
+import { TimeDilationSystem } from '../systems/TimeDilationSystem';
 import { PerfSystem } from '../systems/PerfSystem';
 import { OrientationOverlay } from '../systems/OrientationOverlay';
 import { GAME_MODE } from '../config/gameMode';
@@ -107,6 +108,8 @@ export class GameScene extends Phaser.Scene {
   private perfSystem!: PerfSystem;
   private orientationOverlay: OrientationOverlay | null = null;
   private shieldSystem!: ShieldSystem;
+  private timeDilation!: TimeDilationSystem;
+  private wasDilating: boolean = false;
 
   // Custom cursor (rendered under CRT)
   private cursorStroke?: Phaser.GameObjects.Image;
@@ -145,6 +148,9 @@ export class GameScene extends Phaser.Scene {
   // Lane warning indicators (pooled, right-edge preview circles)
   private warningPool: { circle: Phaser.GameObjects.Arc; preview: Phaser.GameObjects.Sprite; currentKey: string }[] = [];
   private warningPoolUsed: number = 0;
+  // Lane warning pills (combo: crash + pickup/shield, pill-shaped)
+  private warningPillPool: { gfx: Phaser.GameObjects.Graphics; preview1: Phaser.GameObjects.Sprite; preview2: Phaser.GameObjects.Sprite; currentKey1: string; currentKey2: string }[] = [];
+  private warningPillPoolUsed: number = 0;
 
   // Rage meter
   private rageAmount: number = 0;
@@ -379,6 +385,15 @@ export class GameScene extends Phaser.Scene {
       const preview = this.add.sprite(0, 0, 'obstacle-crash')
         .setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
       this.warningPool.push({ circle, preview, currentKey: '' });
+    }
+
+    // Lane warning pills (combo: crash + pickup/shield, pooled)
+    const initialPillPoolSize = TUNING.LANE_COUNT;
+    for (let i = 0; i < initialPillPoolSize; i++) {
+      const gfx = this.add.graphics().setDepth(95).setVisible(false);
+      const p1 = this.add.sprite(0, 0, 'obstacle-crash').setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
+      const p2 = this.add.sprite(0, 0, 'obstacle-crash').setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
+      this.warningPillPool.push({ gfx, preview1: p1, preview2: p2, currentKey1: '', currentKey2: '' });
     }
 
     // --- HUD (visible during PLAYING) ---
@@ -968,6 +983,11 @@ export class GameScene extends Phaser.Scene {
         for (let i = 0; i < this.warningPool.length; i++) {
           this.warningPool[i].circle.setVisible(v);
           this.warningPool[i].preview.setVisible(v);
+        }
+        for (let i = 0; i < this.warningPillPool.length; i++) {
+          this.warningPillPool[i].gfx.setVisible(v);
+          this.warningPillPool[i].preview1.setVisible(v);
+          this.warningPillPool[i].preview2.setVisible(v);
         }
         for (let i = 0; i < this.laneHighlights.length; i++) {
           this.laneHighlights[i].setVisible(false);
@@ -1627,6 +1647,8 @@ export class GameScene extends Phaser.Scene {
     this.state = GameState.PLAYING;
     this.setCrosshairMode(true);
     this.musicPlayer.setCompact(false);
+    this.timeDilation = new TimeDilationSystem();
+    this.wasDilating = false;
     this.elapsed = 0;
     this.spawnGraceTimer = 0;
     this.blackOverlay.setVisible(false);
@@ -1873,7 +1895,24 @@ export class GameScene extends Phaser.Scene {
     // Blend player cursor following from center to full
     this.playerSystem.setCursorBlend(rampEased);
 
-    this.elapsed += dt;
+    // ── Time dilation: scale dt for slow-mo ──
+    this.timeDilation.update(dt);
+    const timeScale = this.timeDilation.getScale();
+    const hDt = dt * timeScale;
+    const vDt = dt * this.timeDilation.getVerticalScale();
+
+    if (this.timeDilation.isActive()) {
+      this.musicPlayer.setPlaybackRate(this.timeDilation.getMusicRate());
+      this.playerSystem.setAnimTimeScale(timeScale);
+      if (this.slashSprite.anims.isPlaying) this.slashSprite.anims.timeScale = timeScale;
+      this.wasDilating = true;
+    } else if (this.wasDilating) {
+      this.musicPlayer.setPlaybackRate(1);
+      this.playerSystem.setAnimTimeScale(1);
+      this.wasDilating = false;
+    }
+
+    this.elapsed += hDt;
     let baseRoadSpeed = TUNING.ROAD_BASE_SPEED + this.elapsed * TUNING.ROAD_SPEED_RAMP + this.roadSpeedBonus;
     if (this.startHoldRampT < 1) {
       const eased = rampEased;
@@ -1892,21 +1931,21 @@ export class GameScene extends Phaser.Scene {
 
     // Spawn grace — no obstacles until timer expires (countdown intro period)
     if (this.spawnGraceTimer > 0) {
-      this.spawnGraceTimer -= dt;
+      this.spawnGraceTimer -= hDt;
     }
 
-    this.difficultySystem.update(dt);
+    this.difficultySystem.update(hDt);
     this.playerSystem.setInvincible(this.rageTimer > 0 || this.rageZoomProgress > 0);
-    this.playerSystem.update(dt, roadSpeed, baseRoadSpeed);
-    this.scoreSystem.update(dt, this.playerSystem.getPlayerSpeed());
+    this.playerSystem.update(hDt, roadSpeed, baseRoadSpeed, vDt);
+    this.scoreSystem.update(hDt, this.playerSystem.getPlayerSpeed());
     if (this.spawnGraceTimer <= 0) {
-      this.obstacleSystem.update(dt, roadSpeed, this.difficultySystem.getFactor(), rageFactor);
+      this.obstacleSystem.update(hDt, roadSpeed, this.difficultySystem.getFactor(), rageFactor);
     }
     this.updateLaneWarnings(roadSpeed);
 
     // Katana slash (checked BEFORE player collision so destroyed obstacles can't kill)
-    this.slashCooldownTimer = Math.max(0, this.slashCooldownTimer - dt);
-    this.slashInvincibilityTimer = Math.max(0, this.slashInvincibilityTimer - dt);
+    this.slashCooldownTimer = Math.max(0, this.slashCooldownTimer - hDt);
+    this.slashInvincibilityTimer = Math.max(0, this.slashInvincibilityTimer - hDt);
 
     // Speed-scaled slash: wider and further right at higher speeds
     const speedRatio = roadSpeed > 0 ? this.playerSystem.getPlayerSpeed() / roadSpeed : 1;
@@ -1929,6 +1968,7 @@ export class GameScene extends Phaser.Scene {
       if (hitX >= 0) {
         this.slashInvincibilityTimer = TUNING.KATANA_INVINCIBILITY;
         this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION, TUNING.SHAKE_DEATH_INTENSITY * 0.25);
+        // this.timeDilation.trigger(); // disabled — kept for potential reuse
 
         // Distance-based bonus: left edge of slash = 100pts, right edge = min pts
         const slashLeft = this.playerSystem.getX() + slashOffset - slashWidth / 2;
@@ -1985,7 +2025,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Rocket launcher: right-click fires when ammo > 0 (spectator = infinite ammo)
-    this.rocketCooldownTimer = Math.max(0, this.rocketCooldownTimer - dt);
+    this.rocketCooldownTimer = Math.max(0, this.rocketCooldownTimer - hDt);
     if (this.inputSystem.getRocketPressed() && this.rocketCooldownTimer <= 0 && (this.spectatorMode || this.pickupSystem.getAmmo() > 0)) {
       // Lock the lane at fire time using the collision Y (sprite center + offset), same as all other collisions
       const fireY = Math.max(this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y, TUNING.ROAD_TOP_Y);
@@ -2005,7 +2045,7 @@ export class GameScene extends Phaser.Scene {
         this.rocketCooldownTimer = TUNING.ROCKET_COOLDOWN;
       }
     }
-    this.rocketSystem.update(dt);
+    this.rocketSystem.update(hDt);
 
     // Player collisions (after slash so destroyed obstacles are already gone)
     // NOTE: rage timer is ticked AFTER collisions so it can't expire mid-frame
@@ -2013,13 +2053,13 @@ export class GameScene extends Phaser.Scene {
     const playerCollY = Math.max(this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y, TUNING.ROAD_TOP_Y);
 
     // Update pickups (scrolling + collection)
-    this.pickupSystem.update(dt, roadSpeed, playerCollX, playerCollY);
+    this.pickupSystem.update(hDt, roadSpeed, playerCollX, playerCollY);
     if (this.pickupSystem.wasCollected()) {
       this.playerSystem.playCollectRocket();
     }
 
     // Update shield pickups (scrolling + collection)
-    this.shieldSystem.update(dt, roadSpeed, playerCollX, playerCollY);
+    this.shieldSystem.update(hDt, roadSpeed, playerCollX, playerCollY);
     if (this.shieldSystem.wasCollected()) {
       this.playerSystem.playCollectShield();
     }
@@ -2046,7 +2086,7 @@ export class GameScene extends Phaser.Scene {
       // Still check slow zones
       const result = this.obstacleSystem.checkCollision(playerCollX, playerCollY, pHalfW, pHalfH);
       if (result.slowOverlapping) {
-        this.playerSystem.applyLeftwardPush(TUNING.SLOW_PUSH_RATE * dt);
+        this.playerSystem.applyLeftwardPush(TUNING.SLOW_PUSH_RATE * hDt);
       }
       this.fxSystem.onSlowOverlap(result.slowOverlapping);
     } else if (this.playerSystem.isCollecting()) {
@@ -2067,7 +2107,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
       if (result.slowOverlapping) {
-        this.playerSystem.applyLeftwardPush(TUNING.SLOW_PUSH_RATE * dt);
+        this.playerSystem.applyLeftwardPush(TUNING.SLOW_PUSH_RATE * hDt);
       }
       this.fxSystem.onSlowOverlap(result.slowOverlapping);
     }
@@ -2075,7 +2115,7 @@ export class GameScene extends Phaser.Scene {
     // Rage mode tick — drain the bar so player can see time remaining
     // (ticked AFTER collisions so rage can't expire mid-frame leaving player vulnerable)
     if (this.rageTimer > 0) {
-      this.rageTimer -= dt;
+      this.rageTimer -= hDt;
       if (this.rageTimer <= 0) {
         this.rageTimer = 0;
         this.rageAmount = 0;
@@ -2096,15 +2136,15 @@ export class GameScene extends Phaser.Scene {
     // Rage zoom: start zooming out early so player can adjust before rage ends
     if (this.rageTimer > TUNING.RAGE_ZOOM_OUT_DURATION) {
       // Still plenty of rage left — zoom in
-      this.rageZoomProgress = Math.min(this.rageZoomProgress + dt / TUNING.RAGE_ZOOM_IN_DURATION, 1);
+      this.rageZoomProgress = Math.min(this.rageZoomProgress + hDt / TUNING.RAGE_ZOOM_IN_DURATION, 1);
     } else if (this.rageZoomProgress > 0) {
       // Zoom out (starts RAGE_ZOOM_OUT_DURATION seconds before rage expires)
-      this.rageZoomProgress = Math.max(this.rageZoomProgress - dt / TUNING.RAGE_ZOOM_OUT_DURATION, 0);
+      this.rageZoomProgress = Math.max(this.rageZoomProgress - hDt / TUNING.RAGE_ZOOM_OUT_DURATION, 0);
     }
     this.applyRageZoom();
 
     // FX: speed lines + edge warnings
-    this.fxSystem.update(dt, this.playerSystem.getPlayerSpeed(), roadSpeed, this.playerSystem.getX());
+    this.fxSystem.update(hDt, this.playerSystem.getPlayerSpeed(), roadSpeed, this.playerSystem.getX());
 
     // Audio: engine pitch/volume
     this.audioSystem.updateEngine(this.playerSystem.getPlayerSpeed(), roadSpeed, this.inputSystem.isSpaceHeld());
@@ -2114,8 +2154,8 @@ export class GameScene extends Phaser.Scene {
       this.enterDead();
     }
 
-    this.parallaxSystem.update(roadSpeed, dt);
-    this.roadSystem.update(roadSpeed, dt);
+    this.parallaxSystem.update(roadSpeed, hDt);
+    this.roadSystem.update(roadSpeed, hDt);
 
     // Lane collision highlights
     const collY = this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y;
@@ -2161,6 +2201,11 @@ export class GameScene extends Phaser.Scene {
       for (let i = 0; i < this.warningPool.length; i++) {
         this.warningPool[i].circle.setVisible(false);
         this.warningPool[i].preview.setVisible(false);
+      }
+      for (let i = 0; i < this.warningPillPool.length; i++) {
+        this.warningPillPool[i].gfx.setVisible(false);
+        this.warningPillPool[i].preview1.setVisible(false);
+        this.warningPillPool[i].preview2.setVisible(false);
       }
       for (let i = 0; i < this.laneHighlights.length; i++) {
         this.laneHighlights[i].setVisible(false);
@@ -2266,112 +2311,240 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Reset pool usage counter — we'll claim slots as needed
+    // Reset pool usage counters
     let poolIdx = 0;
+    let pillIdx = 0;
 
     for (let lane = 0; lane < TUNING.LANE_COUNT; lane++) {
       const laneWarnings = warnings[lane];
       const laneY = laneCenters[lane];
-      const total = laneWarnings.length;
 
-      for (let w = 0; w < total; w++) {
-        const warning = laneWarnings[w];
+      // --- Phase 1: detect CRASH + pickup/shield combo pairs ---
+      const paired = new Set<number>();
+      const comboForPickup = new Map<number, number>(); // pickupIdx → crashIdx
 
-        // Grow pool if needed
-        if (poolIdx >= this.warningPool.length) {
-          const circle = this.add.circle(0, 0, warningRadius, TUNING.WARNING_FILL_COLOR, TUNING.WARNING_FILL_ALPHA)
-            .setDepth(95).setVisible(false);
-          const preview = this.add.sprite(0, 0, 'obstacle-crash')
-            .setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
-          this.warningPool.push({ circle, preview, currentKey: '' });
-        }
+      for (let w = 0; w < laneWarnings.length; w++) {
+        const wn = laneWarnings[w];
+        if (wn.type !== 'pickup' && wn.type !== 'shield-pickup') continue;
+        if (paired.has(w)) continue;
 
-        const slot = this.warningPool[poolIdx];
-        poolIdx++;
-
-        // Position: latest arrival (last in sorted array) is at the right edge,
-        // earlier arrivals stack leftward. This means new warnings appear at the
-        // right and push existing ones left.
-        const cx = TUNING.GAME_WIDTH - warningRadius - (total - 1 - w) * circleDiameter;
-        slot.circle.setPosition(cx, laneY);
-        slot.preview.setPosition(cx, laneY);
-
-        // Alpha fades in as obstacle approaches
-        const warningDuration = warning.type === ObstacleType.CAR
-          ? TUNING.LANE_WARNING_DURATION + TUNING.LANE_WARNING_CAR_EXTRA
-          : TUNING.LANE_WARNING_DURATION;
-        const alpha = (1 - warning.timeUntil / warningDuration) * 0.8;
-        slot.circle.setAlpha(alpha).setVisible(true);
-        slot.preview.setAlpha(alpha).setVisible(true);
-
-        // Determine texture, scale, and stroke color per type
-        let scaleMultiplier: number;
-        let textureKey: string;
-        let strokeColor: number;
-        switch (warning.type) {
-          case ObstacleType.CRASH:
-            textureKey = 'obstacle-crash';
-            scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_CRASH;
-            strokeColor = TUNING.WARNING_STROKE_CRASH;
+        // Find nearest preceding unpaired CRASH (sorted ascending by timeUntil)
+        for (let c = w - 1; c >= 0; c--) {
+          if (laneWarnings[c].type !== ObstacleType.CRASH) continue;
+          if (paired.has(c)) continue;
+          const timeDiff = wn.timeUntil - laneWarnings[c].timeUntil;
+          if (timeDiff >= 0 && timeDiff < 1.5) {
+            paired.add(w);
+            paired.add(c);
+            comboForPickup.set(w, c);
             break;
-          case ObstacleType.CAR:
-            textureKey = warning.textureKey;
-            scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_CAR;
-            strokeColor = TUNING.WARNING_STROKE_CAR;
-            break;
-          case ObstacleType.SLOW:
-            textureKey = 'obstacle-slow';
-            scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_SLOW;
-            strokeColor = TUNING.WARNING_STROKE_SLOW;
-            break;
-          case 'pickup':
-            textureKey = 'pickup-rocket';
-            scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_PICKUP;
-            strokeColor = TUNING.WARNING_STROKE_ROCKET;
-            break;
-          case 'shield-pickup':
-            textureKey = 'pickup-shield';
-            scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_SHIELD;
-            strokeColor = TUNING.WARNING_STROKE_SHIELD;
-            break;
-          default:
-            textureKey = 'obstacle-crash';
-            scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_CRASH;
-            strokeColor = TUNING.WARNING_STROKE_CRASH;
-            break;
-        }
-
-        // Apply per-type stroke
-        slot.circle.setStrokeStyle(TUNING.WARNING_STROKE_WIDTH, strokeColor, alpha);
-
-        // Only switch texture/animation when key changes
-        if (slot.currentKey !== textureKey) {
-          slot.currentKey = textureKey;
-          if (warning.type === ObstacleType.CAR) {
-            slot.preview.setTexture(textureKey);
-            slot.preview.play(`${textureKey}-drive`);
-          } else {
-            slot.preview.setTexture(textureKey);
-            slot.preview.stop();
           }
         }
+      }
 
-        // Scale preview to fit inside circle
-        const targetH = circleDiameter * scaleMultiplier;
-        const frameW = slot.preview.width || 1;
-        const frameH = slot.preview.height || 1;
-        const targetW = targetH * (frameW / frameH);
-        slot.preview.setDisplaySize(targetW, targetH);
+      // --- Phase 2: build render entries in sorted order ---
+      const entries: ({ combo: false; warning: LaneWarning } | { combo: true; crash: LaneWarning; pickup: LaneWarning })[] = [];
+
+      for (let w = 0; w < laneWarnings.length; w++) {
+        if (paired.has(w)) {
+          if (comboForPickup.has(w)) {
+            // Pickup entry — emit combo (crash folded in, no separate crash circle)
+            const crashIdx = comboForPickup.get(w)!;
+            entries.push({ combo: true, crash: laneWarnings[crashIdx], pickup: laneWarnings[w] });
+          }
+          continue; // skip paired crash entries (included in combo pill)
+        }
+        entries.push({ combo: false, warning: laneWarnings[w] });
+      }
+
+      // --- Phase 3: count total slots for positioning ---
+      let totalSlots = 0;
+      for (let r = 0; r < entries.length; r++) {
+        totalSlots += entries[r].combo ? 2 : 1;
+      }
+
+      // --- Phase 4: render entries from earliest (left) to latest (right) ---
+      let slotOff = 0;
+      for (let r = 0; r < entries.length; r++) {
+        const entry = entries[r];
+
+        if (entry.combo) {
+          // ── Combo pill (2 slots) ──
+          const leftCx = TUNING.GAME_WIDTH - warningRadius - (totalSlots - 1 - slotOff) * circleDiameter;
+          const rightCx = TUNING.GAME_WIDTH - warningRadius - (totalSlots - 1 - (slotOff + 1)) * circleDiameter;
+          const pillCx = (leftCx + rightCx) / 2;
+
+          // Alpha based on crash (first to arrive)
+          const alpha = (1 - entry.crash.timeUntil / TUNING.LANE_WARNING_DURATION) * 0.8;
+
+          // Stroke color from pickup type (yellow for rocket, green for shield — never orange)
+          const strokeColor = entry.pickup.type === 'pickup'
+            ? TUNING.WARNING_STROKE_ROCKET
+            : TUNING.WARNING_STROKE_SHIELD;
+
+          // Grow pill pool if needed
+          if (pillIdx >= this.warningPillPool.length) {
+            const gfx = this.add.graphics().setDepth(95).setVisible(false);
+            const p1 = this.add.sprite(0, 0, 'obstacle-crash').setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
+            const p2 = this.add.sprite(0, 0, 'obstacle-crash').setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
+            this.warningPillPool.push({ gfx, preview1: p1, preview2: p2, currentKey1: '', currentKey2: '' });
+          }
+
+          const pill = this.warningPillPool[pillIdx];
+          pillIdx++;
+
+          // Draw pill shape (stadium: rounded rect where corner radius = half height)
+          const pillW = circleDiameter * 2;
+          const pillH = circleDiameter;
+          pill.gfx.clear();
+          pill.gfx.fillStyle(TUNING.WARNING_FILL_COLOR, TUNING.WARNING_FILL_ALPHA);
+          pill.gfx.fillRoundedRect(pillCx - pillW / 2, laneY - pillH / 2, pillW, pillH, warningRadius);
+          pill.gfx.lineStyle(TUNING.WARNING_STROKE_WIDTH, strokeColor, 1);
+          pill.gfx.strokeRoundedRect(pillCx - pillW / 2, laneY - pillH / 2, pillW, pillH, warningRadius);
+          pill.gfx.setAlpha(alpha).setVisible(true);
+
+          // Crash preview (left half)
+          const crashKey = 'obstacle-crash';
+          if (pill.currentKey1 !== crashKey) {
+            pill.currentKey1 = crashKey;
+            pill.preview1.setTexture(crashKey).stop();
+          }
+          const crashTgtH = circleDiameter * TUNING.LANE_WARNING_PREVIEW_CRASH;
+          const cFW = pill.preview1.width || 1;
+          const cFH = pill.preview1.height || 1;
+          pill.preview1.setDisplaySize(crashTgtH * (cFW / cFH), crashTgtH);
+          pill.preview1.setPosition(leftCx, laneY);
+          pill.preview1.setAlpha(alpha).setVisible(true);
+
+          // Pickup/shield preview (right half)
+          const pickupKey = entry.pickup.textureKey;
+          const pickupScale = entry.pickup.type === 'pickup'
+            ? TUNING.LANE_WARNING_PREVIEW_PICKUP
+            : TUNING.LANE_WARNING_PREVIEW_SHIELD;
+          if (pill.currentKey2 !== pickupKey) {
+            pill.currentKey2 = pickupKey;
+            pill.preview2.setTexture(pickupKey).stop();
+          }
+          const pTgtH = circleDiameter * pickupScale;
+          const pFW = pill.preview2.width || 1;
+          const pFH = pill.preview2.height || 1;
+          pill.preview2.setDisplaySize(pTgtH * (pFW / pFH), pTgtH);
+          pill.preview2.setPosition(rightCx, laneY);
+          pill.preview2.setAlpha(alpha).setVisible(true);
+
+          slotOff += 2;
+        } else {
+          // ── Single circle (1 slot) ──
+          const warning = entry.warning;
+          const cx = TUNING.GAME_WIDTH - warningRadius - (totalSlots - 1 - slotOff) * circleDiameter;
+
+          // Grow pool if needed
+          if (poolIdx >= this.warningPool.length) {
+            const circle = this.add.circle(0, 0, warningRadius, TUNING.WARNING_FILL_COLOR, TUNING.WARNING_FILL_ALPHA)
+              .setDepth(95).setVisible(false);
+            const preview = this.add.sprite(0, 0, 'obstacle-crash')
+              .setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
+            this.warningPool.push({ circle, preview, currentKey: '' });
+          }
+
+          const circleSlot = this.warningPool[poolIdx];
+          poolIdx++;
+
+          circleSlot.circle.setPosition(cx, laneY);
+          circleSlot.preview.setPosition(cx, laneY);
+
+          // Alpha fades in as obstacle approaches
+          const warningDuration = warning.type === ObstacleType.CAR
+            ? TUNING.LANE_WARNING_DURATION + TUNING.LANE_WARNING_CAR_EXTRA
+            : TUNING.LANE_WARNING_DURATION;
+          const alpha = (1 - warning.timeUntil / warningDuration) * 0.8;
+          circleSlot.circle.setAlpha(alpha).setVisible(true);
+          circleSlot.preview.setAlpha(alpha).setVisible(true);
+
+          // Determine texture, scale, and stroke color per type
+          let scaleMultiplier: number;
+          let textureKey: string;
+          let strokeColor: number;
+          switch (warning.type) {
+            case ObstacleType.CRASH:
+              textureKey = 'obstacle-crash';
+              scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_CRASH;
+              strokeColor = TUNING.WARNING_STROKE_CRASH;
+              break;
+            case ObstacleType.CAR:
+              textureKey = warning.textureKey;
+              scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_CAR;
+              strokeColor = TUNING.WARNING_STROKE_CAR;
+              break;
+            case ObstacleType.SLOW:
+              textureKey = 'obstacle-slow';
+              scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_SLOW;
+              strokeColor = TUNING.WARNING_STROKE_SLOW;
+              break;
+            case 'pickup':
+              textureKey = 'pickup-rocket';
+              scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_PICKUP;
+              strokeColor = TUNING.WARNING_STROKE_ROCKET;
+              break;
+            case 'shield-pickup':
+              textureKey = 'pickup-shield';
+              scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_SHIELD;
+              strokeColor = TUNING.WARNING_STROKE_SHIELD;
+              break;
+            default:
+              textureKey = 'obstacle-crash';
+              scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_CRASH;
+              strokeColor = TUNING.WARNING_STROKE_CRASH;
+              break;
+          }
+
+          circleSlot.circle.setStrokeStyle(TUNING.WARNING_STROKE_WIDTH, strokeColor, alpha);
+
+          if (circleSlot.currentKey !== textureKey) {
+            circleSlot.currentKey = textureKey;
+            if (warning.type === ObstacleType.CAR) {
+              circleSlot.preview.setTexture(textureKey);
+              circleSlot.preview.play(`${textureKey}-drive`);
+            } else {
+              circleSlot.preview.setTexture(textureKey);
+              circleSlot.preview.stop();
+            }
+            // Tint puddle preview blue (white circle texture needs color)
+            if (warning.type === ObstacleType.SLOW) {
+              circleSlot.preview.setTint(TUNING.SLOW_COLOR);
+            } else {
+              circleSlot.preview.clearTint();
+            }
+          }
+
+          const targetH = circleDiameter * scaleMultiplier;
+          const frameW = circleSlot.preview.width || 1;
+          const frameH = circleSlot.preview.height || 1;
+          circleSlot.preview.setDisplaySize(targetH * (frameW / frameH), targetH);
+
+          slotOff++;
+        }
       }
     }
 
-    // Hide unused pool slots
+    // Hide unused circle pool slots
     for (let i = poolIdx; i < this.warningPool.length; i++) {
       this.warningPool[i].circle.setVisible(false);
       this.warningPool[i].preview.setVisible(false);
       this.warningPool[i].currentKey = '';
     }
     this.warningPoolUsed = poolIdx;
+
+    // Hide unused pill pool slots
+    for (let i = pillIdx; i < this.warningPillPool.length; i++) {
+      this.warningPillPool[i].gfx.clear();
+      this.warningPillPool[i].gfx.setVisible(false);
+      this.warningPillPool[i].preview1.setVisible(false);
+      this.warningPillPool[i].preview2.setVisible(false);
+      this.warningPillPool[i].currentKey1 = '';
+      this.warningPillPool[i].currentKey2 = '';
+    }
+    this.warningPillPoolUsed = pillIdx;
   }
 
   /** Hide all warning pool items */
@@ -2382,6 +2555,15 @@ export class GameScene extends Phaser.Scene {
       this.warningPool[i].currentKey = '';
     }
     this.warningPoolUsed = 0;
+    for (let i = 0; i < this.warningPillPool.length; i++) {
+      this.warningPillPool[i].gfx.clear();
+      this.warningPillPool[i].gfx.setVisible(false);
+      this.warningPillPool[i].preview1.setVisible(false);
+      this.warningPillPool[i].preview2.setVisible(false);
+      this.warningPillPool[i].currentKey1 = '';
+      this.warningPillPool[i].currentKey2 = '';
+    }
+    this.warningPillPoolUsed = 0;
   }
 
   /** Adjust all scrollFactor(0) HUD elements so they stay pinned during camera zoom */
@@ -2578,6 +2760,14 @@ export class GameScene extends Phaser.Scene {
   private enterDead(): void {
     this.state = GameState.DYING;
     this.autoSubmitted = false;
+
+    // Reset time dilation and restore music rate
+    if (this.timeDilation) {
+      this.timeDilation.reset();
+      this.musicPlayer.setPlaybackRate(1);
+      this.playerSystem.setAnimTimeScale(1);
+      this.wasDilating = false;
+    }
 
     // Restore HUD visibility if hidden by debug key
     if (this.hudHidden) {

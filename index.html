@@ -59,9 +59,10 @@
       --bios-line-height:       1.8;
       --bios-title-font:        'Alagard', 'Courier New', monospace;
       --bios-title-size:        clamp(16px, 3vw, 42px);
-      --bios-scale:             2;             /* scale multiplier for entire BIOS group */
-      --bios-bar-bottom:        200px;          /* bar distance from bottom of screen     */
-      --bios-text-gap:          30px;          /* gap between text bottom and bar top    */
+      --bios-scale:             2;             /* scale multiplier for entire BIOS group     */
+      --bios-row-gap:           20px;           /* extra spacing between text rows             */
+      --bios-text-top:          -169px;           /* Y offset of first text row within group     */
+      --bios-bar-top:           180px;         /* Y offset of loading bar within group        */
     }
 
     #boot-overlay {
@@ -114,32 +115,33 @@
 
     #boot-content {
       position: absolute;
-      bottom: var(--bios-bar-bottom);
-      left: 0;
-      right: 0;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(var(--bios-scale));
       width: clamp(240px, 40vw, 420px);
-      margin: 0 auto;
-      transform: scale(var(--bios-scale));
-      transform-origin: bottom center;
       z-index: 1;
     }
     #boot-lines {
+      position: absolute;
+      top: var(--bios-text-top);
+      left: 0;
+      right: 0;
       text-align: left;
       font-size: var(--bios-font-size);
       line-height: var(--bios-line-height);
       text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow),
                    0 0 2px var(--bios-color);
       animation: bios-jitter var(--bios-jitter-speed) infinite alternate;
-      margin-bottom: var(--bios-text-gap);
+      display: flex;
+      flex-direction: column;
+      gap: var(--bios-row-gap);
     }
     #boot-lines .line {
       white-space: pre;
-      height: 0;
-      overflow: hidden;
+      visibility: hidden;
     }
     #boot-lines .line.visible {
-      height: auto;
-      overflow: visible;
+      visibility: visible;
     }
     #boot-lines .line:first-child {
       font-family: var(--bios-title-font);
@@ -147,7 +149,10 @@
     }
 
     #boot-bar-wrap {
-      width: 100%;
+      position: absolute;
+      top: var(--bios-bar-top);
+      left: 0;
+      right: 0;
       height: 14px;
       animation: bios-jitter var(--bios-jitter-speed) infinite alternate;
       border: 1px solid var(--bios-color);

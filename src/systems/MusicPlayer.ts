@@ -43,6 +43,8 @@ export class MusicPlayer {
 
   // Phaser objects mirroring thumbnail and title (rendered through CRT shader)
   private thumbSprite!: Phaser.GameObjects.Image;
+  private thumbHoverOverlay!: Phaser.GameObjects.Rectangle;
+  private thumbHovered: boolean = false;
   private thumbTextureId: number = 0;
   private titleText!: Phaser.GameObjects.Text;
   private titleMaskGfx!: Phaser.GameObjects.Graphics;
@@ -168,6 +170,10 @@ export class MusicPlayer {
     this.thumbnailImg.crossOrigin = 'anonymous';
     thumbLink.appendChild(this.thumbnailImg);
 
+    // Thumbnail hover brightness
+    thumbLink.addEventListener('mouseenter', () => { this.thumbHovered = true; });
+    thumbLink.addEventListener('mouseleave', () => { this.thumbHovered = false; });
+
     // Right side: track title stacked above controls (height matches thumbnail)
     const rightColumn = document.createElement('div');
     Object.assign(rightColumn.style, {
@@ -240,6 +246,9 @@ export class MusicPlayer {
     // Thumbnail CRT sprite (mirrors HTML thumbnail through CRT shader)
     this.thumbSprite = this.scene.add.image(0, 0, '__DEFAULT')
       .setDepth(1000).setScrollFactor(0).setVisible(false);
+    this.thumbHoverOverlay = this.scene.add.rectangle(0, 0, 1, 1, 0xffffff, 0.1)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(1001).setScrollFactor(0).setVisible(false);
     this.thumbnailImg.addEventListener('load', () => this.updateThumbTexture());
 
     // Song title CRT text (mirrors scrolling track title through CRT shader)
@@ -627,6 +636,16 @@ export class MusicPlayer {
     }
   }
 
+  /** Set music playback rate for time dilation slow-mo. 1.0 = normal speed. */
+  setPlaybackRate(rate: number): void {
+    if (this.source === 'youtube' && this.ytPlayer && this.playlistStarted) {
+      try { this.ytPlayer.setPlaybackRate(rate); } catch (_) { /* YT not ready */ }
+    }
+    if (this.titleMusic) {
+      (this.titleMusic as any).setRate(rate);
+    }
+  }
+
   private toggleMute(): void {
     if (this.source === 'spotify' && this.spotifyPlayer && this.playlistStarted) {
       const muted = this.spotifyPlayer.toggleMute();
@@ -815,8 +834,13 @@ export class MusicPlayer {
       this.thumbSprite.setPosition((tcx / ow) * TUNING.GAME_WIDTH, (tcy / oh) * TUNING.GAME_HEIGHT);
       this.thumbSprite.setDisplaySize((tr.width / ow) * TUNING.GAME_WIDTH, (tr.height / oh) * TUNING.GAME_HEIGHT);
       this.thumbSprite.setVisible(true);
+      // Hover brightness overlay
+      this.thumbHoverOverlay.setPosition(this.thumbSprite.x, this.thumbSprite.y);
+      this.thumbHoverOverlay.setDisplaySize(this.thumbSprite.displayWidth, this.thumbSprite.displayHeight);
+      this.thumbHoverOverlay.setVisible(this.thumbHovered);
     } else {
       this.thumbSprite.setVisible(false);
+      this.thumbHoverOverlay.setVisible(false);
     }
 
     // --- Title text ---
@@ -861,6 +885,7 @@ export class MusicPlayer {
     for (const s of this.btnSprites) s.destroy();
     this.btnSprites.length = 0;
     this.thumbSprite.destroy();
+    this.thumbHoverOverlay.destroy();
     this.titleText.destroy();
     this.titleMaskGfx.destroy();
     if (this.crossfadeTimer) window.clearTimeout(this.crossfadeTimer);

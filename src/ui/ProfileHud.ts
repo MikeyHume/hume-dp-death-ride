@@ -48,6 +48,7 @@ export class ProfileHud {
   private scoreScale: number = 1;
 
   private avatarImage: Phaser.GameObjects.Image | null = null;
+  private avatarHoverOverlay!: Phaser.GameObjects.Arc;
   private nameDisplay!: Phaser.GameObjects.Text;
   private playingNameText!: Phaser.GameObjects.Text;
   private rankDisplay!: Phaser.GameObjects.Text;
@@ -76,7 +77,19 @@ export class ProfileHud {
       new Phaser.Geom.Circle(AVATAR_RADIUS, AVATAR_RADIUS, AVATAR_RADIUS),
       Phaser.Geom.Circle.Contains
     );
-    hitZone.on('pointerover', () => scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
+    // White overlay for hover brightness (inserted after avatar image, before hit zone)
+    this.avatarHoverOverlay = scene.add.circle(AVATAR_X, AVATAR_Y, AVATAR_RADIUS, 0xffffff, 0.1)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setVisible(false);
+    this.container.add(this.avatarHoverOverlay);
+
+    hitZone.on('pointerover', () => {
+      scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME });
+      this.avatarHoverOverlay.setVisible(true);
+    });
+    hitZone.on('pointerout', () => {
+      this.avatarHoverOverlay.setVisible(false);
+    });
     hitZone.on('pointerdown', () => {
       scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME });
       if (this.clickCallback) this.clickCallback();

@@ -85,8 +85,10 @@ export class PlayerSystem {
     this.setBaseDisplaySize(startW, displayH * s);
   }
 
-  update(dt: number, roadSpeed: number, baseRoadSpeed?: number): void {
+  update(dt: number, roadSpeed: number, baseRoadSpeed?: number, verticalDt?: number): void {
     if (!this.alive) return;
+
+    const vDt = verticalDt ?? dt;
 
     // Tick attack cooldown
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
@@ -102,7 +104,7 @@ export class PlayerSystem {
       if (arrowDir !== 0) {
         const halfH = TUNING.PLAYER_DISPLAY_HEIGHT / 2;
         this.sprite.y = Phaser.Math.Clamp(
-          this.sprite.y + arrowDir * TUNING.PLAYER_ARROW_SPEED * dt,
+          this.sprite.y + arrowDir * TUNING.PLAYER_ARROW_SPEED * vDt,
           TUNING.ROAD_TOP_Y - TUNING.PLAYER_TOP_Y_EXTEND,
           TUNING.ROAD_BOTTOM_Y - halfH
         );
@@ -118,7 +120,7 @@ export class PlayerSystem {
       if (Math.abs(yDiff) < 0.5) {
         this.sprite.y = blendedTarget;
       } else {
-        this.sprite.y += yDiff * (1 - Math.exp(-TUNING.PLAYER_MOUSE_FOLLOW_RATE * dt));
+        this.sprite.y += yDiff * (1 - Math.exp(-TUNING.PLAYER_MOUSE_FOLLOW_RATE * vDt));
       }
     }
 
@@ -608,6 +610,10 @@ export class PlayerSystem {
 
   setVisible(visible: boolean): void {
     this.sprite.setVisible(visible);
+  }
+
+  setAnimTimeScale(scale: number): void {
+    this.sprite.anims.timeScale = scale;
   }
 
   destroy(): void {

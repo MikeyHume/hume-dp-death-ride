@@ -122,9 +122,8 @@ export const TUNING = {
   OBSTACLE_SPAWN_MARGIN: 120,   // spawn this far off-screen right
 
   // Obstacles — slow (blue, tile-based zone, continuous slowdown while overlapping)
-  SLOW_TILE_SIZE: 80,              // square base unit for slow obstacles
-  SLOW_MIN_TILES: 1,              // minimum length in tiles
-  SLOW_MAX_TILES: 16,             // maximum length in tiles (16 × 80 = 1280px)
+  SLOW_BASE_WIDTH: 150,             // shortest puddle width in px (sizes are 1× through SLOW_SIZE_COUNT×)
+  SLOW_SIZE_COUNT: 12,              // number of possible puddle sizes (150, 300, ... 1800)
   SLOW_COLOR: 0x0066ff,
   SLOW_PUSH_RATE: 1200,           // player speed reduced per second while overlapping
 
@@ -297,7 +296,7 @@ export const TUNING = {
   // Rocket launcher pickups
   PICKUP_DIAMETER: 135,              // yellow circle diameter (= laneHeight)
   PICKUP_GAP: 200,                   // px gap between obstacle right edge and pickup left edge
-  PICKUP_SPAWN_CHANCE: 0.2,          // probability a CRASH obstacle spawns a pickup behind it
+  PICKUP_SPAWN_CHANCE: 0.12,         // probability a CRASH obstacle spawns a pickup behind it
   PICKUP_MAX_AMMO: 3,                // max rockets player can carry
   PICKUP_HUD_CIRCLE_RADIUS: 12,     // small yellow circle radius for HUD ammo indicator
   PICKUP_HUD_X: 30,                 // X position of first ammo circle in HUD
@@ -319,7 +318,7 @@ export const TUNING = {
   SHIELD_MAX: 3,                      // max shields player can hold
   SHIELD_DIAMETER: 135,               // pickup collision diameter (= laneHeight)
   SHIELD_COLOR: 0x00ff00,             // green (legacy, used for warnings)
-  SHIELD_SPAWN_CHANCE: 0.15,          // probability a CRASH obstacle spawns a shield behind it
+  SHIELD_SPAWN_CHANCE: 0.10,          // probability a CRASH obstacle spawns a shield behind it
   LANE_WARNING_PREVIEW_SHIELD: 0.5,   // preview scale in warning circle (shield pickup)
   SHIELD_FRAME_WIDTH: 300,            // px per frame in shield sprite sheet (1800 / 6 cols)
   SHIELD_FRAME_HEIGHT: 300,           // px per frame in shield sprite sheet (900 / 3 rows)
@@ -339,12 +338,12 @@ export const TUNING = {
   // Warning circle colors
   WARNING_FILL_COLOR: 0x440000,       // deep dark blood red fill
   WARNING_FILL_ALPHA: 0.69,           // 69% opacity
-  WARNING_STROKE_WIDTH: 3,            // stroke width in px
+  WARNING_STROKE_WIDTH: 6,            // stroke width in px
   WARNING_STROKE_SLOW: 0x0066ff,      // blue for slow/puddles
   WARNING_STROKE_CRASH: 0xff8800,     // orange for obstacles/cones
   WARNING_STROKE_CAR: 0xffffff,       // white for cars
   WARNING_STROKE_ROCKET: 0xffff00,    // yellow for rocket pickups
-  WARNING_STROKE_SHIELD: 0x00ff00,    // green for shield pickups
+  WARNING_STROKE_SHIELD: 0xff0000,    // red for shield pickups
 
   // Rockets (projectiles)
   ROCKET_SPEED: 2400,               // px/sec max rightward speed
@@ -391,4 +390,14 @@ export const TUNING = {
 
   // Debug — set to true to enable hotkeys (0 = instant rage)
   DEBUG_KEYS: true,
+
+  // ── Time dilation (300-style katana slow-mo) ──
+  TDIL_MIN_SCALE: 0.1,            // min time scale at full slowdown (0.1 = 10% speed)
+  TDIL_RAMP_DOWN_DURATION: 0.5,  // real-time seconds to ramp from 1x to min
+  TDIL_HOLD_DURATION: 0.1,        // real-time seconds held at min scale
+  TDIL_RAMP_UP_DURATION: 1.0,     // real-time seconds to ramp from min back to 1x
+  TDIL_RAMP_DOWN_EASE: 2.0,       // power curve exponent for ramp down (higher = snappier)
+  TDIL_RAMP_UP_EASE: 2.0,         // power curve exponent for ramp up
+  TDIL_VERTICAL_BLEND: 0.85,      // how much vertical movement stays real-time (0=fully dilated, 1=fully real)
+  TDIL_MUSIC_MIN_RATE: 0.25,      // YouTube min playback rate (YT API floor)
 } as const;

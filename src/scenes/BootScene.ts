@@ -295,11 +295,11 @@ export class BootScene extends Phaser.Scene {
       repeat: 0,
     });
 
-    // Slow obstacle (blue, single tile — stretched via setDisplaySize at spawn)
+    // Puddle ellipse (white circle — stretched to ellipse + tinted blue at spawn)
     const slowGfx = this.add.graphics();
-    slowGfx.fillStyle(TUNING.SLOW_COLOR);
-    slowGfx.fillRect(0, 0, TUNING.SLOW_TILE_SIZE, TUNING.SLOW_TILE_SIZE);
-    slowGfx.generateTexture('obstacle-slow', TUNING.SLOW_TILE_SIZE, TUNING.SLOW_TILE_SIZE);
+    slowGfx.fillStyle(0xffffff);
+    slowGfx.fillCircle(128, 128, 128);
+    slowGfx.generateTexture('obstacle-slow', 256, 256);
     slowGfx.destroy();
 
     // Car drive animations (20 sprite sheets, 59 usable frames each at 12fps)

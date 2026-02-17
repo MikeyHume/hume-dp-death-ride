@@ -110,19 +110,31 @@ export class ObstacleSystem {
     for (let i = 1; i <= TUNING.CAR_COUNT; i++) this.carDeck.push(i);
     // Fisher-Yates shuffle
     for (let i = this.carDeck.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(this.rng.next() * (i + 1));
       const tmp = this.carDeck[i];
       this.carDeck[i] = this.carDeck[j];
       this.carDeck[j] = tmp;
     }
     // If the first card matches the last card from the previous deck, swap it
     if (this.carDeck[0] === this.lastCarSkin && this.carDeck.length > 1) {
-      const swapIdx = 1 + Math.floor(Math.random() * (this.carDeck.length - 1));
+      const swapIdx = 1 + Math.floor(this.rng.next() * (this.carDeck.length - 1));
       const tmp = this.carDeck[0];
       this.carDeck[0] = this.carDeck[swapIdx];
       this.carDeck[swapIdx] = tmp;
     }
     this.carDeckIndex = 0;
+  }
+
+  /** Check if a lane has an active car that's still off-screen right. */
+  private laneHasOffscreenCar(laneIndex: number): boolean {
+    for (let i = 0; i < this.pool.length; i++) {
+      const obs = this.pool[i];
+      if (!obs.active || obs.getData('dying')) continue;
+      if (obs.getData('type') !== ObstacleType.CAR) continue;
+      if (obs.getData('lane') !== laneIndex) continue;
+      if (obs.x > TUNING.GAME_WIDTH) return true;
+    }
+    return false;
   }
 
   /** Get the next car skin index from the deck. Reshuffles when exhausted. */
@@ -225,6 +237,9 @@ export class ObstacleSystem {
         const stat = this.pool[s];
         if (!stat.active || stat.getData('type') !== ObstacleType.CRASH) continue;
 
+        // Never collide when both objects are off-screen (invisible deaths feel broken)
+        if (car.x > TUNING.GAME_WIDTH && stat.x > TUNING.GAME_WIDTH) continue;
+
         const statW = stat.getData('w') as number;
         const statH = stat.getData('h') as number;
 
@@ -319,6 +334,11 @@ export class ObstacleSystem {
         type = ObstacleType.SLOW;
       }
 
+      // Avoid spawning CRASH in a lane with an off-screen car (would collide before reaching player)
+      if (type === ObstacleType.CRASH && this.laneHasOffscreenCar(laneIndex)) {
+        type = ObstacleType.SLOW;
+      }
+
       // Spawn far enough off-screen for the longest warning window (cars get extra lead time and scroll slower)
       const carWarningDist = roadSpeed * (1 - TUNING.CAR_SPEED_FACTOR) * (TUNING.LANE_WARNING_DURATION + TUNING.LANE_WARNING_CAR_EXTRA);
       const defaultWarningDist = roadSpeed * TUNING.LANE_WARNING_DURATION;
@@ -361,8 +381,8 @@ export class ObstacleSystem {
       }
       case ObstacleType.SLOW: {
         textureKey = 'obstacle-slow';
-        const tiles = TUNING.SLOW_MIN_TILES + Math.floor(this.rng.next() * (TUNING.SLOW_MAX_TILES - TUNING.SLOW_MIN_TILES + 1));
-        w = TUNING.SLOW_TILE_SIZE * tiles;
+        const sizeIdx = 1 + Math.floor(this.rng.next() * TUNING.SLOW_SIZE_COUNT);
+        w = TUNING.SLOW_BASE_WIDTH * sizeIdx;
         h = this.laneHeight;
         obs.stop();
         break;
@@ -370,6 +390,12 @@ export class ObstacleSystem {
     }
 
     obs.setTexture(textureKey);
+    // Tint puddles blue (white circle texture); clear tint for other types (pool reuses sprites)
+    if (type === ObstacleType.SLOW) {
+      obs.setTint(TUNING.SLOW_COLOR);
+    } else {
+      obs.clearTint();
+    }
     const obsScale = TUNING.OBSTACLE_DISPLAY_SCALE;
     const laneScale = TUNING.LANE_SCALES[laneIndex] ?? 1;
     if (type === ObstacleType.CRASH) {
