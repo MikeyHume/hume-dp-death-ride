@@ -116,3 +116,68 @@ $$;
 -- 7) Grant execute to anon + authenticated
 GRANT EXECUTE ON FUNCTION public.get_player_top10(text, text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_player_weekly_history(text) TO anon, authenticated;
+
+-- ============================================================
+-- GLOBAL LEADERBOARD: time_survived column + global top 10 RPC
+-- ============================================================
+
+-- 8) Add time_survived column (seconds as int, nullable for old rows)
+ALTER TABLE public.leaderboard_entries
+  ADD COLUMN IF NOT EXISTS time_survived int;
+
+-- 9) Re-add user_id column (was dropped earlier) + default to COALESCE(auth.uid(), gen_random_uuid())
+ALTER TABLE public.leaderboard_entries
+  ADD COLUMN IF NOT EXISTS user_id uuid;
+
+ALTER TABLE public.leaderboard_entries
+  ALTER COLUMN user_id SET DEFAULT COALESCE(auth.uid(), gen_random_uuid());
+
+-- 10) Indexes for global queries
+CREATE INDEX IF NOT EXISTS idx_lb_week_user
+  ON public.leaderboard_entries (week_id, user_id);
+
+-- 11) RPC: Global top 10 RUNS for a given week.
+--     No dedup — same player can occupy multiple slots.
+--     Tie-breaker: earlier created_at wins ties.
+DROP FUNCTION IF EXISTS public.get_global_top10(text);
+
+CREATE FUNCTION public.get_global_top10(p_week_id text)
+RETURNS TABLE(
+  rank bigint,
+  id bigint,
+  username text,
+  score int,
+  time_survived int,
+  user_id uuid,
+  spotify_user_id text,
+  avatar_url text,
+  created_at timestamptz
+)
+LANGUAGE sql STABLE
+AS $$
+  SELECT
+    ROW_NUMBER() OVER (
+      ORDER BY le.score DESC,
+               le.time_survived DESC NULLS LAST,
+               le.created_at ASC
+    ) AS rank,
+    le.id,
+    COALESCE(le.username, 'ANON') AS username,
+    le.score,
+    le.time_survived,
+    le.user_id,
+    le.spotify_user_id,
+    le.avatar_url,
+    le.created_at
+  FROM public.leaderboard_entries le
+  WHERE le.week_id = p_week_id
+  ORDER BY le.score DESC,
+           le.time_survived DESC NULLS LAST,
+           le.created_at ASC
+  LIMIT 10;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_global_top10(text) TO anon, authenticated;
+
+-- 12) Grant table-level SELECT + INSERT to anon and authenticated roles
+GRANT SELECT, INSERT ON public.leaderboard_entries TO anon, authenticated;

@@ -23,7 +23,7 @@ import { TimeDilationSystem } from '../systems/TimeDilationSystem';
 import { PerfSystem } from '../systems/PerfSystem';
 import { OrientationOverlay } from '../systems/OrientationOverlay';
 import { GAME_MODE } from '../config/gameMode';
-import { submitScore } from '../systems/LeaderboardService';
+import { submitScore, fetchGlobalTop10, GlobalLeaderboardEntry } from '../systems/LeaderboardService';
 
 enum GameState {
   TITLE,
@@ -202,6 +202,9 @@ export class GameScene extends Phaser.Scene {
   private nameKeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private nameConfirmed: boolean = false;
   private autoSubmitted: boolean = false;
+  private globalLeaderboardData: GlobalLeaderboardEntry[] | null = null;
+  private lastSubmittedRunId: string | null = null;
+  private deathGen = 0;
   private nameSkipConfirmPending: boolean = false;
   private nameSkipWarning!: Phaser.GameObjects.Text;
   private emptyNamePrompt!: Phaser.GameObjects.Text;
@@ -1356,8 +1359,10 @@ export class GameScene extends Phaser.Scene {
     this.emptyNameYesBtn.setVisible(false);
     this.emptyNameNoBtn.setVisible(false);
 
-    // Reset auto-submit state
+    // Reset auto-submit and global leaderboard state
     this.autoSubmitted = false;
+    this.globalLeaderboardData = null;
+    this.lastSubmittedRunId = null;
     this.deathBestText.setVisible(false);
 
     // Restore road/parallax and show title screen
@@ -2708,25 +2713,40 @@ export class GameScene extends Phaser.Scene {
           this.dyingPhase = 'fade';
           this.dyingTimer = 0;
 
+          // Show death screen shell immediately (behind white overlay)
+          this.deathScoreText.setText(`SCORE: ${this.pendingScore}`);
+          this.deathTimeText.setText(`TIME: ${Math.round(this.elapsed)}s`);
+          this.deathRankText.setText('');
+          this.deathBestText.setVisible(false);
+          this.deathLeaderboardText.setText('');
+          this.deathLbEntriesContainer.removeAll(true);
+          this.highlightedRowTexts = [];
+          this.deathContainer.setVisible(true);
+          this.deathRestartText.setVisible(true);
+
           const profileName = this.profilePopup.getName();
           const hasProfileName = profileName !== 'ANON' && profileName.trim() !== '';
 
           if (hasProfileName) {
             // Auto-submit with profile name — skip name entry entirely
             const rank = this.leaderboardSystem.submit(profileName, this.pendingScore, this.elapsed);
-            void submitScore(this.pendingScore, profileName);
+            const gen = this.deathGen;
             this.autoSubmitted = true;
-            this.prepareDeathScreenVisuals(rank);
-          } else if (this.pendingRank > 0) {
-            // Top 10 but no profile name — show name entry
+            submitScore(this.pendingScore, this.elapsed, profileName).then(id => {
+              if (gen !== this.deathGen) return;
+              this.lastSubmittedRunId = id;
+              return fetchGlobalTop10(this.weekKey);
+            }).then(data => {
+              if (gen !== this.deathGen) return;
+              if (data) this.globalLeaderboardData = data;
+            }).catch(() => {}).finally(() => {
+              if (gen !== this.deathGen) return;
+              this.prepareDeathScreenVisuals(rank);
+            });
+          } else {
+            // No profile name — always show name entry for anon users
             this.autoSubmitted = false;
             this.prepareNameEntryVisuals();
-          } else {
-            // Not top 10, no profile name
-            this.autoSubmitted = false;
-            this.leaderboardSystem.submit('---', this.pendingScore, this.elapsed);
-            void submitScore(this.pendingScore);
-            this.prepareDeathScreenVisuals(0);
           }
         }
         break;
@@ -2745,7 +2765,7 @@ export class GameScene extends Phaser.Scene {
           this.profileHud.setVisible(true);
 
           // NOW activate the actual state
-          if (!this.autoSubmitted && this.pendingRank > 0) {
+          if (!this.autoSubmitted) {
             this.activateNameEntry();
           } else {
             this.state = GameState.DEAD;
@@ -2813,6 +2833,11 @@ export class GameScene extends Phaser.Scene {
     this.deathWhiteOverlay.setAlpha(0).setVisible(true);
     this.dyingPhase = 'ramp';
     this.dyingTimer = 0;
+
+    // Reset global leaderboard state — fetch happens after submit completes
+    this.globalLeaderboardData = null;
+    this.lastSubmittedRunId = null;
+    this.deathGen++;
   }
 
   /** Show name entry UI (visuals only, no state change or keyboard handler) */
@@ -2884,18 +2909,39 @@ export class GameScene extends Phaser.Scene {
     this.deathScoreText.setText(`SCORE: ${this.pendingScore}`);
     this.deathTimeText.setText(`TIME: ${Math.round(this.elapsed)}s`);
 
-    if (rank > 0 && rank <= 10) {
-      this.deathRankText.setText(`#${rank} THIS WEEK`);
-    } else if (rank > 10) {
-      this.deathRankText.setText(`YOUR SCORE RANKED #${rank}`);
+    // Build unified entry list from global data (preferred) or local fallback
+    const globalData = this.globalLeaderboardData;
+    const isGlobal = !!(globalData && globalData.length > 0);
+
+    interface DisplayEntry { name: string; score: number; time: number; entryId: string | null; isCurrentPlayer: boolean }
+    let entries: DisplayEntry[];
+    let highlightIdx = -1;
+
+    if (isGlobal) {
+      entries = globalData!.map(e => ({
+        name: e.username || 'ANON',
+        score: e.score,
+        time: e.timeSurvived || 0,
+        entryId: e.id,
+        isCurrentPlayer: !!(this.lastSubmittedRunId && e.id === this.lastSubmittedRunId),
+      }));
+      highlightIdx = entries.findIndex(e => e.isCurrentPlayer);
     } else {
-      this.deathRankText.setText('');
+      const localEntries = this.leaderboardSystem.getDisplayEntries();
+      entries = localEntries.map(e => ({
+        name: e.name,
+        score: e.score,
+        time: e.time,
+        entryId: null,
+        isCurrentPlayer: false,
+      }));
+      highlightIdx = (rank > 0 && rank <= 10) ? rank - 1 : -1;
     }
 
-    // Show best score info when not in top 10
+    // Show best score info when not in top 10 (local data)
     const profileName = this.profilePopup.getName();
     const hasProfileName = profileName !== 'ANON' && profileName.trim() !== '';
-    if (rank > 10 && hasProfileName) {
+    if (!isGlobal && rank > 10 && hasProfileName) {
       const best = this.leaderboardSystem.getBestForName(profileName);
       if (best && best.rank !== rank) {
         this.deathBestText.setText(`BEST: ${best.score} (RANKED #${best.rank})`);
@@ -2907,20 +2953,30 @@ export class GameScene extends Phaser.Scene {
       this.deathBestText.setVisible(false);
     }
 
+    // Rank text
+    if (isGlobal && highlightIdx >= 0) {
+      this.deathRankText.setText(`#${highlightIdx + 1} GLOBAL THIS WEEK`);
+    } else if (!isGlobal && rank > 0 && rank <= 10) {
+      this.deathRankText.setText(`#${rank} THIS WEEK`);
+    } else if (!isGlobal && rank > 10) {
+      this.deathRankText.setText(`YOUR SCORE RANKED #${rank}`);
+    } else {
+      this.deathRankText.setText('');
+    }
+
     // Top 10 leaderboard display — top 3 get podium styling
-    const entries = this.leaderboardSystem.getDisplayEntries();
-    this.deathLeaderboardText.setText(`── ${this.weekKey} TOP 10 ──`);
+    this.deathLeaderboardText.setText(isGlobal
+      ? `── ${this.weekKey} GLOBAL TOP 10 ──`
+      : `── ${this.weekKey} TOP 10 ──`);
 
     // Clear previous entry rows
     this.deathLbEntriesContainer.removeAll(true);
     this.highlightedRowTexts = [];
 
-    const highlightIdx = (rank > 0 && rank <= 10) ? rank - 1 : -1;
     const headerH = 40;
     const baseY = this.deathLeaderboardText.y + headerH;
 
     const hasAvatar = this.textures.exists(AVATAR_TEXTURE_KEY);
-    const playerName = this.profilePopup.getName();
 
     // ── Top 3 entries ──
     let curY = baseY + DLB_T3_Y;
@@ -2936,8 +2992,7 @@ export class GameScene extends Phaser.Scene {
       const ring = this.add.circle(avatarX, rowCenterY, DLB_T3_AVATAR_R + DLB_T3_AVATAR_STROKE, DLB_T3_MEDAL_COLORS[i]);
       this.deathLbEntriesContainer.add(ring);
 
-      const isPlayerEntry = e.name === playerName && hasAvatar;
-      if (isPlayerEntry) {
+      if (e.isCurrentPlayer && hasAvatar) {
         const avatar = this.add.image(avatarX, rowCenterY, AVATAR_TEXTURE_KEY)
           .setDisplaySize(DLB_T3_AVATAR_R * 2, DLB_T3_AVATAR_R * 2);
         this.deathLbEntriesContainer.add(avatar);
@@ -3026,7 +3081,7 @@ export class GameScene extends Phaser.Scene {
         fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
       }).setOrigin(0, 0.5);
       this.deathLbEntriesContainer.add(scoreT);
-      rowTexts.push(timeT);
+      rowTexts.push(scoreT);
 
       if (i === highlightIdx) this.highlightedRowTexts = rowTexts;
       curY += DLB_REST_ROW_H;
@@ -3104,7 +3159,16 @@ export class GameScene extends Phaser.Scene {
       // Submit score with name
       const name = this.enteredName.trim() || 'ANON';
       const rank = this.leaderboardSystem.submit(name, this.pendingScore, this.elapsed);
-      void submitScore(this.pendingScore, name);
+      const gen3 = this.deathGen;
+      submitScore(this.pendingScore, this.elapsed, name).then(id => {
+        if (gen3 !== this.deathGen) return;
+        this.lastSubmittedRunId = id;
+        return fetchGlobalTop10(this.weekKey);
+      }).then(data => {
+        if (gen3 !== this.deathGen || !data) return;
+        this.globalLeaderboardData = data;
+        this.prepareDeathScreenVisuals(rank);
+      }).catch(() => { /* keep local fallback */ });
       this.nameEntryContainer.setVisible(false);
       this.nameEnterBtn.setVisible(false);
       this.showDeathScreen(rank);
