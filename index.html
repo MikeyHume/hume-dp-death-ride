@@ -59,7 +59,7 @@
       --bios-line-height:       1.8;
       --bios-title-font:        'Alagard', 'Courier New', monospace;
       --bios-title-size:        clamp(16px, 3vw, 42px);
-      --bios-scale:             3;             /* scale multiplier for entire BIOS group */
+      --bios-scale:             2;             /* scale multiplier for entire BIOS group */
       --bios-bar-bottom:        200px;          /* bar distance from bottom of screen     */
       --bios-text-gap:          30px;          /* gap between text bottom and bar top    */
     }
@@ -219,6 +219,21 @@
       biosClickAudio.play().catch(function() {});
     });
 
+    // Boot-up sound — plays when BIOS starts, faded out when dismissed
+    var bootupAudio = new Audio('assets/audio/sfx/old_bootup.mp3');
+    bootupAudio.volume = 1.0;
+    bootupAudio.loop = false;
+    bootupAudio.play().catch(function() {
+      // Autoplay blocked — start on first user interaction
+      var startBootAudio = function() {
+        bootupAudio.play().catch(function() {});
+        document.removeEventListener('pointerdown', startBootAudio);
+        document.removeEventListener('keydown', startBootAudio);
+      };
+      document.addEventListener('pointerdown', startBootAudio);
+      document.addEventListener('keydown', startBootAudio);
+    });
+
     // Build flat character list, count dots/non-dots, assign progress thresholds
     var chars = [];
     var totalDots = 0;
@@ -300,9 +315,32 @@
       typingDone = true;
     }
 
+    function fadeOutBootAudio() {
+      var start = bootupAudio.volume;
+      var dur = 500; // ms
+      var step = 16;
+      var decrement = start / (dur / step);
+      var fade = setInterval(function() {
+        var v = bootupAudio.volume - decrement;
+        if (v <= 0) {
+          clearInterval(fade);
+          bootupAudio.volume = 0;
+          bootupAudio.pause();
+        } else {
+          bootupAudio.volume = v;
+        }
+      }, step);
+    }
+
+    // BIOS complete chime — plays when loading finishes
+    var biosCompleteAudio = new Audio('assets/audio/sfx/bios complete loading.mp3');
+    biosCompleteAudio.volume = 1.0;
+
     function tryDismiss() {
       if (dismissed || !typingDone || !loadingDone) return;
       dismissed = true;
+      fadeOutBootAudio();
+      biosCompleteAudio.play().catch(function() {});
       // Bar is already at 100% (set in markStartScreenReady) — just fade out
       setTimeout(function() {
         overlay.style.transition = 'opacity 0.3s ease-out';

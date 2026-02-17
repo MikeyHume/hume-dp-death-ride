@@ -37,7 +37,7 @@ export const CRT_TUNING = {
   vignette: 0,              // vignette strength (0 = off, darkens edges)
 
   // ── Rage distortion ──
-  rageDistortionMax: 1,        // target intensity during rage (tune this — higher = more gnarly)
+  rageDistortionMax: .25,        // target intensity during rage (tune this — higher = more gnarly)
   rageDistortion: 0,           // runtime value (driven by GameScene — do not edit)
 };
 

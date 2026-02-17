@@ -162,6 +162,11 @@ export class InputSystem {
     );
   }
 
+  /** Returns raw cursor X position */
+  getTargetX(): number {
+    return this.scene.input.activePointer.x;
+  }
+
   /** Returns true while boost is held (Space on desktop, left thumb down on mobile) */
   isSpaceHeld(): boolean {
     if (this.mobileMode) return this.touchBoostHeld;

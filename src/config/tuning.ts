@@ -41,6 +41,16 @@ export const TUNING = {
   ROCKET_LAUNCHER_OFFSET_Y: -10,      // px vertical offset for rocket launcher sprite (positive = down)
   ROCKET_EMIT_X: 0,                  // px offset from player X for rocket spawn (positive = right)
   ROCKET_EMIT_Y: -69,                  // px offset from player Y for rocket spawn (positive = down)
+  // Collection animations (shared tuning — all COL sheets are identical layout)
+  COL_SPEED: 2.0,                    // global playback speed multiplier for all collect animations
+  COL_FRAME_WIDTH: 840,             // px per frame (3360 / 4 cols)
+  COL_FRAME_HEIGHT: 637,            // px per frame (3185 / 5 rows)
+  COL_ANIM_FRAMES: 19,              // usable frames (last frame of 4×5 grid is empty)
+  COL_FPS: 12,                       // base animation framerate (multiplied by COL_SPEED)
+  COL_SCALE: 1.269,                   // scale multiplier for all COL sprites
+  COL_OFFSET_X: 0,                  // px horizontal offset for all COL anims (positive = right)
+  COL_OFFSET_Y: -22,                // px vertical offset for all COL anims (negative = up)
+
   SPEEDUP_FRAME_WIDTH: 655,       // px per frame in speed-up sprite sheet (2620 / 4 cols)
   SPEEDUP_FRAME_HEIGHT: 469,      // px per frame in speed-up sprite sheet (7504 / 16 rows)
   SPEEDUP_INTRO_END: 35,          // last frame of intro sequence (frames 0-35)
@@ -74,13 +84,18 @@ export const TUNING = {
   PLAYER_MOUSE_FOLLOW_RATE: 15, // exponential approach rate for mouse Y tracking (higher = snappier, 15 ≈ 95% in 0.2s)
 
   // Start hold — player waits after countdown, then ramps to speed
-  START_HOLD_WAIT: 2.0,        // seconds player must wait before spacebar works
+  START_HOLD_WAIT: 0.5,        // seconds player must wait before spacebar works
   START_HOLD_RAMP: 6.9,        // seconds for road speed + player Y to ramp up after release
+  START_TEXT_ON_MS: 800,       // ms the "HOLD SPACEBAR TO GO" text stays visible per blink cycle
+  START_TEXT_OFF_MS: 400,      // ms the text stays hidden per blink cycle
+  START_TEXT_FADE_MS: 150,     // ms fade transition between on/off (0 = hard cut)
+  INTRO_TUT_SCALE: 1.01,       // multiplier to stretch the intro-to-tutorial cutscene (1.0 = exact fit)
 
   // Player horizontal position — edit these to move the left/right death boundaries
   PLAYER_START_X: 960,       // where the bike spawns horizontally (960 = center of 1920)
   PLAYER_MIN_X: 0,           // left death boundary (0 = left screen edge)
   PLAYER_MAX_X: 1920,        // right death boundary (1920 = right screen edge)
+  SPECTATOR_CURSOR_OFFSET_X: -200, // px offset from cursor X in spectator mode (negative = left)
 
   // Road speed — increases over time
   ROAD_BASE_SPEED: 1000,      // starting road scroll speed (px/sec)
@@ -176,11 +191,23 @@ export const TUNING = {
   ENGINE_BASE_FREQ: 80,            // Hz at speed 0
   ENGINE_IDLE_FREQ: 45,            // Hz for idle putter when not accelerating
   ENGINE_MAX_FREQ: 300,            // Hz at max speed
-  ENGINE_VOLUME: 0.01,
-  ENGINE_IDLE_VOLUME: 0.01,        // quiet putter volume when space not pressed
+  ENGINE_VOLUME: 10,
+  ENGINE_IDLE_VOLUME: 1,        // quiet putter volume when space not pressed
+  ENGINE_SAMPLE_VOLUME: 5,       // engine sample volume at full speed
+  ENGINE_SAMPLE_IDLE_VOLUME: 0.4,  // engine sample volume when idle
+  ENGINE_IDLE_RATE: 0.7,           // playback rate when idle (lower pitch)
+  ENGINE_MAX_RATE: 1.8,            // playback rate at max speed (higher pitch/rev)
+  ENGINE_RAGE_RATE_BOOST: 0.4,     // extra playback rate added during rage mode
+  ENGINE_SMOOTHING: 0.08,          // per-frame smoothing factor for rate/volume transitions
+  ENGINE_REV_RATE_BOOST: 0.6,      // extra playback rate on tap (instant rev burst)
+  ENGINE_REV_VOL_BOOST: 0.5,       // extra volume on tap (instant rev burst)
+  ENGINE_REV_DECAY: 4.0,           // how fast the rev burst decays per second
+  SFX_CLICK_VOLUME: 0.5,            // UI click volume
+  SFX_HOVER_VOLUME: 0.3,            // UI hover volume
+  SFX_EXPLODE_VOLUME: 0.25,         // explosion volume
+  SFX_ROCKET_FIRE_VOLUME: 0.5,      // rocket launch volume
   IMPACT_VOLUME: 0.3,
   IMPACT_DURATION: 0.15,           // seconds
-  EXPLOSION_VOLUME: 0.25,          // car-vs-crash boom volume
 
   // Katana slash
   KATANA_DURATION: 0.15,           // seconds the slash hitbox is active
@@ -244,7 +271,7 @@ export const TUNING = {
   COUNTDOWN_INITIAL_DELAY: 0.5,     // seconds to wait before showing the first number (5)
   COUNTDOWN_NUMBER_DURATION: 0.8,   // seconds each number takes to scale up and fade out
   COUNTDOWN_DELAY: 0.4,             // seconds to wait before showing the next number
-  COUNTDOWN_CONTROL_DELAY: 1.0,    // seconds after black fades before player can control
+  COUNTDOWN_CONTROL_DELAY: 0.5,    // seconds after black fades before player can control
   COUNTDOWN_SPAWN_DELAY: 2.0,      // seconds after player gets control before obstacles spawn
 
   // Tutorial (pre-countdown screens)
@@ -264,6 +291,9 @@ export const TUNING = {
   LANE_WARNING_PREVIEW_SLOW: 0.4,       // preview scale relative to circle diameter (slow zone)
   LANE_WARNING_PREVIEW_PICKUP: 0.5,     // preview scale relative to circle diameter (rocket pickup)
 
+  // Pickups (shared)
+  PICKUP_Y_OFFSET: -50,             // px vertical offset for all pickups (negative = higher)
+
   // Rocket launcher pickups
   PICKUP_DIAMETER: 135,              // yellow circle diameter (= laneHeight)
   PICKUP_GAP: 200,                   // px gap between obstacle right edge and pickup left edge
@@ -274,23 +304,37 @@ export const TUNING = {
   PICKUP_HUD_Y: 90,                 // Y position of ammo circles (below rage bar at Y=60)
   PICKUP_HUD_SPACING: 30,           // horizontal spacing between ammo circles
   PICKUP_COLOR: 0xffff00,           // yellow
+  PICKUP_FRAME_SIZE: 300,            // px per frame in pickup sprite sheet (1800 / 6)
+  PICKUP_ANIM_FRAMES: 31,           // usable frames (6×6 grid = 36, last 5 blank)
+  PICKUP_ANIM_FPS: 12,              // base animation framerate
+  PICKUP_ANIM_SCALE: 1.0,           // scale multiplier for pickup sprite size
+  PICKUP_ANIM_SPEED: 1.0,           // playback speed multiplier for pickup animation
+  PICKUP_HOVER_AMOUNT: 8,             // px amplitude of vertical hover bob
+  PICKUP_HOVER_SPEED: 2.0,            // hover cycles per second
+  PICKUP_GLOW_SCALE: 2.0,             // glow size relative to pickup diameter
+  PICKUP_GLOW_PULSE_SPEED: 1.5,       // glow pulse cycles per second
+  ROCKET_ICON_SCALE: 0.2,            // scale multiplier for rocket ammo HUD icons
 
   // Shield pickups
   SHIELD_MAX: 3,                      // max shields player can hold
-  SHIELD_DIAMETER: 135,               // green sphere diameter (= laneHeight)
-  SHIELD_COLOR: 0x00ff00,             // green
+  SHIELD_DIAMETER: 135,               // pickup collision diameter (= laneHeight)
+  SHIELD_COLOR: 0x00ff00,             // green (legacy, used for warnings)
   SHIELD_SPAWN_CHANCE: 0.15,          // probability a CRASH obstacle spawns a shield behind it
   LANE_WARNING_PREVIEW_SHIELD: 0.5,   // preview scale in warning circle (shield pickup)
+  SHIELD_FRAME_WIDTH: 300,            // px per frame in shield sprite sheet (1800 / 6 cols)
+  SHIELD_FRAME_HEIGHT: 300,           // px per frame in shield sprite sheet (900 / 3 rows)
+  SHIELD_ANIM_FRAMES: 17,             // usable frames (6×3 grid = 18, last 1 blank)
+  SHIELD_ANIM_FPS: 12,                // base animation framerate
+  SHIELD_ANIM_SCALE: 1.0,             // scale multiplier for shield pickup sprite size
+  SHIELD_ANIM_SPEED: 1.0,             // playback speed multiplier for shield pickup animation
+  SHIELD_HOVER_AMOUNT: 8,             // px amplitude of vertical hover bob
+  SHIELD_HOVER_SPEED: 2.0,            // hover cycles per second
+  SHIELD_GLOW_SCALE: 2.0,             // glow size relative to shield diameter
+  SHIELD_GLOW_PULSE_SPEED: 1.5,       // glow pulse cycles per second
+  SHIELD_ICON_SCALE: 0.2,             // scale multiplier for shield HUD icons
 
-  // Shield HUD pills (top-center of screen)
-  SHIELD_PILL_W: 60,                  // pill width in px
-  SHIELD_PILL_H: 24,                  // pill height in px
-  SHIELD_PILL_GAP: 10,                // gap between pills in px
-  SHIELD_PILL_Y: 40,                  // Y position from top of screen
-  SHIELD_PILL_BG_COLOR: 0x003300,     // dark green background
-  SHIELD_PILL_BG_ALPHA: 0.5,          // background opacity
-  SHIELD_PILL_ACTIVE_COLOR: 0x00ff00, // neon green active color
-  SHIELD_PILL_CORNER_RADIUS: 12,      // rounded corner radius
+  // Shield HUD pills (right-justified under rage bar)
+  SHIELD_PILL_GAP: 10,                // gap between shield icons in px
 
   // Warning circle colors
   WARNING_FILL_COLOR: 0x440000,       // deep dark blood red fill
@@ -303,11 +347,20 @@ export const TUNING = {
   WARNING_STROKE_SHIELD: 0x00ff00,    // green for shield pickups
 
   // Rockets (projectiles)
-  ROCKET_SPEED: 2400,               // px/sec rightward
+  ROCKET_SPEED: 2400,               // px/sec max rightward speed
+  ROCKET_RAMP_TIME: .69,            // seconds to reach max speed (exponential ramp)
   ROCKET_RADIUS: 20,                // collision circle radius
   ROCKET_DISPLAY_W: 40,             // visual width
   ROCKET_DISPLAY_H: 20,             // visual height
   ROCKET_COLOR: 0xffff00,           // yellow
+  ROCKET_PROJ_FRAME_W: 385,        // spritesheet frame width (1925 / 5)
+  ROCKET_PROJ_FRAME_H: 200,        // spritesheet frame height (800 / 4)
+  ROCKET_PROJ_FRAMES: 20,          // total frames (5×4)
+  ROCKET_PROJ_LOOP_START: 9,       // frame index where the loop begins (skip first 9 on repeat)
+  ROCKET_PROJ_FPS: 12,             // animation framerate
+  ROCKET_PROJ_SCALE: .36,          // visual scale multiplier for projectile sprite
+  ROCKET_PROJ_OFFSET_X: 150,        // px horizontal offset from player fire position (positive = right)
+  ROCKET_PROJ_OFFSET_Y: 0,        // px vertical offset from player fire position (positive = down)
   ROCKET_COOLDOWN: 0.3,             // seconds between rocket shots
   ATTACK_COOLDOWN_SLASH: .5,       // seconds after katana before any attack allowed
   ATTACK_COOLDOWN_ROCKET: 1.0,      // seconds after rocket before any attack allowed
@@ -334,6 +387,7 @@ export const TUNING = {
   CURSOR_STROKE_W: ((window as any).__cursorConfig?.strokeW ?? 0) as number,
   CURSOR_STROKE_COLOR: ((window as any).__cursorConfig?.strokeColor ?? 0xffffff) as number,
   CURSOR_DEPTH: 9998,              // render depth (on top of game, under debug)
+  CROSSHAIR_SCALE: 3.0,            // multiplier to adjust crosshair size
 
   // Debug — set to true to enable hotkeys (0 = instant rage)
   DEBUG_KEYS: true,

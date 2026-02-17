@@ -17,25 +17,13 @@ const BAR_GAP_Y = 4;                      // vertical gap between score bottom a
 const PIP_GAP = 8;                        // vertical gap below rage bar to pips
 const PIP_AREA_W = 200;                   // width used for pip layout (keeps original spacing)
 
-// Rocket pill tuning (under rage bar, left-justified)
-const ROCKET_PILL_BG_COLOR = 0x333300;    // dark yellow background
-const ROCKET_PILL_BG_ALPHA = 0.5;
-const ROCKET_PILL_ACTIVE_COLOR = 0xffff00; // bright yellow active
-const ROCKET_PILL_ACTIVE_ALPHA = 0.9;
 const SIGN_IN_SCALE = 0.4;               // sign-in image scale
 const SIGN_IN_OFFSET_X = 96;             // sign-in X offset from avatar center
 const SIGN_IN_OFFSET_Y = 50;             // sign-in Y offset below avatar bottom
 const RANK_FONT_SIZE = 30;               // rank text font size in px
 
-// Shield pill tuning (under rage bar, right-justified)
-const SHIELD_PILL_W = TUNING.SHIELD_PILL_W;
-const SHIELD_PILL_H = TUNING.SHIELD_PILL_H;
+// Shield icon tuning (under rage bar, right-justified)
 const SHIELD_PILL_GAP = TUNING.SHIELD_PILL_GAP;
-const SHIELD_PILL_RADIUS = TUNING.SHIELD_PILL_CORNER_RADIUS;
-const SHIELD_BG_COLOR = TUNING.SHIELD_PILL_BG_COLOR;
-const SHIELD_BG_ALPHA = TUNING.SHIELD_PILL_BG_ALPHA;
-const SHIELD_ACTIVE_COLOR = TUNING.SHIELD_PILL_ACTIVE_COLOR;
-const SHIELD_ACTIVE_ALPHA = 0.9;
 
 // Derived layout (computed from tuning above)
 const AVATAR_X = AVATAR_RADIUS;
@@ -53,8 +41,8 @@ export class ProfileHud {
   private rageBg: Phaser.GameObjects.Rectangle;
   private rageFill: Phaser.GameObjects.Rectangle;
   private rageSegments: Phaser.GameObjects.Rectangle[] = [];
-  private rocketBgPills: Phaser.GameObjects.Graphics[] = [];
-  private rocketActivePills: Phaser.GameObjects.Graphics[] = [];
+  private rocketBgIcons: Phaser.GameObjects.Image[] = [];
+  private rocketActiveIcons: Phaser.GameObjects.Image[] = [];
   private barBottomY: number = 0;
   private barY: number = 0;
   private scoreScale: number = 1;
@@ -65,9 +53,9 @@ export class ProfileHud {
   private rankDisplay!: Phaser.GameObjects.Text;
   private clickCallback: (() => void) | null = null;
 
-  // Shield pills (right-justified under rage bar)
-  private shieldBgPills: Phaser.GameObjects.Graphics[] = [];
-  private shieldActivePills: Phaser.GameObjects.Graphics[] = [];
+  // Shield icons (right-justified under rage bar)
+  private shieldBgIcons: Phaser.GameObjects.Image[] = [];
+  private shieldActiveIcons: Phaser.GameObjects.Image[] = [];
   private currentShields: number = 0;
 
   // Sign-in indicator (below avatar, pulses on title/tutorial)
@@ -88,9 +76,9 @@ export class ProfileHud {
       new Phaser.Geom.Circle(AVATAR_RADIUS, AVATAR_RADIUS, AVATAR_RADIUS),
       Phaser.Geom.Circle.Contains
     );
-    hitZone.on('pointerover', () => scene.sound.play('sfx-hover'));
+    hitZone.on('pointerover', () => scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
     hitZone.on('pointerdown', () => {
-      scene.sound.play('sfx-click');
+      scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME });
       if (this.clickCallback) this.clickCallback();
     });
     this.container.add(hitZone);
@@ -136,43 +124,54 @@ export class ProfileHud {
       this.container.add(seg);
     }
 
-    // --- Rocket pills (left-justified under rage bar) ---
+    // --- Rocket icons (left-justified under rage bar) ---
     const pillY = this.barBottomY + PIP_GAP;
+    const iconScale = TUNING.ROCKET_ICON_SCALE;
     for (let i = 0; i < TUNING.PICKUP_MAX_AMMO; i++) {
-      const px = BAR_X + i * (SHIELD_PILL_W + SHIELD_PILL_GAP);
-
-      const bg = scene.add.graphics();
-      bg.fillStyle(ROCKET_PILL_BG_COLOR, ROCKET_PILL_BG_ALPHA);
-      bg.fillRoundedRect(px, pillY, SHIELD_PILL_W, SHIELD_PILL_H, SHIELD_PILL_RADIUS);
+      const bg = scene.add.image(0, 0, 'rocket-icon-empty')
+        .setScale(iconScale)
+        .setTint(0x666666)
+        .setAlpha(0.4);
+      // Position based on the scaled icon width
+      const iconW = bg.displayWidth;
+      const px = BAR_X + i * (iconW + SHIELD_PILL_GAP) + iconW / 2;
+      const py = pillY + bg.displayHeight / 2;
+      bg.setPosition(px, py);
       this.container.add(bg);
-      this.rocketBgPills.push(bg);
+      this.rocketBgIcons.push(bg);
 
-      const active = scene.add.graphics();
-      active.fillStyle(ROCKET_PILL_ACTIVE_COLOR, ROCKET_PILL_ACTIVE_ALPHA);
-      active.fillRoundedRect(px, pillY, SHIELD_PILL_W, SHIELD_PILL_H, SHIELD_PILL_RADIUS);
-      active.setVisible(false);
+      const active = scene.add.image(px, py, 'rocket-icon')
+        .setScale(iconScale)
+        .setVisible(false);
       this.container.add(active);
-      this.rocketActivePills.push(active);
+      this.rocketActiveIcons.push(active);
     }
 
-    // --- Shield pills (right-justified under rage bar) ---
-    const shieldTotalW = SHIELD_PILL_W * TUNING.SHIELD_MAX + SHIELD_PILL_GAP * (TUNING.SHIELD_MAX - 1);
+    // --- Shield icons (right-justified under rage bar) ---
+    const shieldIconScale = TUNING.SHIELD_ICON_SCALE;
+    // Measure one icon to compute layout
+    const shieldProbe = scene.add.image(0, 0, 'shield-icon-empty').setScale(shieldIconScale);
+    const shieldIconW = shieldProbe.displayWidth;
+    const shieldIconH = shieldProbe.displayHeight;
+    shieldProbe.destroy();
+    const shieldTotalW = shieldIconW * TUNING.SHIELD_MAX + SHIELD_PILL_GAP * (TUNING.SHIELD_MAX - 1);
     const shieldStartX = BAR_X + BAR_W - shieldTotalW; // right-justified
     for (let i = 0; i < TUNING.SHIELD_MAX; i++) {
-      const px = shieldStartX + i * (SHIELD_PILL_W + SHIELD_PILL_GAP);
+      const px = shieldStartX + i * (shieldIconW + SHIELD_PILL_GAP) + shieldIconW / 2;
+      const py = pillY + shieldIconH / 2;
 
-      const bg = scene.add.graphics();
-      bg.fillStyle(SHIELD_BG_COLOR, SHIELD_BG_ALPHA);
-      bg.fillRoundedRect(px, pillY, SHIELD_PILL_W, SHIELD_PILL_H, SHIELD_PILL_RADIUS);
+      const bg = scene.add.image(px, py, 'shield-icon-empty')
+        .setScale(shieldIconScale)
+        .setTint(0x666666)
+        .setAlpha(0.4);
       this.container.add(bg);
-      this.shieldBgPills.push(bg);
+      this.shieldBgIcons.push(bg);
 
-      const active = scene.add.graphics();
-      active.fillStyle(SHIELD_ACTIVE_COLOR, SHIELD_ACTIVE_ALPHA);
-      active.fillRoundedRect(px, pillY, SHIELD_PILL_W, SHIELD_PILL_H, SHIELD_PILL_RADIUS);
-      active.setVisible(false);
+      const active = scene.add.image(px, py, 'shield-icon')
+        .setScale(shieldIconScale)
+        .setVisible(false);
       this.container.add(active);
-      this.shieldActivePills.push(active);
+      this.shieldActiveIcons.push(active);
     }
 
     // --- Sign-in indicator (below avatar, white-tinted, hidden if Spotify connected) ---
@@ -221,8 +220,8 @@ export class ProfileHud {
   }
 
   setRockets(count: number, _max: number): void {
-    for (let i = 0; i < this.rocketActivePills.length; i++) {
-      this.rocketActivePills[i].setVisible(i < count);
+    for (let i = 0; i < this.rocketActiveIcons.length; i++) {
+      this.rocketActiveIcons[i].setVisible(i < count);
     }
   }
 
@@ -230,7 +229,7 @@ export class ProfileHud {
     if (count !== this.currentShields) {
       this.currentShields = count;
       for (let i = 0; i < TUNING.SHIELD_MAX; i++) {
-        this.shieldActivePills[i].setVisible(i < count);
+        this.shieldActiveIcons[i].setVisible(i < count);
       }
     }
   }
@@ -286,10 +285,10 @@ export class ProfileHud {
     this.rageBg.setVisible(false);
     this.rageFill.setVisible(false);
     for (let i = 0; i < this.rageSegments.length; i++) this.rageSegments[i].setVisible(false);
-    for (let i = 0; i < this.rocketBgPills.length; i++) this.rocketBgPills[i].setVisible(false);
-    for (let i = 0; i < this.rocketActivePills.length; i++) this.rocketActivePills[i].setVisible(false);
-    for (let i = 0; i < this.shieldBgPills.length; i++) this.shieldBgPills[i].setVisible(false);
-    for (let i = 0; i < this.shieldActivePills.length; i++) this.shieldActivePills[i].setVisible(false);
+    for (let i = 0; i < this.rocketBgIcons.length; i++) this.rocketBgIcons[i].setVisible(false);
+    for (let i = 0; i < this.rocketActiveIcons.length; i++) this.rocketActiveIcons[i].setVisible(false);
+    for (let i = 0; i < this.shieldBgIcons.length; i++) this.shieldBgIcons[i].setVisible(false);
+    for (let i = 0; i < this.shieldActiveIcons.length; i++) this.shieldActiveIcons[i].setVisible(false);
     this.playingNameText.setVisible(false);
 
     // Show name (same font/scale as playing name)
@@ -310,8 +309,8 @@ export class ProfileHud {
     this.rageBg.setVisible(true);
     this.rageFill.setVisible(true);
     for (let i = 0; i < this.rageSegments.length; i++) this.rageSegments[i].setVisible(true);
-    for (let i = 0; i < this.rocketBgPills.length; i++) this.rocketBgPills[i].setVisible(true);
-    for (let i = 0; i < this.shieldBgPills.length; i++) this.shieldBgPills[i].setVisible(true);
+    for (let i = 0; i < this.rocketBgIcons.length; i++) this.rocketBgIcons[i].setVisible(true);
+    for (let i = 0; i < this.shieldBgIcons.length; i++) this.shieldBgIcons[i].setVisible(true);
 
     // Show player name left-justified above rage bar
     this.playingNameText.setText(name || '');

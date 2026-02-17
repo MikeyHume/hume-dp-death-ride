@@ -4,6 +4,8 @@ import { ensureAnonUser } from '../systems/AuthSystem';
 
 const TITLE_LOOP_FRAME_COUNT = 27;
 const TITLE_START_FRAME_COUNT = 25;
+const PRE_START_FRAME_COUNT = 46;
+const INTRO_TO_TUT_FRAME_COUNT = 27;
 export class BootScene extends Phaser.Scene {
   constructor() {
     super({ key: 'BootScene' });
@@ -21,6 +23,14 @@ export class BootScene extends Phaser.Scene {
     for (let i = 0; i < TITLE_START_FRAME_COUNT; i++) {
       const idx = String(i).padStart(2, '0');
       this.load.image(`start-play-${idx}`, `assets/start/start_play/DP_Death_Ride_Title_Start${idx}.jpg`);
+    }
+    for (let i = 0; i < PRE_START_FRAME_COUNT; i++) {
+      const idx = String(i).padStart(5, '0');
+      this.load.image(`pre-start-${idx}`, `assets/cutscenes/pre_start/v02/pre_start_v02__${idx}.png`);
+    }
+    for (let i = 0; i < INTRO_TO_TUT_FRAME_COUNT; i++) {
+      const idx = String(i).padStart(5, '0');
+      this.load.image(`intro-tut-${idx}`, `assets/cutscenes/intro_to_tut/v3/intro_to_tut_v03__${idx}.jpg`);
     }
     this.load.spritesheet('player-start', 'assets/dp_player/dp_start.png', {
       frameWidth: TUNING.START_ANIM_FRAME_WIDTH,
@@ -46,10 +56,33 @@ export class BootScene extends Phaser.Scene {
       frameWidth: TUNING.ROCKET_LAUNCHER_FRAME_WIDTH,
       frameHeight: TUNING.ROCKET_LAUNCHER_FRAME_HEIGHT,
     });
-    this.load.audio('title-music', 'assets/audio/music/red malibu 1.5.wav');
+    this.load.spritesheet('player-collect-rocket', 'assets/COL/COL_rocket.png', {
+      frameWidth: TUNING.COL_FRAME_WIDTH,
+      frameHeight: TUNING.COL_FRAME_HEIGHT,
+    });
+    this.load.spritesheet('player-collect-shield', 'assets/COL/COL_shield.png', {
+      frameWidth: TUNING.COL_FRAME_WIDTH,
+      frameHeight: TUNING.COL_FRAME_HEIGHT,
+    });
+    this.load.spritesheet('player-collect-hit', 'assets/COL/COL_hit.png', {
+      frameWidth: TUNING.COL_FRAME_WIDTH,
+      frameHeight: TUNING.COL_FRAME_HEIGHT,
+    });
+    this.load.spritesheet('rocket-projectile', 'assets/pickups/rocket_Projectile.png', {
+      frameWidth: TUNING.ROCKET_PROJ_FRAME_W,
+      frameHeight: TUNING.ROCKET_PROJ_FRAME_H,
+    });
+    this.load.audio('title-music', 'assets/audio/music/red malibu - deathpixie.mp3');
     this.load.audio('countdown-music', 'assets/audio/music/hell_girl_countdown.mp3');
     this.load.audio('sfx-click', 'assets/audio/sfx/mouse click.mp3');
     this.load.audio('sfx-hover', 'assets/audio/sfx/mouse hover.mp3');
+    this.load.audio('sfx-explode', 'assets/audio/sfx/explode.mp3');
+    this.load.audio('sfx-rocket-fire', 'assets/audio/sfx/rocket_fire.mp3');
+    this.load.audio('sfx-engine', 'assets/audio/sfx/motorcycle engine.mp3');
+    this.load.spritesheet('pickup-rocket', 'assets/pickups/rocket pickup.png', {
+      frameWidth: TUNING.PICKUP_FRAME_SIZE,
+      frameHeight: TUNING.PICKUP_FRAME_SIZE,
+    });
     this.load.image('play-music-overlay', 'assets/start/play_music.png');
     this.load.image('obstacle-crash', 'assets/obstacles/road_barrier_01.png');
     this.load.image('road-img', 'assets/background/road.jpg');
@@ -90,6 +123,15 @@ export class BootScene extends Phaser.Scene {
     this.load.image('spotify-text-logo', 'ui/spotify_text_logo_.png');
     this.load.image('sign-in', 'ui/sign_in.png');
     this.load.image('cursor', 'ui/cursor.png');
+    this.load.image('crosshair', 'ui/crosshair.png');
+    this.load.image('rocket-icon', 'assets/pickups/rocket_icon.png');
+    this.load.image('rocket-icon-empty', 'assets/pickups/rocket_empty_icon.png');
+    this.load.spritesheet('pickup-shield', 'assets/pickups/shield_pickup.png', {
+      frameWidth: TUNING.SHIELD_FRAME_WIDTH,
+      frameHeight: TUNING.SHIELD_FRAME_HEIGHT,
+    });
+    this.load.image('shield-icon', 'assets/pickups/shield_icon.png');
+    this.load.image('shield-icon-empty', 'assets/pickups/shield_empty_icon.png');
     this.load.image('ui-skip', 'ui/skip.png');
     this.load.image('ui-unmuted', 'ui/unmuted.png');
     this.load.image('ui-muted', 'ui/muted.png');
@@ -133,6 +175,30 @@ export class BootScene extends Phaser.Scene {
       frameRate: 12,
       repeat: 0,
     });
+    // Pre-start cutscene animation (plays once after countdown, before gameplay)
+    const preStartFrames: Phaser.Types.Animations.AnimationFrame[] = [];
+    for (let i = 0; i < PRE_START_FRAME_COUNT; i++) {
+      preStartFrames.push({ key: `pre-start-${String(i).padStart(5, '0')}` });
+    }
+    this.anims.create({
+      key: 'pre-start-cutscene',
+      frames: preStartFrames,
+      frameRate: 12,
+      repeat: 0,
+    });
+
+    // Intro-to-tutorial cutscene (plays once between title and tutorial)
+    const introTutFrames: Phaser.Types.Animations.AnimationFrame[] = [];
+    for (let i = 0; i < INTRO_TO_TUT_FRAME_COUNT; i++) {
+      introTutFrames.push({ key: `intro-tut-${String(i).padStart(5, '0')}` });
+    }
+    this.anims.create({
+      key: 'intro-tut-cutscene',
+      frames: introTutFrames,
+      frameRate: 12,
+      repeat: 0,
+    });
+
     // Player start animation (plays once before ride loop)
     this.anims.create({
       key: 'player-start',
@@ -163,6 +229,30 @@ export class BootScene extends Phaser.Scene {
       frames: this.anims.generateFrameNumbers('player-rocket-launch', { start: 0, end: TUNING.ROCKET_LAUNCHER_ANIM_FRAMES - 1 }),
       frameRate: TUNING.ROCKET_LAUNCHER_FPS,
       repeat: 0,
+    });
+
+    // COL animations (all share same frame layout — rocket, shield, hit)
+    for (const key of ['player-collect-rocket', 'player-collect-shield', 'player-collect-hit']) {
+      this.anims.create({
+        key,
+        frames: this.anims.generateFrameNumbers(key, { start: 0, end: TUNING.COL_ANIM_FRAMES - 1 }),
+        frameRate: TUNING.COL_FPS * TUNING.COL_SPEED,
+        repeat: 0,
+      });
+    }
+
+    // Rocket projectile — intro plays full sequence once, then loops from frame LOOP_START
+    this.anims.create({
+      key: 'rocket-proj-intro',
+      frames: this.anims.generateFrameNumbers('rocket-projectile', { start: 0, end: TUNING.ROCKET_PROJ_FRAMES - 1 }),
+      frameRate: TUNING.ROCKET_PROJ_FPS,
+      repeat: 0,
+    });
+    this.anims.create({
+      key: 'rocket-proj-loop',
+      frames: this.anims.generateFrameNumbers('rocket-projectile', { start: TUNING.ROCKET_PROJ_LOOP_START, end: TUNING.ROCKET_PROJ_FRAMES - 1 }),
+      frameRate: TUNING.ROCKET_PROJ_FPS,
+      repeat: -1,
     });
 
     // Powered-up intro (full sequence, plays once)
@@ -266,30 +356,45 @@ export class BootScene extends Phaser.Scene {
       repeat: 0,
     });
 
-    // Rocket launcher pickup (large yellow circle)
-    const pickupGfx = this.add.graphics();
-    pickupGfx.fillStyle(TUNING.PICKUP_COLOR, 0.8);
-    pickupGfx.fillCircle(TUNING.PICKUP_DIAMETER / 2, TUNING.PICKUP_DIAMETER / 2, TUNING.PICKUP_DIAMETER / 2);
-    pickupGfx.lineStyle(3, 0xffaa00, 1);
-    pickupGfx.strokeCircle(TUNING.PICKUP_DIAMETER / 2, TUNING.PICKUP_DIAMETER / 2, TUNING.PICKUP_DIAMETER / 2);
-    pickupGfx.generateTexture('pickup-rocket', TUNING.PICKUP_DIAMETER, TUNING.PICKUP_DIAMETER);
-    pickupGfx.destroy();
+    // Rocket launcher pickup animation (looping spritesheet)
+    this.anims.create({
+      key: 'pickup-rocket-anim',
+      frames: this.anims.generateFrameNumbers('pickup-rocket', { start: 0, end: TUNING.PICKUP_ANIM_FRAMES - 1 }),
+      frameRate: TUNING.PICKUP_ANIM_FPS * TUNING.PICKUP_ANIM_SPEED,
+      repeat: -1,
+    });
 
-    // Shield pickup (green sphere placeholder)
-    const shieldGfx = this.add.graphics();
-    shieldGfx.fillStyle(TUNING.SHIELD_COLOR, 0.8);
-    shieldGfx.fillCircle(TUNING.SHIELD_DIAMETER / 2, TUNING.SHIELD_DIAMETER / 2, TUNING.SHIELD_DIAMETER / 2);
-    shieldGfx.lineStyle(3, 0x00aa00, 1);
-    shieldGfx.strokeCircle(TUNING.SHIELD_DIAMETER / 2, TUNING.SHIELD_DIAMETER / 2, TUNING.SHIELD_DIAMETER / 2);
-    shieldGfx.generateTexture('pickup-shield', TUNING.SHIELD_DIAMETER, TUNING.SHIELD_DIAMETER);
-    shieldGfx.destroy();
+    // Soft feathered glow texture for pickup (concentric circles = radial gradient)
+    const glowSize = 256;
+    const glowGfx = this.add.graphics();
+    const glowSteps = 24;
+    for (let i = 0; i < glowSteps; i++) {
+      const ratio = 1 - i / glowSteps;
+      glowGfx.fillStyle(0xffff00, 0.04);
+      glowGfx.fillCircle(glowSize / 2, glowSize / 2, ratio * glowSize / 2);
+    }
+    glowGfx.generateTexture('pickup-glow', glowSize, glowSize);
+    glowGfx.destroy();
 
-    // Rocket projectile (small yellow ellipse)
-    const rocketGfx = this.add.graphics();
-    rocketGfx.fillStyle(TUNING.ROCKET_COLOR);
-    rocketGfx.fillEllipse(TUNING.ROCKET_DISPLAY_W / 2, TUNING.ROCKET_DISPLAY_H / 2, TUNING.ROCKET_DISPLAY_W, TUNING.ROCKET_DISPLAY_H);
-    rocketGfx.generateTexture('rocket-projectile', TUNING.ROCKET_DISPLAY_W, TUNING.ROCKET_DISPLAY_H);
-    rocketGfx.destroy();
+    // Shield pickup animation (looping spritesheet)
+    this.anims.create({
+      key: 'pickup-shield-anim',
+      frames: this.anims.generateFrameNumbers('pickup-shield', { start: 0, end: TUNING.SHIELD_ANIM_FRAMES - 1 }),
+      frameRate: TUNING.SHIELD_ANIM_FPS * TUNING.SHIELD_ANIM_SPEED,
+      repeat: -1,
+    });
+
+    // Soft feathered red glow texture for shield pickup
+    const shieldGlowGfx = this.add.graphics();
+    for (let i = 0; i < glowSteps; i++) {
+      const ratio = 1 - i / glowSteps;
+      shieldGlowGfx.fillStyle(0xff0000, 0.04);
+      shieldGlowGfx.fillCircle(glowSize / 2, glowSize / 2, ratio * glowSize / 2);
+    }
+    shieldGlowGfx.generateTexture('shield-glow', glowSize, glowSize);
+    shieldGlowGfx.destroy();
+
+    // Rocket projectile spritesheet — loaded in preload(), animations created here
 
     // Force-load custom fonts before transitioning (browser won't load them until something uses them)
     await Promise.all([

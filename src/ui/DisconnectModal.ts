@@ -67,8 +67,8 @@ export class DisconnectModal {
 
     const yesHit = scene.add.zone(yesX, btnY, BTN_W, BTN_H)
       .setInteractive({ useHandCursor: true });
-    yesHit.on('pointerover', () => this.scene.sound.play('sfx-hover'));
-    yesHit.on('pointerdown', () => { this.scene.sound.play('sfx-click'); this.answer(true); });
+    yesHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
+    yesHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME }); this.answer(true); });
     this.container.add(yesHit);
 
     // NO button
@@ -88,8 +88,8 @@ export class DisconnectModal {
 
     const noHit = scene.add.zone(noX, btnY, BTN_W, BTN_H)
       .setInteractive({ useHandCursor: true });
-    noHit.on('pointerover', () => this.scene.sound.play('sfx-hover'));
-    noHit.on('pointerdown', () => { this.scene.sound.play('sfx-click'); this.answer(false); });
+    noHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
+    noHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME }); this.answer(false); });
     this.container.add(noHit);
   }
 

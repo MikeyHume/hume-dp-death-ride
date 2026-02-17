@@ -35,8 +35,8 @@ enum GameState {
 }
 
 const NAME_MAX_LENGTH = 10;
-const SKIP_BTN_MARGIN_RIGHT = 60;    // px from right edge of screen
-const SKIP_BTN_MARGIN_BOTTOM = 36;   // px from bottom edge of screen
+const SKIP_BTN_MARGIN_RIGHT = 90;    // px from right edge of screen
+const SKIP_BTN_MARGIN_BOTTOM = 56;   // px from bottom edge of screen
 
 // ── Debug hotkeys (set active: false to disable) ──
 const DEBUG_HOTKEYS = {
@@ -111,6 +111,7 @@ export class GameScene extends Phaser.Scene {
   // Custom cursor (rendered under CRT)
   private cursorStroke?: Phaser.GameObjects.Image;
   private cursorMain!: Phaser.GameObjects.Image;
+  private crosshair!: Phaser.GameObjects.Image;
   private cursorOverUI: boolean = false;
 
   // Weekly seed
@@ -212,10 +213,13 @@ export class GameScene extends Phaser.Scene {
   private blackOverlay!: Phaser.GameObjects.Rectangle;
   private countdownIndex: number = 0;
   private countdownPhaseTimer: number = 0;
-  private countdownPhase: 'animate' | 'delay' | 'fade' | 'grace' | 'done' = 'done';
+  private countdownPhase: 'animate' | 'delay' | 'cutscene' | 'grace' | 'done' = 'done';
+  private preStartSprite!: Phaser.GameObjects.Sprite;
   private spawnGraceTimer: number = 0;
 
   // Tutorial (pre-countdown screens)
+  private introTutSprite!: Phaser.GameObjects.Sprite;
+  private introTutPlaying: boolean = false;
   private tutorialBlank!: Phaser.GameObjects.Image;
   private tutorialControlsSprite!: Phaser.GameObjects.Sprite;
   private tutorialObstaclesImage!: Phaser.GameObjects.Image;
@@ -239,9 +243,12 @@ export class GameScene extends Phaser.Scene {
     this.elapsed = 0;
     this.state = GameState.TITLE;
 
-    // Any key or click can start the game from title (except Escape)
+    // Keyboard input — only Space/Enter advance title & tutorial; all keys blocked during BIOS
     this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
       const k = event.key.toLowerCase();
+      // Block ALL keyboard input while BIOS overlay is still visible
+      const biosOverlay = document.getElementById('boot-overlay');
+      if (biosOverlay && !biosOverlay.classList.contains('hidden')) return;
       // Forward all keys to profile popup when open
       if (this.profilePopup?.isOpen()) {
         this.profilePopup.handleKey(event);
@@ -276,20 +283,27 @@ export class GameScene extends Phaser.Scene {
         this.nameSkipConfirmPending = false;
         this.nameSkipWarning.setVisible(false);
       }
+      // Only Space and Enter can advance title/tutorial (other keys are ignored)
+      const isAdvanceKey = k === ' ' || k === 'enter';
       if (this.state === GameState.TUTORIAL) {
-        this.tutorialAdvance = true;
+        if (isAdvanceKey) this.tutorialAdvance = true;
       } else if (this.state === GameState.TITLE) {
-        if (this.musicOverlayActive) {
-          this.dismissMusicOverlay();
-        } else {
-          this.anyInputPressed = true;
+        if (isAdvanceKey) {
+          if (this.musicOverlayActive) {
+            this.dismissMusicOverlay();
+          } else {
+            this.anyInputPressed = true;
+          }
         }
       }
     });
     this.input.on('pointerdown', () => {
       if (this.profilePopup?.isOpen()) return;
+      // Block clicks while BIOS overlay is still visible
+      const biosOverlay = document.getElementById('boot-overlay');
+      if (biosOverlay && !biosOverlay.classList.contains('hidden')) return;
       if (this.state === GameState.TUTORIAL || this.state === GameState.TITLE || this.state === GameState.STARTING) {
-        this.sound.play('sfx-click');
+        this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME });
       }
       if (this.state === GameState.TUTORIAL) {
         this.tutorialAdvance = true;
@@ -338,7 +352,7 @@ export class GameScene extends Phaser.Scene {
     this.playerSystem = new PlayerSystem(this, this.inputSystem);
     this.scoreSystem = new ScoreSystem();
     this.fxSystem = new FXSystem(this);
-    this.audioSystem = new AudioSystem();
+    this.audioSystem = new AudioSystem(this);
     this.musicPlayer = new MusicPlayer(this);
 
     // Wire car-vs-crash explosion sound
@@ -618,14 +632,14 @@ export class GameScene extends Phaser.Scene {
       }
     ).setOrigin(0.5).setDepth(211).setInteractive({ useHandCursor: true });
     this.nameEnterBtn.on('pointerover', () => {
-      this.sound.play('sfx-hover');
+      this.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME });
       this.nameEnterBtn.setColor('#ffffff').setBackgroundColor('#006600');
     });
     this.nameEnterBtn.on('pointerout', () => {
       this.nameEnterBtn.setColor('#00ff00').setBackgroundColor('#003300');
     });
     this.nameEnterBtn.on('pointerdown', () => {
-      this.sound.play('sfx-click');
+      this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME });
       if (this.state === GameState.NAME_ENTRY) {
         this.confirmNameEntry();
       }
@@ -653,10 +667,10 @@ export class GameScene extends Phaser.Scene {
       TUNING.GAME_WIDTH / 2 - 100, TUNING.GAME_HEIGHT / 2 + 250,
       'YES', { ...btnStyle, color: '#ff4444', backgroundColor: '#330000' }
     ).setOrigin(0.5).setDepth(212).setInteractive({ useHandCursor: true }).setVisible(false);
-    this.emptyNameYesBtn.on('pointerover', () => { this.sound.play('sfx-hover'); this.emptyNameYesBtn.setColor('#ffffff').setBackgroundColor('#660000'); });
+    this.emptyNameYesBtn.on('pointerover', () => { this.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }); this.emptyNameYesBtn.setColor('#ffffff').setBackgroundColor('#660000'); });
     this.emptyNameYesBtn.on('pointerout', () => this.emptyNameYesBtn.setColor('#ff4444').setBackgroundColor('#330000'));
     this.emptyNameYesBtn.on('pointerdown', () => {
-      this.sound.play('sfx-click');
+      this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME });
       if (this.state === GameState.NAME_ENTRY && this.emptyNameVisible) {
         this.submitAsAnon();
       }
@@ -666,10 +680,10 @@ export class GameScene extends Phaser.Scene {
       TUNING.GAME_WIDTH / 2 + 100, TUNING.GAME_HEIGHT / 2 + 250,
       'NO', { ...btnStyle, color: '#00ff00', backgroundColor: '#003300' }
     ).setOrigin(0.5).setDepth(212).setInteractive({ useHandCursor: true }).setVisible(false);
-    this.emptyNameNoBtn.on('pointerover', () => { this.sound.play('sfx-hover'); this.emptyNameNoBtn.setColor('#ffffff').setBackgroundColor('#006600'); });
+    this.emptyNameNoBtn.on('pointerover', () => { this.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }); this.emptyNameNoBtn.setColor('#ffffff').setBackgroundColor('#006600'); });
     this.emptyNameNoBtn.on('pointerout', () => this.emptyNameNoBtn.setColor('#00ff00').setBackgroundColor('#003300'));
     this.emptyNameNoBtn.on('pointerdown', () => {
-      this.sound.play('sfx-click');
+      this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME });
       if (this.state === GameState.NAME_ENTRY && this.emptyNameVisible) {
         this.hideEmptyNamePrompt();
       }
@@ -681,6 +695,18 @@ export class GameScene extends Phaser.Scene {
       TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
       0x000000
     ).setDepth(249).setScrollFactor(0).setVisible(false);
+
+    // Pre-start cutscene (fullscreen, plays once after countdown, above game world)
+    this.preStartSprite = this.add.sprite(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00000'
+    ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT)
+     .setDepth(248).setScrollFactor(0).setVisible(false);
+
+    // Intro-to-tutorial cutscene (fullscreen, plays once between title and tutorial)
+    this.introTutSprite = this.add.sprite(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'intro-tut-00000'
+    ).setDisplaySize(TUNING.GAME_WIDTH * TUNING.INTRO_TUT_SCALE, TUNING.GAME_HEIGHT)
+     .setDepth(248).setScrollFactor(0).setVisible(false);
 
     // Death exposure white overlay (above everything game-related)
     this.deathWhiteOverlay = this.add.rectangle(
@@ -721,7 +747,7 @@ export class GameScene extends Phaser.Scene {
       TUNING.GAME_HEIGHT - SKIP_BTN_MARGIN_BOTTOM - this.tutorialSkipBtn.displayHeight / 2,
     );
     this.tutorialSkipBtn.on('pointerover', () => {
-      this.sound.play('sfx-hover');
+      this.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME });
       this.tweens.killTweensOf(this.tutorialSkipBtn);
       this.tweens.add({
         targets: this.tutorialSkipBtn,
@@ -742,7 +768,7 @@ export class GameScene extends Phaser.Scene {
       });
     });
     this.tutorialSkipBtn.on('pointerdown', () => {
-      this.sound.play('sfx-click');
+      this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME });
       if (this.state === GameState.TUTORIAL && this.tutorialPhase !== 'skip_fade' && this.tutorialPhase !== 'done') {
         // Flash red, shrink smoothly from current scale to base, fade out over 0.5s
         this.tweens.killTweensOf(this.tutorialSkipBtn);
@@ -810,6 +836,18 @@ export class GameScene extends Phaser.Scene {
       .setDepth(TUNING.CURSOR_DEPTH + 1)
       .setScrollFactor(0);
 
+    // Crosshair cursor (shown during gameplay only, same depth as main cursor)
+    const chTex = this.textures.get('crosshair').getSourceImage();
+    const chAspect = chTex.width / chTex.height;
+    const chH = TUNING.CURSOR_SIZE * TUNING.CROSSHAIR_SCALE;
+    const chW = chH * chAspect;
+    this.crosshair = this.add.image(0, 0, 'crosshair')
+      .setDisplaySize(chW, chH)
+      .setTintFill(0xff0000)
+      .setDepth(TUNING.CURSOR_DEPTH + 1)
+      .setScrollFactor(0)
+      .setVisible(false);
+
     // CRT debug overlay (DOM element — not affected by CRT shader)
     this.crtDebugEl = document.createElement('pre');
     Object.assign(this.crtDebugEl.style, {
@@ -850,6 +888,9 @@ export class GameScene extends Phaser.Scene {
 
     // Signal boot overlay that the start screen is ready
     (window as any).__bootOverlay?.markStartScreenReady?.();
+
+    // Attempt to autoplay title music — skip overlay if browser allows it
+    this.tryAutoplayMusic();
 
     if (DEBUG_HOTKEYS.instantRage.active) {
       this.input.keyboard?.addKey(DEBUG_HOTKEYS.instantRage.key).on('down', () => {
@@ -1007,8 +1048,9 @@ export class GameScene extends Phaser.Scene {
     const ptr = this.input.activePointer;
     this.cursorMain.setPosition(ptr.x, ptr.y);
     this.cursorStroke?.setPosition(ptr.x, ptr.y);
+    this.crosshair.setPosition(ptr.x, ptr.y);
 
-    // Fade cursor when hovering over music UI overlay
+    // Fade cursor/crosshair when hovering over music UI overlay
     const overUI = this.musicPlayer.isCursorOverUI();
     if (overUI !== this.cursorOverUI) {
       this.cursorOverUI = overUI;
@@ -1019,6 +1061,8 @@ export class GameScene extends Phaser.Scene {
         this.tweens.killTweensOf(this.cursorStroke);
         this.tweens.add({ targets: this.cursorStroke, alpha, duration: 200 });
       }
+      this.tweens.killTweensOf(this.crosshair);
+      this.tweens.add({ targets: this.crosshair, alpha, duration: 200 });
     }
 
     this.perfSystem.update(dt);
@@ -1144,6 +1188,38 @@ export class GameScene extends Phaser.Scene {
         this.countdownPhase = 'delay';
         this.countdownPhaseTimer = 0;
         this.countdownSprite.setVisible(false);
+
+        // When "2" finishes animating, start the cutscene + fade black + reveal music UI
+        if (this.countdownIndex === TUNING.COUNTDOWN_FRAMES - 2) {
+          this.musicPlayer.revealForGameplay();
+          this.titleLoopSprite.stop();
+          this.titleLoopSprite.setVisible(false);
+          this.playerSystem.reset();
+          this.preStartSprite.setVisible(true).setAlpha(1);
+          this.preStartSprite.play('pre-start-cutscene');
+          this.preStartSprite.once('animationcomplete', () => {
+            if (this.countdownPhase !== 'done') {
+              this.countdownPhase = 'done';
+              this.startGame();
+              this.spawnGraceTimer = TUNING.COUNTDOWN_SPAWN_DELAY;
+              this.tweens.add({
+                targets: this.preStartSprite,
+                alpha: 0,
+                duration: 1000,
+                onComplete: () => {
+                  this.preStartSprite.setVisible(false);
+                },
+              });
+            }
+          });
+          // Fade black overlay + cursor out over the delay period
+          const fadeDur = TUNING.COUNTDOWN_DELAY * 1000;
+          this.tweens.add({ targets: this.blackOverlay, alpha: 0, duration: fadeDur });
+          this.tweens.add({ targets: this.cursorMain, alpha: 0, duration: fadeDur });
+          if (this.cursorStroke) {
+            this.tweens.add({ targets: this.cursorStroke, alpha: 0, duration: fadeDur });
+          }
+        }
       }
     } else if (this.countdownPhase === 'delay') {
       const wait = this.countdownIndex < 0
@@ -1152,14 +1228,11 @@ export class GameScene extends Phaser.Scene {
       if (this.countdownPhaseTimer >= wait) {
         const nextIndex = this.countdownIndex + 1;
         if (nextIndex >= TUNING.COUNTDOWN_FRAMES - 1) {
-          // Skip "1" — fade black overlay to reveal game instead
-          this.countdownPhase = 'fade';
+          // Skip "1" — go straight to cutscene phase (black already faded during "2"'s delay)
+          this.countdownPhase = 'cutscene';
           this.countdownPhaseTimer = 0;
-          this.titleLoopSprite.stop();
-          this.titleLoopSprite.setVisible(false);
-          // Show player riding in place (visible through fading overlay)
-          this.playerSystem.reset();
-          this.playerSystem.setVisible(true);
+          this.countdownSprite.setVisible(false);
+          this.blackOverlay.setVisible(false);
         } else {
           // Show next number
           this.countdownIndex = nextIndex;
@@ -1171,37 +1244,14 @@ export class GameScene extends Phaser.Scene {
           this.countdownSprite.setVisible(true);
         }
       }
-    } else if (this.countdownPhase === 'fade') {
-      // Fade black overlay from 1→0 over the same duration a number would take
-      const dur = TUNING.COUNTDOWN_NUMBER_DURATION;
-      const t = Math.min(this.countdownPhaseTimer / dur, 1);
-      this.blackOverlay.setAlpha(1 - t);
-
-      // Fade cursor out as game is revealed
-      const cursorAlpha = 1 - t;
-      this.cursorMain.setAlpha(cursorAlpha);
-      this.cursorStroke?.setAlpha(cursorAlpha);
-
-      if (t >= 1) {
-        this.blackOverlay.setVisible(false);
-        this.cursorMain.setVisible(false);
-        this.cursorStroke?.setVisible(false);
-        this.countdownPhase = 'grace';
-        this.countdownPhaseTimer = 0;
-      }
-    } else if (this.countdownPhase === 'grace') {
-      // Player visible but uncontrolled — wait before handing control
-      if (this.countdownPhaseTimer >= TUNING.COUNTDOWN_CONTROL_DELAY) {
-        this.countdownPhase = 'done';
-        this.startGame();
-        // Spawn grace: obstacles delayed after player gets control
-        this.spawnGraceTimer = TUNING.COUNTDOWN_SPAWN_DELAY;
-      }
+    } else if (this.countdownPhase === 'cutscene') {
+      // Cutscene playing — just wait for animationcomplete callback
     }
   }
 
   private returnToTitle(): void {
     this.state = GameState.TITLE;
+    this.setCrosshairMode(false);
     this.elapsed = 0;
 
     // Clean up tutorial
@@ -1224,6 +1274,11 @@ export class GameScene extends Phaser.Scene {
     this.deathWhiteOverlay.setVisible(false);
     this.countdownSprite.setVisible(false);
     this.blackOverlay.setVisible(false);
+    this.preStartSprite.setVisible(false);
+    this.preStartSprite.stop();
+    this.introTutSprite.setVisible(false);
+    this.introTutSprite.stop();
+    this.introTutPlaying = false;
     this.playerSystem.setVisible(false);
     this.deathExplosion.setVisible(false);
     this.slashSprite.setVisible(false);
@@ -1282,10 +1337,34 @@ export class GameScene extends Phaser.Scene {
     this.titleLoopSprite.play('title-loop');
     this.titleContainer.setVisible(true);
 
+    // Hide music player UI on title (music keeps playing)
+    this.musicPlayer.setVisible(false);
+
     // ProfileHud in profile mode on title
     this.profileHud.showProfileMode(this.profilePopup.getName(), this.getProfileRankText());
     this.profileHud.setAlpha(1);
     this.profileHud.setVisible(true);
+  }
+
+  private tryAutoplayMusic(): void {
+    if (!this.cache.audio.exists('title-music')) return;
+    const testSound = this.sound.add('title-music', { loop: true, volume: 0 });
+    testSound.play();
+    // Check if the browser actually allowed playback
+    if (testSound.isPlaying) {
+      // Autoplay worked — hand off to MusicPlayer and skip the overlay
+      testSound.stop();
+      testSound.destroy();
+      this.musicPlayer.startTitleMusic();
+      this.musicOverlayActive = false;
+      this.playMusicOverlay.setVisible(false);
+      this.profileHud.showProfileMode(this.profilePopup.getName(), this.getProfileRankText());
+      this.profileHud.setVisible(true);
+    } else {
+      // Autoplay blocked — clean up and keep the overlay as fallback
+      testSound.stop();
+      testSound.destroy();
+    }
   }
 
   private dismissMusicOverlay(): void {
@@ -1315,24 +1394,42 @@ export class GameScene extends Phaser.Scene {
       this.titleLoopSprite.setVisible(false);
     });
 
-    // Show tutorial base layer (always visible under the slides)
-    this.tutorialBlank.setVisible(true);
+    // Play intro-to-tutorial cutscene over everything
+    this.introTutPlaying = true;
+    this.introTutSprite.setVisible(true).setAlpha(1);
+    this.introTutSprite.play('intro-tut-cutscene');
+    this.introTutSprite.once('animationcomplete', () => {
+      // Cutscene finished — fade it out to reveal the tutorial underneath
+      this.tweens.add({
+        targets: this.introTutSprite,
+        alpha: 0,
+        duration: 1000,
+        onComplete: () => {
+          this.introTutSprite.setVisible(false);
+          this.introTutPlaying = false;
+        },
+      });
+      // Cutscene fades out to reveal controls directly — skip black_reveal
+      this.tutorialPhase = 'controls_wait';
+      this.tutorialTimer = 0;
+      this.tutorialAdvance = false;
+      this.tutorialSkipBtn.setVisible(true).setAlpha(0.69).setScale(0.5).setTintFill(0xffffff).setInteractive({ useHandCursor: true });
+    });
 
-    // Start controls animation (playing underneath the black overlay)
+    // Prepare tutorial layers underneath the cutscene (hidden by black overlay)
+    this.tutorialBlank.setVisible(true);
     this.tutorialControlsSprite.setVisible(true).setAlpha(1);
     this.tutorialControlsSprite.play('tutorial-controls');
-
-    // Others hidden until their phase
     this.tutorialObstaclesImage.setVisible(false).setAlpha(0);
     this.tutorialRageSprite.setVisible(false).setAlpha(0);
 
-    // Black overlay fully opaque — will fade to reveal controls
-    this.blackOverlay.setVisible(true).setAlpha(1);
+    // Black overlay starts hidden — will be shown when cutscene finishes
+    this.blackOverlay.setVisible(false);
 
-    this.tutorialPhase = 'black_reveal';
+    // Tutorial phases start as 'done' — cutscene callback will kick off 'black_reveal'
+    this.tutorialPhase = 'done';
     this.tutorialTimer = 0;
     this.tutorialAdvance = false;
-    this.tutorialSkipBtn.setVisible(true).setAlpha(0.69).setScale(0.5).setTintFill(0xffffff).setInteractive({ useHandCursor: true });
   }
 
   private updateTutorial(dt: number): void {
@@ -1502,11 +1599,23 @@ export class GameScene extends Phaser.Scene {
     this.countdownPhaseTimer = 0;
     this.countdownPhase = 'delay';
     this.countdownSprite.setVisible(false);
-    this.musicPlayer.setCompact(false);
+  }
+
+  private setCrosshairMode(enabled: boolean): void {
+    this.tweens.killTweensOf(this.crosshair);
+    if (enabled) {
+      this.crosshair.setVisible(true).setAlpha(0);
+      this.tweens.add({ targets: this.crosshair, alpha: 1, duration: 1500 });
+    } else {
+      this.crosshair.setVisible(false).setAlpha(0);
+    }
+    this.cursorMain.setVisible(!enabled);
+    if (this.cursorStroke) this.cursorStroke.setVisible(!enabled);
   }
 
   private startGame(): void {
     this.state = GameState.PLAYING;
+    this.setCrosshairMode(true);
     this.musicPlayer.setCompact(false);
     this.elapsed = 0;
     this.spawnGraceTimer = 0;
@@ -1582,15 +1691,16 @@ export class GameScene extends Phaser.Scene {
       this.startHoldRampT = 0;
       this.startHoldText.setAlpha(1);
       this.startHoldText.setVisible(true);
-      // Blink: 1s on, 0.33s off, repeating
+      // Blink: on → fade out → off → fade in → repeat
       if (this.startHoldBlinkTween) this.startHoldBlinkTween.destroy();
       this.startHoldBlinkTween = this.tweens.add({
         targets: this.startHoldText,
         alpha: 0,
-        duration: 1,          // snap to 0 instantly
-        delay: 1000,          // visible for 1s first
-        hold: 330,            // stay at 0 for 0.33s
+        duration: TUNING.START_TEXT_FADE_MS,
+        delay: TUNING.START_TEXT_ON_MS,
+        hold: TUNING.START_TEXT_OFF_MS,
         yoyo: true,
+        repeatDelay: TUNING.START_TEXT_ON_MS,
         repeat: -1,
       });
     } else {
@@ -1894,9 +2004,15 @@ export class GameScene extends Phaser.Scene {
 
     // Update pickups (scrolling + collection)
     this.pickupSystem.update(dt, roadSpeed, playerCollX, playerCollY);
+    if (this.pickupSystem.wasCollected()) {
+      this.playerSystem.playCollectRocket();
+    }
 
     // Update shield pickups (scrolling + collection)
     this.shieldSystem.update(dt, roadSpeed, playerCollX, playerCollY);
+    if (this.shieldSystem.wasCollected()) {
+      this.playerSystem.playCollectShield();
+    }
 
     const pHalfW = TUNING.PLAYER_COLLISION_W / 2;
     const pHalfH = TUNING.PLAYER_COLLISION_H / 2;
@@ -1909,6 +2025,7 @@ export class GameScene extends Phaser.Scene {
       );
       if (hits.length > 0) {
         this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 0.5, TUNING.SHAKE_DEATH_INTENSITY * 0.3);
+        this.playerSystem.playCollectHit();
         for (let i = 0; i < hits.length; i++) {
           if (hits[i].type === ObstacleType.CAR) {
             this.scoreSystem.addBonus(TUNING.RAGE_CAR_KILL_BONUS);
@@ -1922,6 +2039,9 @@ export class GameScene extends Phaser.Scene {
         this.playerSystem.applyLeftwardPush(TUNING.SLOW_PUSH_RATE * dt);
       }
       this.fxSystem.onSlowOverlap(result.slowOverlapping);
+    } else if (this.playerSystem.isCollecting()) {
+      // COL animation playing = invincibility frames, skip collision entirely
+      this.fxSystem.onSlowOverlap(false);
     } else {
       const result = this.obstacleSystem.checkCollision(playerCollX, playerCollY, pHalfW, pHalfH);
       if (result.crashed && this.slashInvincibilityTimer <= 0) {
@@ -1930,6 +2050,7 @@ export class GameScene extends Phaser.Scene {
           this.shieldSystem.consumeShield();
           this.obstacleSystem.spawnExplosion(result.hitX, result.hitY);
           this.audioSystem.playExplosion();
+          this.playerSystem.playCollectHit();
           if (!this.hudHidden) this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 0.5, TUNING.SHAKE_DEATH_INTENSITY * 0.5);
         } else {
           this.playerSystem.kill();

@@ -15,6 +15,9 @@ export class PlayerSystem {
   private rocketLaunching: boolean = false;
   private rocketFireCallback: (() => void) | null = null;
   private poweredUp: boolean = false;
+  private collectingRocket: boolean = false;
+  private collectingShield: boolean = false;
+  private collectingHit: boolean = false;
   private renderOffsetX: number = 0; // visual-only X shift (attack sprite alignment)
   private renderOffsetY: number = 0; // visual-only Y shift (powered-up alignment)
   private invincible: boolean = false;
@@ -184,8 +187,8 @@ export class PlayerSystem {
 
     // --- Horizontal drift ---
     if (this.spectator) {
-      // Spectator: lock X to road center, force speed to match road
-      this.sprite.x = TUNING.PLAYER_START_X;
+      // Spectator: follow cursor X (with offset) and force speed to match road
+      this.sprite.x = this.input.getTargetX() + TUNING.SPECTATOR_CURSOR_OFFSET_X;
       this.speedMultiplier = TUNING.HOLD_MULTIPLIER;
       this.playerSpeed = controlSpeed * this.speedMultiplier;
     } else {
@@ -206,22 +209,27 @@ export class PlayerSystem {
       if (!this.invincible) this.kill();
     }
 
-    // Reapply render offsets for display (visual only, stripped next frame)
+    // Compute perspective from logical Y (before render offsets) so all animations scale as a group
+    const perspScale = this.getPerspectiveScale();
+
+    // Reapply render offsets scaled by perspective so they stay proportional at all Y positions
     const inSpeedup = this.speedupState !== 'idle';
-    this.renderOffsetX = this.startAnimPlaying ? TUNING.START_ANIM_OFFSET_X : (this.rocketLaunching ? TUNING.ROCKET_LAUNCHER_OFFSET_X : (this.attacking ? TUNING.PLAYER_ATTACK_OFFSET_X : (this.poweredUp ? TUNING.POWERED_OFFSET_X : (inSpeedup ? TUNING.SPEEDUP_OFFSET_X : 0))));
-    this.renderOffsetY = this.startAnimPlaying ? TUNING.START_ANIM_OFFSET_Y : (this.rocketLaunching ? TUNING.ROCKET_LAUNCHER_OFFSET_Y : (this.attacking ? 0 : (this.poweredUp ? TUNING.POWERED_OFFSET_Y : (inSpeedup ? TUNING.SPEEDUP_OFFSET_Y : 0))));
+    const collecting = this.collectingRocket || this.collectingShield || this.collectingHit;
+    const rawOffX = this.startAnimPlaying ? TUNING.START_ANIM_OFFSET_X : (this.rocketLaunching ? TUNING.ROCKET_LAUNCHER_OFFSET_X : (collecting ? TUNING.COL_OFFSET_X : (this.attacking ? TUNING.PLAYER_ATTACK_OFFSET_X : (this.poweredUp ? TUNING.POWERED_OFFSET_X : (inSpeedup ? TUNING.SPEEDUP_OFFSET_X : 0)))));
+    const rawOffY = this.startAnimPlaying ? TUNING.START_ANIM_OFFSET_Y : (this.rocketLaunching ? TUNING.ROCKET_LAUNCHER_OFFSET_Y : (collecting ? TUNING.COL_OFFSET_Y : (this.attacking ? 0 : (this.poweredUp ? TUNING.POWERED_OFFSET_Y : (inSpeedup ? TUNING.SPEEDUP_OFFSET_Y : 0)))));
+    this.renderOffsetX = rawOffX * perspScale;
+    this.renderOffsetY = rawOffY * perspScale;
     this.sprite.x += this.renderOffsetX;
     this.sprite.y += this.renderOffsetY;
 
-    // Apply perspective scale based on Y position
-    const perspScale = this.getPerspectiveScale();
+    // Apply perspective scale to sprite
     this.sprite.setScale(this.baseSpriteScaleX * perspScale, this.baseSpriteScaleY * perspScale);
   }
 
   /** Manage speed-up animation transitions based on input and speed state */
   private updateSpeedupAnimation(dt: number, tapped: boolean): void {
-    // Speed-up animation is suppressed during start anim, attack, or powered-up (rage)
-    if (this.startAnimPlaying || this.attacking || this.poweredUp) return;
+    // Speed-up animation is suppressed during start anim, attack, powered-up (rage), or COL animations
+    if (this.startAnimPlaying || this.attacking || this.poweredUp || this.collectingRocket || this.collectingShield || this.collectingHit) return;
 
     // Only actual taps keep the speed-up alive (holding space does not)
     if (tapped) {
@@ -321,6 +329,9 @@ export class PlayerSystem {
     this.sprite.removeAllListeners('animationupdate');
     this.attacking = false;
     this.rocketLaunching = false;
+    this.collectingRocket = false;
+    this.collectingShield = false;
+    this.collectingHit = false;
     this.rocketFireCallback = null;
   }
 
@@ -417,6 +428,77 @@ export class PlayerSystem {
     return true;
   }
 
+  /** True while any COL animation is playing (invincibility frames). */
+  isCollecting(): boolean {
+    return this.collectingRocket || this.collectingShield || this.collectingHit;
+  }
+
+  /** Play collect-rocket animation once, then return to default. */
+  playCollectRocket(): void {
+    // Don't interrupt start animation
+    if (this.startAnimPlaying) return;
+
+    this.cancelCurrentAnimation();
+    this.collectingRocket = true;
+    this.speedupState = 'idle';
+    this.noTapTimer = 0;
+
+    const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
+    const s = TUNING.COL_SCALE;
+    const colW = displayH * s * (TUNING.COL_FRAME_WIDTH / TUNING.COL_FRAME_HEIGHT);
+    this.sprite.play('player-collect-rocket');
+    this.setBaseDisplaySize(colW, displayH * s);
+
+    this.sprite.once('animationcomplete', () => {
+      this.collectingRocket = false;
+      this.restoreDefaultAnimation();
+    });
+  }
+
+  /** Play collect-shield animation once, then return to default. */
+  playCollectShield(): void {
+    // Don't interrupt start animation
+    if (this.startAnimPlaying) return;
+
+    this.cancelCurrentAnimation();
+    this.collectingShield = true;
+    this.speedupState = 'idle';
+    this.noTapTimer = 0;
+
+    const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
+    const s = TUNING.COL_SCALE;
+    const colW = displayH * s * (TUNING.COL_FRAME_WIDTH / TUNING.COL_FRAME_HEIGHT);
+    this.sprite.play('player-collect-shield');
+    this.setBaseDisplaySize(colW, displayH * s);
+
+    this.sprite.once('animationcomplete', () => {
+      this.collectingShield = false;
+      this.restoreDefaultAnimation();
+    });
+  }
+
+  /** Play collect-hit animation once, then return to default. Plays on shield-absorb or spectator destruction. */
+  playCollectHit(): void {
+    // Don't interrupt start animation
+    if (this.startAnimPlaying) return;
+
+    this.cancelCurrentAnimation();
+    this.collectingHit = true;
+    this.speedupState = 'idle';
+    this.noTapTimer = 0;
+
+    const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
+    const s = TUNING.COL_SCALE;
+    const colW = displayH * s * (TUNING.COL_FRAME_WIDTH / TUNING.COL_FRAME_HEIGHT);
+    this.sprite.play('player-collect-hit');
+    this.setBaseDisplaySize(colW, displayH * s);
+
+    this.sprite.once('animationcomplete', () => {
+      this.collectingHit = false;
+      this.restoreDefaultAnimation();
+    });
+  }
+
   playPoweredUp(): void {
     this.poweredUp = true;
     // Cancel any speed-up state — rage takes priority
@@ -478,9 +560,10 @@ export class PlayerSystem {
     this.blendStartY = this.sprite.y;
     this.startAnimPlaying = false;
     // Show frame 0 of start animation, paused
-    this.applyStartDisplaySize();
+    // Set the frame FIRST so applyStartDisplaySize computes scale from correct frame dimensions
     this.sprite.play({ key: 'player-start', startFrame: 0 });
     this.sprite.anims.pause();
+    this.applyStartDisplaySize();
   }
 
   /** Set cursor follow blend (0 = locked at start Y, 1 = full cursor following) */

@@ -54,7 +54,7 @@ export class MusicPlayer {
   private countdownMusic: Phaser.Sound.BaseSound | null = null;
   private crossfadeTimer: number = 0;
   private crossfadeAnim: number = 0;
-
+  private revealTimer: Phaser.Time.TimerEvent | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -73,9 +73,7 @@ export class MusicPlayer {
       this.titleMusic = this.scene.sound.add('title-music', { loop: true, volume: 0.5 });
       this.titleMusic.play();
     }
-    // Show the music player controls
-    this.container.style.display = 'flex';
-    // Show intro track thumbnail and title
+    // Set up track info (UI stays hidden until revealForGameplay)
     const s = TUNING.MUSIC_UI_THUMB_SCALE;
     this.thumbnailImg.src = TUNING.INTRO_TRACK_THUMBNAIL;
     this.thumbnailImg.style.width = `${YT_THUMB_HEIGHT * s}px`;
@@ -84,9 +82,6 @@ export class MusicPlayer {
     this.trackTitle.textContent = TUNING.INTRO_TRACK_TITLE;
     this.titleClip.style.display = 'block';
     this.startTitleScroll();
-    if (this.compact) {
-      this.collapseUI(false);
-    }
   }
 
   getSource(): MusicSource { return this.source; }
@@ -295,11 +290,11 @@ export class MusicPlayer {
     });
     btn.appendChild(img);
     btn.addEventListener('click', () => {
-      if (this.scene.cache.audio.exists('sfx-click')) this.scene.sound.play('sfx-click');
+      if (this.scene.cache.audio.exists('sfx-click')) this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME });
       onClick();
     });
     btn.addEventListener('mouseenter', () => {
-      if (this.scene.cache.audio.exists('sfx-hover')) this.scene.sound.play('sfx-hover');
+      if (this.scene.cache.audio.exists('sfx-hover')) this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME });
     });
     return btn;
   }
@@ -719,9 +714,42 @@ export class MusicPlayer {
     }
   }
 
+  /** Reveal music player during gameplay: fade in thumbnail, wait 1.5s, then expand */
+  revealForGameplay(): void {
+    // Cancel any previous reveal
+    if (this.revealTimer) {
+      this.revealTimer.destroy();
+      this.revealTimer = null;
+    }
+
+    // Show container in collapsed state (thumbnail only, instant)
+    this.container.style.display = 'flex';
+    this.collapseUI(false);
+
+    // Fade in thumbnail sprite
+    this.thumbSprite.setAlpha(0);
+    this.scene.tweens.add({
+      targets: this.thumbSprite,
+      alpha: 1,
+      duration: 500,
+      ease: 'Sine.easeInOut',
+    });
+
+    // After 1.5s, expand to show full UI
+    this.revealTimer = this.scene.time.delayedCall(1500, () => {
+      this.revealTimer = null;
+      this.compact = false;
+      this.expandUI();
+    });
+  }
+
   setVisible(visible: boolean): void {
     this.container.style.display = visible ? 'flex' : 'none';
     if (!visible) {
+      if (this.revealTimer) {
+        this.revealTimer.destroy();
+        this.revealTimer = null;
+      }
       for (const s of this.btnSprites) s.setVisible(false);
       this.thumbSprite.setVisible(false);
       this.titleText.setVisible(false);

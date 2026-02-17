@@ -438,35 +438,15 @@ export class ObstacleSystem {
       const obsH = obs.getData('h') as number;
 
       if (type === ObstacleType.CAR) {
-        // Player ellipse vs car ellipse — proper ellipse reach in normalized space
-        const a = (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2;
-        const b = (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
+        // Player rect vs car rect (AABB)
+        const halfW = (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2;
+        const halfH = (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
         const coy = (obsH - obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
 
-        const dx = playerX - obs.x;
-        const dy = playerY - (obs.y + coy);
-        const nx = dx / a;
-        const ny = dy / b;
-        const normDistSq = nx * nx + ny * ny;
+        const overlapX = Math.abs(playerX - obs.x) < (halfW + playerHalfW);
+        const overlapY = Math.abs(playerY - (obs.y + coy)) < (halfH + playerHalfH);
 
-        let colliding: boolean;
-        if (normDistSq < 0.001) {
-          colliding = true;
-        } else {
-          const normDist = Math.sqrt(normDistSq);
-          const dirX = nx / normDist;
-          const dirY = ny / normDist;
-          // Player ellipse semi-axes in normalized space
-          const pNormW = playerHalfW / a;
-          const pNormH = playerHalfH / b;
-          // Player ellipse reach in the center-to-center direction
-          const dw = dirX / pNormW;
-          const dh = dirY / pNormH;
-          const normR = 1 / Math.sqrt(dw * dw + dh * dh);
-          colliding = normDist < 1 + normR;
-        }
-
-        if (colliding) {
+        if (overlapX && overlapY) {
           this.collisionResult.crashed = true;
           this.collisionResult.hitX = obs.x;
           this.collisionResult.hitY = obs.y;
@@ -476,29 +456,10 @@ export class ObstacleSystem {
           return this.collisionResult;
         }
       } else if (type === ObstacleType.SLOW) {
-        // Player ellipse vs puddle ellipse
-        const a = obsW / 2;
-        const b = obsH / 2;
-        const dx = playerX - obs.x;
-        const dy = playerY - obs.y;
-        const nx = dx / a;
-        const ny = dy / b;
-        const normDistSq = nx * nx + ny * ny;
-        let slowHit: boolean;
-        if (normDistSq < 0.001) {
-          slowHit = true;
-        } else {
-          const normDist = Math.sqrt(normDistSq);
-          const dirX = nx / normDist;
-          const dirY = ny / normDist;
-          const pNormW = playerHalfW / a;
-          const pNormH = playerHalfH / b;
-          const dw = dirX / pNormW;
-          const dh = dirY / pNormH;
-          const normR = 1 / Math.sqrt(dw * dw + dh * dh);
-          slowHit = normDist < 1 + normR;
-        }
-        if (slowHit) {
+        // Player rect vs puddle rect (AABB)
+        const overlapX = Math.abs(playerX - obs.x) < (obsW / 2 + playerHalfW);
+        const overlapY = Math.abs(playerY - obs.y) < (obsH / 2 + playerHalfH);
+        if (overlapX && overlapY) {
           this.collisionResult.slowOverlapping = true;
         }
       } else {
@@ -560,27 +521,16 @@ export class ObstacleSystem {
       let hit = false;
 
       if (type === ObstacleType.CAR || type === ObstacleType.SLOW) {
-        // Ellipse collision for cars and puddles
-        const a = type === ObstacleType.CAR ? (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2 : obsW / 2;
-        const b = type === ObstacleType.CAR ? (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2 : obsH / 2;
+        // Projectile circle vs car/puddle rect (AABB)
+        const halfW = type === ObstacleType.CAR ? (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2 : obsW / 2;
+        const halfH = type === ObstacleType.CAR ? (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2 : obsH / 2;
         const coy = type === ObstacleType.CAR ? (obsH - obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2 : 0;
-        const dx = projX - obs.x;
-        const dy = projY - (obs.y + coy);
-        const nx = dx / a;
-        const ny = dy / b;
-        const normDistSq = nx * nx + ny * ny;
-        if (normDistSq < 0.001) {
-          hit = true;
-        } else {
-          const normDist = Math.sqrt(normDistSq);
-          const dirX = nx / normDist;
-          const dirY = ny / normDist;
-          const normR = Math.sqrt(
-            (projRadius * dirX / a) * (projRadius * dirX / a) +
-            (projRadius * dirY / b) * (projRadius * dirY / b)
-          );
-          hit = normDist < 1 + normR;
-        }
+        const cy = obs.y + coy;
+        const closestX = Math.max(obs.x - halfW, Math.min(projX, obs.x + halfW));
+        const closestY = Math.max(cy - halfH, Math.min(projY, cy + halfH));
+        const dx = projX - closestX;
+        const dy = projY - closestY;
+        hit = dx * dx + dy * dy < projRadius * projRadius;
       } else {
         // AABB for crash obstacles
         const halfW = obsW / 2;
@@ -626,27 +576,13 @@ export class ObstacleSystem {
       let colliding = false;
 
       if (type === ObstacleType.CAR) {
-        const a = (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2;
-        const b = (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
+        // Rage player rect vs car rect (AABB)
+        const halfW = (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2;
+        const halfH = (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
         const coy = (obsH - obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
-        const dx = playerX - obs.x;
-        const dy = playerY - (obs.y + coy);
-        const nx = dx / a;
-        const ny = dy / b;
-        const normDistSq = nx * nx + ny * ny;
-        if (normDistSq < 0.001) {
-          colliding = true;
-        } else {
-          const normDist = Math.sqrt(normDistSq);
-          const dirX = nx / normDist;
-          const dirY = ny / normDist;
-          const pNormW = playerHalfW / a;
-          const pNormH = playerHalfH / b;
-          const dw = dirX / pNormW;
-          const dh = dirY / pNormH;
-          const normR = 1 / Math.sqrt(dw * dw + dh * dh);
-          colliding = normDist < 1 + normR;
-        }
+        const overlapX = Math.abs(playerX - obs.x) < (halfW + playerHalfW);
+        const overlapY = Math.abs(playerY - (obs.y + coy)) < (halfH + playerHalfH);
+        colliding = overlapX && overlapY;
       } else {
         const overlapX = Math.abs(playerX - obs.x) < (obsW / 2 + playerHalfW);
         const overlapY = Math.abs(playerY - obs.y) < (obsH / 2 + playerHalfH);
