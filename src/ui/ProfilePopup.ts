@@ -316,8 +316,8 @@ export class ProfilePopup {
         const success = await startLogin();
         if (success) {
           this.updateSpotifyButton();
+          await this.loadProfile();
           this.scene.events.emit('spotify-auth-changed');
-          this.loadProfile();
           this.loadScoreData();
         }
       }
@@ -428,8 +428,8 @@ export class ProfilePopup {
 
   /* ============ Public API ============ */
 
-  loadProfile(): void {
-    loadOrCreateProfile().then((profile) => {
+  loadProfile(): Promise<void> {
+    return loadOrCreateProfile().then((profile) => {
       this.currentName = profile.username;
       this.nameText.setText(profile.username);
       if (profile.avatar_url) {

@@ -421,6 +421,16 @@ export class GameScene extends Phaser.Scene {
     // Load profile from Supabase early so the HUD is populated before the player sees it
     this.profilePopup.loadProfile();
 
+    // Refresh HUD name + avatar after Spotify login/disconnect
+    this.events.on('spotify-auth-changed', () => {
+      const name = this.profilePopup.getName();
+      const key = this.profilePopup.getAvatarTextureKey();
+      if (key) this.profileHud.setAvatarTexture(key);
+      if (this.state === GameState.TITLE || this.state === GameState.DEAD) {
+        this.profileHud.showProfileMode(name, this.getProfileRankText());
+      }
+    });
+
     // --- Debug text ---
     this.debugText = this.add.text(16, 16, '', {
       fontSize: '16px',
