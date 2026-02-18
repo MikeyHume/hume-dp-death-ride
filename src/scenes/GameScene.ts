@@ -24,6 +24,7 @@ import { PerfSystem } from '../systems/PerfSystem';
 import { OrientationOverlay } from '../systems/OrientationOverlay';
 import { GAME_MODE } from '../config/gameMode';
 import { submitScore, fetchGlobalTop10, GlobalLeaderboardEntry } from '../systems/LeaderboardService';
+import { ReflectionSystem } from '../systems/ReflectionSystem';
 
 enum GameState {
   TITLE,
@@ -47,7 +48,7 @@ const DEBUG_HOTKEYS = {
   toggleCRT:      { key: 'O',       active: false },  // toggle CRT shader on/off
   crtDebug:       { key: 'P',       active: false },  // toggle CRT tuning overlay
   instantRage:    { key: 'ZERO',    active: false },  // trigger instant rage mode
-  spectatorMode:  { key: 'I',       active: false },  // toggle spectator mode
+  spectatorMode:  { key: 'I',       active: true },  // toggle spectator mode
   toggleLayer1:   { key: 'ONE',     active: false },  // toggle parallax layer 1
   toggleLayer2:   { key: 'TWO',     active: false },  // toggle parallax layer 2
   toggleLayer3:   { key: 'THREE',   active: false },  // toggle parallax layer 3
@@ -58,9 +59,14 @@ const DEBUG_HOTKEYS = {
   toggleSky:      { key: 'EIGHT',   active: false },  // toggle sky background
   toggleRoad:     { key: 'NINE',    active: false },  // toggle road
   hideHud:        { key: 'G',       active: false },  // hide HUD + music UI during gameplay
+  volumeAdjust:   { key: 'V',       active: false },  // up/down arrows adjust current music volume
+  spritePosition: { key: 'S',       active: false },  // sprite X-offset position panel
+  preStartOverlay:{ key: 'F',       active: false },  // toggle last pre-start frame overlay
   showHelp:       { key: 'PLUS',    active: true  },  // toggle debug panel (always active)
   showCollisions: { key: 'MINUS',   active: false },  // toggle collision hitbox overlay
   startHold:      { key: 'BACKTICK', active: false }, // skip the start hold phase
+  toggleRefMask:  { key: 'M',       active: true },  // toggle puddle reflection mask
+
 };
 
 // ── Death screen leaderboard: Scale multipliers ──
@@ -93,6 +99,7 @@ export class GameScene extends Phaser.Scene {
   private parallaxSystem!: ParallaxSystem;
   private roadSystem!: RoadSystem;
   private obstacleSystem!: ObstacleSystem;
+  private reflectionSystem!: ReflectionSystem;
   private difficultySystem!: DifficultySystem;
   private scoreSystem!: ScoreSystem;
   private fxSystem!: FXSystem;
@@ -191,6 +198,16 @@ export class GameScene extends Phaser.Scene {
   private debugMasterEnabled: boolean = true;
   private debugPanelRows: { label: string; text: Phaser.GameObjects.Text }[] = [];
   private debugMasterText!: Phaser.GameObjects.Text;
+  private debugVolumeBg!: Phaser.GameObjects.Rectangle;
+  private debugVolumeTexts: Phaser.GameObjects.Text[] = [];
+  private debugVolumeActive: boolean = false;
+  private debugVolumeIdx: number = 0;
+  private debugSpritePosBg!: Phaser.GameObjects.Rectangle;
+  private debugSpritePosTexts: Phaser.GameObjects.Text[] = [];
+  private debugSpritePosActive: boolean = false;
+  private debugSpritePosIdx: number = 0;
+  private debugPreStartOverlay!: Phaser.GameObjects.Image;
+  private debugRepeatTimers: Record<string, number> = {};
   private collisionDebug: boolean = false;
   private collisionGfx!: Phaser.GameObjects.Graphics;
 
@@ -214,10 +231,6 @@ export class GameScene extends Phaser.Scene {
   private emptyNameNoBtn!: Phaser.GameObjects.Text;
   private emptyNameVisible: boolean = false;
   private anyInputPressed: boolean = false;
-
-  // Play-music overlay (shown once on first load, dismissed on first interaction)
-  private playMusicOverlay!: Phaser.GameObjects.Image;
-  private musicOverlayActive: boolean = true;
 
   // Countdown (5→1 before gameplay)
   private countdownSprite!: Phaser.GameObjects.Sprite;
@@ -300,11 +313,7 @@ export class GameScene extends Phaser.Scene {
         if (isAdvanceKey) this.tutorialAdvance = true;
       } else if (this.state === GameState.TITLE) {
         if (isAdvanceKey) {
-          if (this.musicOverlayActive) {
-            this.dismissMusicOverlay();
-          } else {
-            this.anyInputPressed = true;
-          }
+          this.anyInputPressed = true;
         }
       }
     });
@@ -319,11 +328,7 @@ export class GameScene extends Phaser.Scene {
       if (this.state === GameState.TUTORIAL) {
         this.tutorialAdvance = true;
       } else if (this.state === GameState.TITLE) {
-        if (this.musicOverlayActive) {
-          this.dismissMusicOverlay();
-        } else {
-          this.anyInputPressed = true;
-        }
+        this.anyInputPressed = true;
       }
     });
 
@@ -336,6 +341,7 @@ export class GameScene extends Phaser.Scene {
     this.parallaxSystem = new ParallaxSystem(this);
     this.roadSystem = new RoadSystem(this);
     this.obstacleSystem = new ObstacleSystem(this, this.weekSeed);
+    this.reflectionSystem = new ReflectionSystem(this, this.parallaxSystem, this.obstacleSystem.getPool());
     this.pickupSystem = new PickupSystem(this);
     this.rocketSystem = new RocketSystem(this, this.obstacleSystem);
 
@@ -491,20 +497,6 @@ export class GameScene extends Phaser.Scene {
       );
     }
     this.titleLoopSprite.play('title-loop');
-
-    // --- Play-music overlay (on top of title, dismissed on first interaction) ---
-    this.playMusicOverlay = this.add.image(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
-      'play-music-overlay'
-    ).setDepth(201);
-    // Scale to fill screen
-    const overlayTex = this.textures.get('play-music-overlay');
-    const overlayW = overlayTex.getSourceImage().width;
-    const overlayH = overlayTex.getSourceImage().height;
-    const scaleX = TUNING.GAME_WIDTH / overlayW;
-    const scaleY = TUNING.GAME_HEIGHT / overlayH;
-    const overlayScale = Math.max(scaleX, scaleY);
-    this.playMusicOverlay.setScale(overlayScale);
 
     // --- Title screen ---
     this.titleContainer = this.add.container(0, 0).setDepth(200);
@@ -921,11 +913,20 @@ export class GameScene extends Phaser.Scene {
       if (this.crtDebugVisible) this.updateCRTDebugText();
     });
 
+    // Apply TUNING volumes to BIOS audio elements before triggering the beep
+    const bootOverlay = (window as any).__bootOverlay;
+    if (bootOverlay?.bootupAudio) bootOverlay.bootupAudio.volume = TUNING.SFX_BIOS_BOOTUP_VOLUME;
+    if (bootOverlay?.biosCompleteAudio) bootOverlay.biosCompleteAudio.volume = TUNING.SFX_BIOS_BEEP_VOLUME;
+
     // Signal boot overlay that the start screen is ready
     (window as any).__bootOverlay?.markStartScreenReady?.();
 
-    // Attempt to autoplay title music — skip overlay if browser allows it
-    this.tryAutoplayMusic();
+    // Attempt to autoplay title music — wait for BIOS beep to finish first
+    if (bootOverlay?.waitForBeep) {
+      bootOverlay.waitForBeep(() => this.tryAutoplayMusic());
+    } else {
+      this.tryAutoplayMusic();
+    }
 
     this.input.keyboard?.addKey(DEBUG_HOTKEYS.instantRage.key).on('down', () => {
       if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.instantRage.active || this.debugPanelOpen) return;
@@ -954,12 +955,19 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard?.addKey(hotkey.key).on('down', () => {
         if (!this.debugMasterEnabled || !hotkey.active || this.debugPanelOpen) return;
         this.parallaxSystem.toggleLayer(layerIdx);
+        this.reflectionSystem.toggleLayer(layerIdx);
       });
     }
     // Sky toggle (key 8)
     this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleSky.key).on('down', () => {
       if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.toggleSky.active || this.debugPanelOpen) return;
       this.parallaxSystem.toggleSky();
+      this.reflectionSystem.toggleSky();
+    });
+    // Reflection mask toggle (M)
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleRefMask.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.toggleRefMask.active || this.debugPanelOpen) return;
+      this.reflectionSystem.toggleMask();
     });
     // Road toggle (key 9)
     let roadVisible = true;
@@ -985,6 +993,7 @@ export class GameScene extends Phaser.Scene {
       this.obstacleSystem.setVisible(v);
       this.pickupSystem.setVisible(v);
       this.shieldSystem.setVisible(v);
+      this.reflectionSystem.setVisible(v);
       for (let i = 0; i < this.warningPool.length; i++) {
         this.warningPool[i].circle.setVisible(v);
         this.warningPool[i].preview.setVisible(v);
@@ -1007,6 +1016,71 @@ export class GameScene extends Phaser.Scene {
       this.startHoldMode = !this.startHoldMode;
     });
 
+    // Volume adjust toggle (V) + full-list readout HUD
+    {
+      const volFontSize = 36;
+      const volLineH = 48;
+      const volParamCount = 15; // 1 music + 14 sfx/bios
+      const volPanelH = volParamCount * volLineH + 16;
+      const volPanelW = 1040;
+      const volTopY = volPanelH / 2;
+      this.debugVolumeBg = this.add.rectangle(
+        TUNING.GAME_WIDTH / 2, volTopY, volPanelW, volPanelH, 0x000000, 0.75
+      ).setDepth(9999).setScrollFactor(0).setVisible(false);
+      this.debugVolumeTexts = [];
+      for (let i = 0; i < volParamCount; i++) {
+        const y = 8 + i * volLineH + volLineH / 2;
+        const txt = this.add.text(TUNING.GAME_WIDTH / 2 - volPanelW / 2 + 16, y, '', {
+          fontSize: `${volFontSize}px`, color: '#ff0000', fontFamily: 'monospace',
+        }).setOrigin(0, 0.5).setDepth(9999).setScrollFactor(0).setVisible(false);
+        this.debugVolumeTexts.push(txt);
+      }
+    }
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.volumeAdjust.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.volumeAdjust.active || this.debugPanelOpen) return;
+      this.debugVolumeActive = !this.debugVolumeActive;
+      this.debugVolumeBg.setVisible(this.debugVolumeActive);
+      for (const t of this.debugVolumeTexts) t.setVisible(this.debugVolumeActive);
+    });
+
+    // Sprite position panel (S) — same layout as volume panel
+    {
+      const spFontSize = 36;
+      const spLineH = 48;
+      const spParamCount = 14;
+      const spPanelH = spParamCount * spLineH + 16;
+      const spPanelW = 1040;
+      const spTopY = spPanelH / 2;
+      this.debugSpritePosBg = this.add.rectangle(
+        TUNING.GAME_WIDTH / 2, spTopY, spPanelW, spPanelH, 0x000000, 0.75
+      ).setDepth(9999).setScrollFactor(0).setVisible(false);
+      this.debugSpritePosTexts = [];
+      for (let i = 0; i < spParamCount; i++) {
+        const y = 8 + i * spLineH + spLineH / 2;
+        const txt = this.add.text(TUNING.GAME_WIDTH / 2 - spPanelW / 2 + 16, y, '', {
+          fontSize: `${spFontSize}px`, color: '#ff0000', fontFamily: 'monospace',
+        }).setOrigin(0, 0.5).setDepth(9999).setScrollFactor(0).setVisible(false);
+        this.debugSpritePosTexts.push(txt);
+      }
+    }
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.spritePosition.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.spritePosition.active || this.debugPanelOpen) return;
+      this.debugSpritePosActive = !this.debugSpritePosActive;
+      this.debugSpritePosBg.setVisible(this.debugSpritePosActive);
+      for (const t of this.debugSpritePosTexts) t.setVisible(this.debugSpritePosActive);
+    });
+
+    // Pre-start last frame overlay (F) — static image for composition reference
+    this.debugPreStartOverlay = this.add.image(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00045'
+    ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT)
+     .setDepth(247).setScrollFactor(0).setAlpha(0.5).setVisible(false);
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.preStartOverlay.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.preStartOverlay.active || this.debugPanelOpen) return;
+      if (this.state !== GameState.PLAYING) return;
+      this.debugPreStartOverlay.setVisible(!this.debugPreStartOverlay.visible);
+    });
+
     // Debug panel — interactive overlay to toggle hotkeys on/off
     {
       const pad = 40;
@@ -1024,6 +1098,10 @@ export class GameScene extends Phaser.Scene {
         { label: 'toggleSky',       key: DEBUG_HOTKEYS.toggleSky.key,       desc: 'Toggle sky' },
         { label: 'toggleRoad',      key: DEBUG_HOTKEYS.toggleRoad.key,      desc: 'Toggle road' },
         { label: 'hideHud',         key: DEBUG_HOTKEYS.hideHud.key,         desc: 'Hide HUD' },
+        { label: 'volumeAdjust',    key: DEBUG_HOTKEYS.volumeAdjust.key,    desc: 'Volume adjust ↑↓' },
+        { label: 'spritePosition', key: DEBUG_HOTKEYS.spritePosition.key,  desc: 'Sprite position ←→' },
+        { label: 'preStartOverlay',key: DEBUG_HOTKEYS.preStartOverlay.key, desc: 'Pre-start last frame' },
+        { label: 'toggleRefMask',   key: DEBUG_HOTKEYS.toggleRefMask.key,   desc: 'Reflection mask' },
         { label: 'showCollisions',  key: '-',                               desc: 'Collision hitboxes' },
         { label: 'startHold',       key: '`',                               desc: 'Skip start hold' },
       ];
@@ -1220,6 +1298,145 @@ export class GameScene extends Phaser.Scene {
       this.debugMusicSourceText.setText(`SRC: ${this.musicPlayer.getSource().toUpperCase()}`);
     }
 
+    // Volume adjust — left/right cycle params, up/down change value, enter copies
+    if (this.debugVolumeActive && this.debugMasterEnabled && DEBUG_HOTKEYS.volumeAdjust.active && this.input.keyboard) {
+      const sfxParams = [
+        'MUSIC_VOL_COUNTDOWN',
+        'SFX_BIOS_BOOTUP_VOLUME',
+        'SFX_BIOS_BEEP_VOLUME',
+        'SFX_EXPLODE_VOLUME',
+        'SFX_ROCKET_FIRE_VOLUME',
+        'SFX_AMMO_PICKUP_VOLUME',
+        'SFX_OBSTACLE_KILL_VOLUME',
+        'SFX_POTION_PICKUP_VOLUME',
+        'SFX_POTION_USED_VOLUME',
+        'IMPACT_VOLUME',
+        'KATANA_SLASH_VOLUME',
+        'ENGINE_SAMPLE_VOLUME',
+        'ENGINE_SAMPLE_IDLE_VOLUME',
+        'ENGINE_REV_VOL_BOOST',
+      ];
+      const totalParams = 1 + sfxParams.length;
+
+      const step = 0.05;
+      const upKey = this.input.keyboard.addKey('UP');
+      const downKey = this.input.keyboard.addKey('DOWN');
+      const leftKey = this.input.keyboard.addKey('LEFT');
+      const rightKey = this.input.keyboard.addKey('RIGHT');
+
+      if (this.debugKeyHeld(rightKey, dt, 'vol-right')) {
+        this.debugVolumeIdx = (this.debugVolumeIdx + 1) % totalParams;
+      }
+      if (this.debugKeyHeld(leftKey, dt, 'vol-left')) {
+        this.debugVolumeIdx = (this.debugVolumeIdx - 1 + totalParams) % totalParams;
+      }
+
+      // Build full param list — index 0 is the active music source
+      const allParams: string[] = [];
+      const isTitle = this.state === GameState.TITLE;
+      const src = this.musicPlayer.getSource();
+      if (isTitle) allParams.push('MUSIC_VOL_TITLE');
+      else if (src === 'spotify') allParams.push('MUSIC_VOL_SPOTIFY');
+      else allParams.push('MUSIC_VOL_YOUTUBE');
+      allParams.push(...sfxParams);
+
+      const param = allParams[this.debugVolumeIdx];
+      let vol: number = (TUNING as any)[param];
+
+      if (this.debugKeyHeld(upKey, dt, 'vol-up')) {
+        vol = Math.round((vol + step) * 100) / 100;
+        (TUNING as any)[param] = vol;
+        if (this.debugVolumeIdx === 0) this.musicPlayer.applyVolume();
+      }
+      if (this.debugKeyHeld(downKey, dt, 'vol-down')) {
+        vol = Math.max(0, Math.round((vol - step) * 100) / 100);
+        (TUNING as any)[param] = vol;
+        if (this.debugVolumeIdx === 0) this.musicPlayer.applyVolume();
+      }
+
+      const enterKey = this.input.keyboard.addKey('ENTER');
+      if (Phaser.Input.Keyboard.JustDown(enterKey)) {
+        const clipText = `${param}: ${vol},`;
+        navigator.clipboard.writeText(clipText).catch(() => {});
+      }
+
+      // Update all lines — selected green, rest red
+      for (let i = 0; i < this.debugVolumeTexts.length && i < allParams.length; i++) {
+        const p = allParams[i];
+        const v: number = (TUNING as any)[p];
+        const selected = i === this.debugVolumeIdx;
+        this.debugVolumeTexts[i].setText(`${selected ? '► ' : '  '}${p}: ${v}`);
+        this.debugVolumeTexts[i].setColor(selected ? '#00ff00' : '#ff0000');
+      }
+    } else if (this.debugVolumeActive && (!this.debugMasterEnabled || !DEBUG_HOTKEYS.volumeAdjust.active)) {
+      this.debugVolumeActive = false;
+      this.debugVolumeBg.setVisible(false);
+      for (const t of this.debugVolumeTexts) t.setVisible(false);
+    }
+
+    // Sprite position panel — up/down cycle sprites, left/right adjust X offset, enter copies
+    if (this.debugSpritePosActive && this.debugMasterEnabled && DEBUG_HOTKEYS.spritePosition.active && this.input.keyboard) {
+      const spriteParams = [
+        'SPRITE_OFFSET_PLAYER',
+        'SPRITE_OFFSET_ROAD',
+        'SPRITE_OFFSET_RAILING',
+        'SPRITE_OFFSET_PARALLAX_2',
+        'SPRITE_OFFSET_PARALLAX_3',
+        'SPRITE_OFFSET_PARALLAX_4',
+        'SPRITE_OFFSET_PARALLAX_5',
+        'SPRITE_OFFSET_PARALLAX_6',
+        'SPRITE_OFFSET_PARALLAX_7',
+        'SPRITE_OFFSET_SKY',
+        'SPRITE_OFFSET_HOLD_TEXT',
+        'SPRITE_OFFSET_HUD_LABEL',
+        'SPRITE_OFFSET_HUD_SCORE',
+        'SPRITE_OFFSET_PROFILE_HUD',
+      ];
+      const spStep = 10;
+      const upKey = this.input.keyboard.addKey('UP');
+      const downKey = this.input.keyboard.addKey('DOWN');
+      const leftKey = this.input.keyboard.addKey('LEFT');
+      const rightKey = this.input.keyboard.addKey('RIGHT');
+
+      if (this.debugKeyHeld(downKey, dt, 'sp-down')) {
+        this.debugSpritePosIdx = (this.debugSpritePosIdx + 1) % spriteParams.length;
+      }
+      if (this.debugKeyHeld(upKey, dt, 'sp-up')) {
+        this.debugSpritePosIdx = (this.debugSpritePosIdx - 1 + spriteParams.length) % spriteParams.length;
+      }
+
+      const param = spriteParams[this.debugSpritePosIdx];
+      let val: number = (TUNING as any)[param];
+
+      if (this.debugKeyHeld(rightKey, dt, 'sp-right')) {
+        val += spStep;
+        (TUNING as any)[param] = val;
+        this.applySpriteOffset(param, val);
+      }
+      if (this.debugKeyHeld(leftKey, dt, 'sp-left')) {
+        val -= spStep;
+        (TUNING as any)[param] = val;
+        this.applySpriteOffset(param, val);
+      }
+
+      const enterKey = this.input.keyboard.addKey('ENTER');
+      if (Phaser.Input.Keyboard.JustDown(enterKey)) {
+        navigator.clipboard.writeText(`${param}: ${val},`).catch(() => {});
+      }
+
+      for (let i = 0; i < this.debugSpritePosTexts.length && i < spriteParams.length; i++) {
+        const p = spriteParams[i];
+        const v: number = (TUNING as any)[p];
+        const selected = i === this.debugSpritePosIdx;
+        this.debugSpritePosTexts[i].setText(`${selected ? '► ' : '  '}${p}: ${v}`);
+        this.debugSpritePosTexts[i].setColor(selected ? '#00ff00' : '#ff0000');
+      }
+    } else if (this.debugSpritePosActive && (!this.debugMasterEnabled || !DEBUG_HOTKEYS.spritePosition.active)) {
+      this.debugSpritePosActive = false;
+      this.debugSpritePosBg.setVisible(false);
+      for (const t of this.debugSpritePosTexts) t.setVisible(false);
+    }
+
     if (this.debugMasterEnabled && DEBUG_HOTKEYS.jumpLeaderboard.active && this.input.keyboard
         && Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey(DEBUG_HOTKEYS.jumpLeaderboard.key))
         && this.state !== GameState.DEAD) {
@@ -1412,6 +1629,8 @@ export class GameScene extends Phaser.Scene {
     this.state = GameState.TITLE;
     this.setCrosshairMode(false);
     this.elapsed = 0;
+    this.debugPreStartOverlay.setVisible(false);
+    this.reflectionSystem.setVisible(false);
 
     // Clean up tutorial
     this.tutorialPhase = 'done';
@@ -1469,7 +1688,6 @@ export class GameScene extends Phaser.Scene {
     this.highlightedRowTexts = [];
     this.nameEntryContainer.setVisible(false);
     this.nameEnterBtn.setVisible(false);
-    this.playMusicOverlay.setAlpha(0).setVisible(false);
     this.debugText.setText('');
 
     // Clean up name entry keyboard handler if active
@@ -1509,44 +1727,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private tryAutoplayMusic(): void {
-    if (!this.cache.audio.exists('title-music')) return;
-    const testSound = this.sound.add('title-music', { loop: true, volume: 0 });
-    testSound.play();
-    // Check if the browser actually allowed playback
-    if (testSound.isPlaying) {
-      // Autoplay worked — hand off to MusicPlayer and skip the overlay
-      testSound.stop();
-      testSound.destroy();
-      this.musicPlayer.startTitleMusic();
-      this.musicPlayer.setVisible(true);
-      this.musicPlayer.setCompact(true);
-      this.musicOverlayActive = false;
-      this.playMusicOverlay.setVisible(false);
-      this.profileHud.showProfileMode(this.profilePopup.getName(), this.getProfileRankText());
-      this.profileHud.setVisible(true);
-    } else {
-      // Autoplay blocked — clean up and keep the overlay as fallback
-      testSound.stop();
-      testSound.destroy();
-    }
-  }
-
-  private dismissMusicOverlay(): void {
-    this.musicOverlayActive = false;
     this.musicPlayer.startTitleMusic();
     this.musicPlayer.setVisible(true);
     this.musicPlayer.setCompact(true);
     this.profileHud.showProfileMode(this.profilePopup.getName(), this.getProfileRankText());
     this.profileHud.setVisible(true);
-    this.tweens.add({
-      targets: this.playMusicOverlay,
-      alpha: 0,
-      duration: 1500,
-      ease: 'Power2',
-      onComplete: () => {
-        this.playMusicOverlay.setVisible(false);
-      },
-    });
   }
 
   private enterTutorial(): void {
@@ -1780,6 +1965,73 @@ export class GameScene extends Phaser.Scene {
     if (this.cursorStroke) this.cursorStroke.setVisible(!enabled);
   }
 
+  /** Returns true on first press, then repeats after an initial delay when held. */
+  private debugKeyHeld(key: Phaser.Input.Keyboard.Key, dt: number, id: string): boolean {
+    if (!key.isDown) {
+      delete this.debugRepeatTimers[id];
+      return false;
+    }
+    if (!(id in this.debugRepeatTimers)) {
+      // First frame pressed — fire immediately, schedule next after initial delay
+      this.debugRepeatTimers[id] = 0.35;
+      return true;
+    }
+    this.debugRepeatTimers[id] -= dt;
+    if (this.debugRepeatTimers[id] <= 0) {
+      this.debugRepeatTimers[id] += 0.05; // repeat every 50ms
+      return true;
+    }
+    return false;
+  }
+
+  /** Apply a single sprite offset param to its game object (for real-time debug adjustment). */
+  private applySpriteOffset(param: string, val: number): void {
+    switch (param) {
+      case 'SPRITE_OFFSET_PLAYER':
+        this.playerSystem.getSprite().x = TUNING.PLAYER_START_X + val;
+        break;
+      case 'SPRITE_OFFSET_ROAD':
+        this.roadSystem.resetScroll(val);
+        break;
+      case 'SPRITE_OFFSET_RAILING':
+        this.parallaxSystem.setLayerOffset(0, val);
+        break;
+      case 'SPRITE_OFFSET_PARALLAX_2':
+        this.parallaxSystem.setLayerOffset(1, val);
+        break;
+      case 'SPRITE_OFFSET_PARALLAX_3':
+        this.parallaxSystem.setLayerOffset(2, val);
+        break;
+      case 'SPRITE_OFFSET_PARALLAX_4':
+        this.parallaxSystem.setLayerOffset(3, val);
+        break;
+      case 'SPRITE_OFFSET_PARALLAX_5':
+        this.parallaxSystem.setLayerOffset(4, val);
+        break;
+      case 'SPRITE_OFFSET_PARALLAX_6':
+        this.parallaxSystem.setLayerOffset(5, val);
+        break;
+      case 'SPRITE_OFFSET_PARALLAX_7':
+        this.parallaxSystem.setLayerOffset(6, val);
+        break;
+      case 'SPRITE_OFFSET_SKY':
+        this.parallaxSystem.setSkyOffsetX(val);
+        break;
+      case 'SPRITE_OFFSET_HOLD_TEXT':
+        this.startHoldText.x = TUNING.GAME_WIDTH / 2 + val;
+        break;
+      case 'SPRITE_OFFSET_HUD_LABEL':
+        this.hudLabel.x = TUNING.GAME_WIDTH / 2 + val;
+        break;
+      case 'SPRITE_OFFSET_HUD_SCORE':
+        this.hudHighScore.x = TUNING.GAME_WIDTH / 2 + val;
+        break;
+      case 'SPRITE_OFFSET_PROFILE_HUD':
+        this.profileHud.setPosition(40 + val, 40);
+        break;
+    }
+  }
+
   private startGame(): void {
     this.state = GameState.PLAYING;
     this.setCrosshairMode(true);
@@ -1792,7 +2044,19 @@ export class GameScene extends Phaser.Scene {
     this.deathWhiteOverlay.setVisible(false);
     this.dyingPhase = 'done';
     this.roadSystem.setVisible(true);
+    this.roadSystem.resetScroll(TUNING.SPRITE_OFFSET_ROAD);
     this.parallaxSystem.setVisible(true);
+    this.parallaxSystem.resetScroll([
+      TUNING.SPRITE_OFFSET_RAILING,
+      TUNING.SPRITE_OFFSET_PARALLAX_2,
+      TUNING.SPRITE_OFFSET_PARALLAX_3,
+      TUNING.SPRITE_OFFSET_PARALLAX_4,
+      TUNING.SPRITE_OFFSET_PARALLAX_5,
+      TUNING.SPRITE_OFFSET_PARALLAX_6,
+      TUNING.SPRITE_OFFSET_PARALLAX_7,
+    ]);
+    this.parallaxSystem.setSkyOffsetX(TUNING.SPRITE_OFFSET_SKY);
+    this.reflectionSystem.setVisible(true);
     this.playerSystem.reset();
     if (this.spectatorMode) this.playerSystem.setSpectator(true);
     this.playerSystem.setVisible(true);
@@ -1817,8 +2081,11 @@ export class GameScene extends Phaser.Scene {
     const weeklyHigh = entries.length > 0 ? entries[0].score : 0;
     this.hudHighScore.setText(String(weeklyHigh).padStart(7, '0'));
     this.hudLabel.setVisible(true);
+    this.hudLabel.x = TUNING.GAME_WIDTH / 2 + TUNING.SPRITE_OFFSET_HUD_LABEL;
     this.hudHighScore.setVisible(true);
+    this.hudHighScore.x = TUNING.GAME_WIDTH / 2 + TUNING.SPRITE_OFFSET_HUD_SCORE;
     this.profileHud.setVisible(true);
+    this.profileHud.setPosition(40 + TUNING.SPRITE_OFFSET_PROFILE_HUD, 40);
     this.profileHud.showPlayingMode(this.profilePopup.getName());
     this.profileHud.setAlpha(0);
     this.tweens.add({
@@ -1860,6 +2127,7 @@ export class GameScene extends Phaser.Scene {
       this.startHoldTimer = 0;
       this.startHoldRampT = 0;
       this.startHoldText.setAlpha(1);
+      this.startHoldText.x = TUNING.GAME_WIDTH / 2 + TUNING.SPRITE_OFFSET_HOLD_TEXT;
       this.startHoldText.setVisible(true);
       // Blink: on → fade out → off → fade in → repeat
       if (this.startHoldBlinkTween) this.startHoldBlinkTween.destroy();
@@ -2021,6 +2289,7 @@ export class GameScene extends Phaser.Scene {
       // Nothing moves — pass 0 speed, skip all updates
       this.roadSystem.update(0, dt);
       this.parallaxSystem.update(0, dt);
+      this.reflectionSystem.update(0, dt);
       return;
     }
     // Ramp from 0 to base speed over START_HOLD_RAMP seconds after hold release
@@ -2318,6 +2587,7 @@ export class GameScene extends Phaser.Scene {
 
     this.parallaxSystem.update(roadSpeed, hDt);
     this.roadSystem.update(roadSpeed, hDt);
+    this.reflectionSystem.update(roadSpeed, hDt);
 
     // Lane collision highlights
     const collY = this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y;
@@ -2372,6 +2642,7 @@ export class GameScene extends Phaser.Scene {
       for (let i = 0; i < this.laneHighlights.length; i++) {
         this.laneHighlights[i].setVisible(false);
       }
+      this.reflectionSystem.setVisible(false);
     }
 
     // CRT debug overlay
@@ -2639,7 +2910,7 @@ export class GameScene extends Phaser.Scene {
               strokeColor = TUNING.WARNING_STROKE_CAR;
               break;
             case ObstacleType.SLOW:
-              textureKey = 'obstacle-slow';
+              textureKey = 'puddle-tex';
               scaleMultiplier = TUNING.LANE_WARNING_PREVIEW_SLOW;
               strokeColor = TUNING.WARNING_STROKE_SLOW;
               break;
@@ -2984,6 +3255,8 @@ export class GameScene extends Phaser.Scene {
   private enterDead(): void {
     this.state = GameState.DYING;
     this.autoSubmitted = false;
+    this.debugPreStartOverlay.setVisible(false);
+    this.reflectionSystem.setVisible(false);
 
     // Reset time dilation and restore music rate
     if (this.timeDilation) {

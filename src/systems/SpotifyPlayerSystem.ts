@@ -7,6 +7,9 @@
 import { getAccessToken } from './SpotifyAuthSystem';
 
 const PLAYLIST_URI = 'spotify:playlist:37i9dQZF1DZ06evO3es99h';
+const SKIP_TRACK_IDS = new Set([
+  '3WhO9X2qZ7JexACAfvxHiZ', // Hell Girl — too similar to countdown track
+]);
 
 export interface SpotifyTrackInfo {
   name: string;
@@ -95,9 +98,18 @@ export class SpotifyPlayerSystem {
       this.player.addListener('account_error', () => resolve(false));
 
       this.player.addListener('player_state_changed', (state: any) => {
-        if (!state || !this.onTrackChange) return;
+        if (!state) return;
         const track = state.track_window?.current_track;
-        if (track) {
+        if (!track) return;
+
+        // Auto-skip banned tracks
+        const trackId = track.uri?.split(':').pop();
+        if (trackId && SKIP_TRACK_IDS.has(trackId) && !state.paused) {
+          this.next();
+          return;
+        }
+
+        if (this.onTrackChange) {
           this.onTrackChange({
             name: track.name,
             artist: track.artists?.map((a: any) => a.name).join(', ') || '',

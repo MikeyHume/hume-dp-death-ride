@@ -91,6 +91,22 @@ export const TUNING = {
   START_TEXT_FADE_MS: 150,     // ms fade transition between on/off (0 = hard cut)
   INTRO_TUT_SCALE: 1.01,       // multiplier to stretch the intro-to-tutorial cutscene (1.0 = exact fit)
 
+  // Per-sprite X offsets for the "hold spacebar" starting screen (px, adjusted via debug S panel)
+  SPRITE_OFFSET_PLAYER: 0,
+  SPRITE_OFFSET_ROAD: 0,
+  SPRITE_OFFSET_RAILING: 0,
+  SPRITE_OFFSET_PARALLAX_2: 0,
+  SPRITE_OFFSET_PARALLAX_3: 0,
+  SPRITE_OFFSET_PARALLAX_4: 0,
+  SPRITE_OFFSET_PARALLAX_5: 0,
+  SPRITE_OFFSET_PARALLAX_6: 0,
+  SPRITE_OFFSET_PARALLAX_7: 0,
+  SPRITE_OFFSET_SKY: 0,
+  SPRITE_OFFSET_HOLD_TEXT: 0,
+  SPRITE_OFFSET_HUD_LABEL: 0,
+  SPRITE_OFFSET_HUD_SCORE: 0,
+  SPRITE_OFFSET_PROFILE_HUD: 0,
+
   // Player horizontal position — edit these to move the left/right death boundaries
   PLAYER_START_X: 960,       // where the bike spawns horizontally (960 = center of 1920)
   PLAYER_MIN_X: 0,           // left death boundary (0 = left screen edge)
@@ -126,6 +142,11 @@ export const TUNING = {
   SLOW_SIZE_COUNT: 12,              // number of possible puddle sizes (150, 300, ... 1800)
   SLOW_COLOR: 0x0066ff,
   SLOW_PUSH_RATE: 1200,           // player speed reduced per second while overlapping
+
+  // Puddle reflections
+  REFLECTION_ALPHA: 1.0,           // opacity of reflected background layers (0-1)
+  REFLECTION_OFFSET_Y: 0,         // vertical offset of reflection group (px, positive = down)
+  REFLECTION_SCALE_Y: 1.0,        // vertical scale of reflection, anchored at mirror line (top of flipped group)
 
   // Obstacles — car (animated sprites, instant death, moves slower than road)
   CAR_COUNT: 20,                    // number of car sprite sheets
@@ -220,7 +241,7 @@ export const TUNING = {
   ENGINE_MAX_FREQ: 300,            // Hz at max speed
   ENGINE_VOLUME: 10,
   ENGINE_IDLE_VOLUME: 1,        // quiet putter volume when space not pressed
-  ENGINE_SAMPLE_VOLUME: 5,       // engine sample volume at full speed
+  ENGINE_SAMPLE_VOLUME: 2.5,       // engine sample volume at full speed
   ENGINE_SAMPLE_IDLE_VOLUME: 0.4,  // engine sample volume when idle
   ENGINE_IDLE_RATE: 0.7,           // playback rate when idle (lower pitch)
   ENGINE_MAX_RATE: 1.8,            // playback rate at max speed (higher pitch/rev)
@@ -233,6 +254,10 @@ export const TUNING = {
   SFX_HOVER_VOLUME: 0.3,            // UI hover volume
   SFX_EXPLODE_VOLUME: 0.25,         // explosion volume
   SFX_ROCKET_FIRE_VOLUME: 0.5,      // rocket launch volume
+  SFX_AMMO_PICKUP_VOLUME: 1,     // ammo pickup volume
+  SFX_OBSTACLE_KILL_VOLUME: 2.5,   // katana slash kill volume
+  SFX_POTION_PICKUP_VOLUME: 1,   // shield/potion pickup volume
+  SFX_POTION_USED_VOLUME: 2.5,     // shield/potion consumed volume
   IMPACT_VOLUME: 0.3,
   IMPACT_DURATION: 0.15,           // seconds
 
@@ -283,9 +308,12 @@ export const TUNING = {
   CAR_EXPLOSION_SCALE: 1.69,          // car explosions are this many times bigger than normal
   CAR_DEATH_LINGER: 4 / 60,           // seconds car remains visible after dying (4 frames at 60fps)
   // Music volume multipliers (1.0 = default, >1 louder, <1 quieter)
-  MUSIC_VOL_TITLE: 1.0,             // title screen track volume multiplier
-  MUSIC_VOL_SPOTIFY: 2.0,           // Spotify playback volume multiplier
-  MUSIC_VOL_YOUTUBE: 3.0,           // YouTube playback volume multiplier
+  MUSIC_VOL_TITLE: 0.2,             // title screen track volume multiplier
+  MUSIC_VOL_SPOTIFY: 0.25,           // Spotify playback volume multiplier
+  MUSIC_VOL_YOUTUBE: 1.0,           // YouTube playback volume multiplier
+  MUSIC_VOL_COUNTDOWN: 0.69,         // countdown music volume before Spotify
+  SFX_BIOS_BOOTUP_VOLUME: 0.5,      // BIOS boot-up sound volume
+  SFX_BIOS_BEEP_VOLUME: 0.4,        // BIOS complete chime volume
 
   // Music player UI positioning (game-unit values, scaled to canvas)
   MUSIC_UI_PAD_TOP: 40,            // game-unit padding above the music player group

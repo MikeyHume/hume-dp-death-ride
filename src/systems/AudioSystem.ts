@@ -122,28 +122,28 @@ export class AudioSystem {
   /** Ammo pickup sound */
   playAmmoPickup(): void {
     if (this.scene.cache.audio.exists('sfx-ammo-pickup')) {
-      this.scene.sound.play('sfx-ammo-pickup', { volume: TUNING.SFX_EXPLODE_VOLUME });
+      this.scene.sound.play('sfx-ammo-pickup', { volume: TUNING.SFX_AMMO_PICKUP_VOLUME });
     }
   }
 
   /** Obstacle killed by slash sound */
   playObstacleKill(): void {
     if (this.scene.cache.audio.exists('sfx-obstacle-kill')) {
-      this.scene.sound.play('sfx-obstacle-kill', { volume: TUNING.SFX_EXPLODE_VOLUME });
+      this.scene.sound.play('sfx-obstacle-kill', { volume: TUNING.SFX_OBSTACLE_KILL_VOLUME });
     }
   }
 
   /** Potion/shield pickup sound */
   playPotionPickup(): void {
     if (this.scene.cache.audio.exists('sfx-potion-pickup')) {
-      this.scene.sound.play('sfx-potion-pickup', { volume: TUNING.SFX_EXPLODE_VOLUME });
+      this.scene.sound.play('sfx-potion-pickup', { volume: TUNING.SFX_POTION_PICKUP_VOLUME });
     }
   }
 
   /** Potion/shield consumed on hit sound */
   playPotionUsed(): void {
     if (this.scene.cache.audio.exists('sfx-potion-used')) {
-      this.scene.sound.play('sfx-potion-used', { volume: TUNING.SFX_EXPLODE_VOLUME });
+      this.scene.sound.play('sfx-potion-used', { volume: TUNING.SFX_POTION_USED_VOLUME });
     }
   }
 

@@ -4,7 +4,6 @@ import { isConnected, checkPremium } from './SpotifyAuthSystem';
 import { SpotifyPlayerSystem } from './SpotifyPlayerSystem';
 
 const MUSIC_UI_SCALE = 1;             // uniform scale from upper-right corner
-const COUNTDOWN_VOLUME = 3.0;         // countdown music volume (0.0–1.0+)
 const CROSSFADE_LEAD_S = 3.0;        // fade duration in seconds (audio audibly fades over this)
 const CROSSFADE_STARTUP_S = 2.0;    // estimated startup overhead for startPlaylist() (shuffle+play+skip+wait)
 const CROSSFADE_START_DB = -6;       // starting volume in dB (0 = full, -12 ≈ 25%)
@@ -102,6 +101,16 @@ export class MusicPlayer {
       overflow: 'hidden',
     });
     document.body.appendChild(this.canvasOverlay);
+
+    // Size overlay immediately so collapseUI() can calculate correct widths
+    // before the first rAF fires
+    const initRect = canvas.getBoundingClientRect();
+    Object.assign(this.canvasOverlay.style, {
+      top: initRect.top + 'px',
+      left: initRect.left + 'px',
+      width: initRect.width + 'px',
+      height: initRect.height + 'px',
+    });
 
     const syncOverlay = () => {
       const rect = canvas.getBoundingClientRect();
@@ -474,7 +483,7 @@ export class MusicPlayer {
 
     // Play countdown audio first, crossfade Spotify in before it ends
     if (this.scene.cache.audio.exists('countdown-music')) {
-      this.countdownMusic = this.scene.sound.add('countdown-music', { loop: false, volume: COUNTDOWN_VOLUME });
+      this.countdownMusic = this.scene.sound.add('countdown-music', { loop: false, volume: TUNING.MUSIC_VOL_COUNTDOWN });
       this.countdownMusic.play();
 
       // Schedule Spotify early enough that startup + fade finishes before countdown ends
@@ -665,6 +674,11 @@ export class MusicPlayer {
     } else if (this.titleMusic && !this.titleMuted) {
       this.titleMusic.setVolume(0.5 * TUNING.MUSIC_VOL_TITLE * multiplier);
     }
+  }
+
+  /** Re-apply current volume multipliers (e.g. after debug adjustment) */
+  applyVolume(): void {
+    this.setVolumeBoost(1);
   }
 
   /** Set music playback rate for time dilation slow-mo. 1.0 = normal speed. */

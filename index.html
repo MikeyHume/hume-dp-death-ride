@@ -168,19 +168,49 @@
       transition: width 0.15s linear;
     }
 
+    /* PowerShell terminal text — upper-left on enter screen */
+    #boot-terminal {
+      position: absolute;
+      top: 4%;
+      left: 3%;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: clamp(10px, 1.8vw, 20px);
+      color: var(--bios-color);
+      text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow),
+                   0 0 2px var(--bios-color);
+      white-space: pre;
+      line-height: 1.4;
+      z-index: 1;
+      text-align: left;
+      animation: bios-jitter var(--bios-jitter-speed) infinite alternate;
+    }
+    #boot-terminal .cursor {
+      display: inline-block;
+      width: 0.6em;
+      height: 1.1em;
+      background: var(--bios-color);
+      box-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow);
+      vertical-align: text-bottom;
+      animation: cursor-blink 1s step-end infinite;
+    }
+    @keyframes cursor-blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
+
     /* "[ enter ]" prompt — shown before BIOS starts */
     #boot-enter-prompt {
       position: absolute;
-      top: 50%;
+      top: 69%;
       left: 50%;
-      transform: translate(-50%, -50%);
+      translate: -50% -50%;
       font-family: var(--bios-title-font);
       font-size: clamp(24px, 5vw, 56px);
       color: var(--bios-color);
       text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow),
                    0 0 2px var(--bios-color);
       z-index: 1;
-      animation: enter-blink 1350ms infinite;
+      animation: enter-blink 1350ms infinite, bios-jitter var(--bios-jitter-speed) infinite alternate;
     }
     @keyframes enter-blink {
       0%   { opacity: 1; }
@@ -195,6 +225,12 @@
 <body>
   <!-- BIOS boot overlay — renders instantly before any JS -->
   <div id="boot-overlay">
+    <div id="boot-terminal">Windowless PowerShell
+Copyright (C) Asylum Corporation. All rights reserved.
+
+Install the latest PowerShell for new features and improvements! https://aka.dp/PSWindowless
+
+PS F:\Users\deathpixie&gt; Fol<span id="boot-typed"></span><span class="cursor"></span></div>
     <div id="boot-enter-prompt">[ enter ]</div>
     <div id="boot-content" style="display:none;">
       <div id="boot-lines">
@@ -240,6 +276,7 @@
     var overlay = document.getElementById('boot-overlay');
     var bootLinesEl = document.getElementById('boot-lines');
     var enterPrompt = document.getElementById('boot-enter-prompt');
+    var bootTerminal = document.getElementById('boot-terminal');
     var bootContent = document.getElementById('boot-content');
     var biosStarted = false;
     var pendingProgress = [];  // buffer setProgress calls until BIOS starts
@@ -258,11 +295,113 @@
     bootupAudio.volume = 1.0;
     bootupAudio.loop = false;
 
-    // Wait for first keypress or click to start BIOS
+    // Terminal easter egg state
+    var bootTypedSpan = document.getElementById('boot-typed');
+    var terminalCursor = bootTerminal.querySelector('.cursor');
+    var SECRET_CMD = 'low the white rabbit...';
+    var SECRET_OUTPUT = [
+      '',
+      'Initializing DP MOTO v0.1...',
+      '[################] 100%',
+      '',
+      'WARNING: No survivors detected from previous sessions.',
+      'Ride count: ??? | Best time: YOU DIED',
+      '',
+      'Good luck, rider.',
+      '',
+    ];
+    var eggPhase = 0;    // 0=hijacked typing, 1=cmd done awaiting enter, 2=free typing
+    var hijackIdx = 0;
+    var freeTyped = '';
+
+    function updateTerminal() {
+      if (eggPhase === 0) {
+        bootTypedSpan.textContent = SECRET_CMD.slice(0, hijackIdx);
+      } else if (eggPhase === 2) {
+        bootTypedSpan.textContent = freeTyped;
+      }
+    }
+
+    var outputTyping = false; // true while output lines are animating
+
+    function printOutputAndNewPrompt() {
+      if (outputTyping) return;
+      outputTyping = true;
+      // Hide cursor during output animation
+      terminalCursor.style.display = 'none';
+
+      var parent = bootTypedSpan.parentNode;
+      // Create a span to hold the progressively typed output
+      var outputSpan = document.createElement('span');
+      parent.insertBefore(outputSpan, terminalCursor);
+
+      var lineIdx = 0;
+      var charIdx = 0;
+      var currentLine = '';
+      var fullText = '';
+
+      function typeNextChar() {
+        if (biosStarted) return; // bail if user pressed Enter during animation
+        if (lineIdx >= SECRET_OUTPUT.length) {
+          // All output lines done — add new prompt and switch to free typing
+          fullText += '\nPS C:\\Users\\mikey> ';
+          outputSpan.textContent = fullText;
+          var freeSpan = document.createElement('span');
+          freeSpan.id = 'boot-typed-free';
+          parent.insertBefore(freeSpan, terminalCursor);
+          bootTypedSpan = freeSpan;
+          terminalCursor.style.display = '';
+          outputTyping = false;
+          eggPhase = 2;
+          return;
+        }
+
+        currentLine = SECRET_OUTPUT[lineIdx];
+
+        if (currentLine === '') {
+          // Empty line — just add newline with a short pause
+          fullText += '\n';
+          outputSpan.textContent = fullText;
+          lineIdx++;
+          charIdx = 0;
+          setTimeout(typeNextChar, 80);
+          return;
+        }
+
+        if (charIdx === 0) {
+          // Start of a new non-empty line
+          fullText += '\n';
+        }
+
+        if (charIdx < currentLine.length) {
+          fullText += currentLine[charIdx];
+          outputSpan.textContent = fullText;
+          charIdx++;
+          // Vary speed: # chars fast (progress bar), normal chars medium
+          var delay = currentLine[charIdx - 1] === '#' ? 12 : 28;
+          setTimeout(typeNextChar, delay);
+        } else {
+          // Line complete, move to next
+          lineIdx++;
+          charIdx = 0;
+          // Pause between lines to simulate processing
+          var pause = 120 + Math.random() * 200;
+          setTimeout(typeNextChar, pause);
+        }
+      }
+
+      // Start with a small initial delay
+      setTimeout(typeNextChar, 150);
+    }
+
+    // Wait for Enter or click to start BIOS; other keys type into terminal
     function startBios() {
       if (biosStarted) return;
       biosStarted = true;
+      biosClickAudio.currentTime = 0;
+      biosClickAudio.play().catch(function() {});
       enterPrompt.style.display = 'none';
+      bootTerminal.style.display = 'none';
       bootContent.style.display = '';
       bootupAudio.play().catch(function() {});
       // Flush any buffered progress updates
@@ -276,10 +415,48 @@
       }
       if (!dripScheduled) scheduleDrip(0);
       document.removeEventListener('pointerdown', startBios);
-      document.removeEventListener('keydown', startBios);
+      document.removeEventListener('keydown', handleTerminalKey);
+    }
+    function handleTerminalKey(e) {
+      if (biosStarted) return;
+      if (e.key === 'Enter') {
+        startBios();
+        return;
+      }
+      if (outputTyping) return; // ignore input while output is animating
+      if (eggPhase === 1) {
+        // Secret command fully typed — any key triggers the output
+        if (e.key.length === 1 || e.key === 'Backspace') {
+          printOutputAndNewPrompt();
+        }
+        return;
+      }
+      if (eggPhase === 0) {
+        // Hijacked phase — any printable key reveals next secret char
+        if (e.key.length === 1 && hijackIdx < SECRET_CMD.length) {
+          hijackIdx++;
+          updateTerminal();
+          if (hijackIdx >= SECRET_CMD.length) {
+            eggPhase = 1; // command fully typed, wait for Enter
+          }
+        }
+        return;
+      }
+      if (eggPhase === 2) {
+        // Free typing phase
+        if (e.key === 'Backspace') {
+          freeTyped = freeTyped.slice(0, -1);
+          updateTerminal();
+          return;
+        }
+        if (e.key.length === 1) {
+          freeTyped += e.key;
+          updateTerminal();
+        }
+      }
     }
     document.addEventListener('pointerdown', startBios);
-    document.addEventListener('keydown', startBios);
+    document.addEventListener('keydown', handleTerminalKey);
 
     // Build flat character list, count dots/non-dots, assign progress thresholds
     var chars = [];
@@ -382,12 +559,22 @@
     // BIOS complete chime — plays when loading finishes
     var biosCompleteAudio = new Audio('assets/audio/sfx/bios complete loading.mp3');
     biosCompleteAudio.volume = 1.0;
+    var beepDone = false;
+    var beepCallback = null;
+
+    function onBeepFinished() {
+      if (beepDone) return;
+      beepDone = true;
+      if (beepCallback) beepCallback();
+    }
+    biosCompleteAudio.addEventListener('ended', onBeepFinished, { once: true });
+    biosCompleteAudio.addEventListener('error', onBeepFinished, { once: true });
 
     function tryDismiss() {
       if (dismissed || !typingDone || !loadingDone) return;
       dismissed = true;
       fadeOutBootAudio();
-      biosCompleteAudio.play().catch(function() {});
+      biosCompleteAudio.play().catch(function() { onBeepFinished(); });
       // Bar is already at 100% (set in markStartScreenReady) — just fade out
       setTimeout(function() {
         overlay.style.transition = 'opacity 0.3s ease-out';
@@ -415,7 +602,13 @@
         targetProgress = 2;
         if (!typingDone && !dripScheduled) scheduleDrip(0);
         tryDismiss();
-      }
+      },
+      waitForBeep: function(cb) {
+        if (beepDone) { cb(); return; }
+        beepCallback = cb;
+      },
+      bootupAudio: bootupAudio,
+      biosCompleteAudio: biosCompleteAudio
     };
 
     // --- Custom cursor (reads from window.__cursorConfig) ---

@@ -47,6 +47,7 @@ const RAILING_DEPTH = 2;              // layer 1: depth (must be above road at 0
 
 export class ParallaxSystem {
   private layers: Phaser.GameObjects.TileSprite[] = [];
+  private textureKeys: string[] = []; // original source texture keys (TileSprite.texture.key returns internal UUID in Phaser 3.90)
   private staticBg!: Phaser.GameObjects.Image;
   private speedFactors: number[] = [];
   private scrollCompensation: number[] = []; // 1/tileScale per layer (compensates scaled tiles)
@@ -99,6 +100,7 @@ export class ParallaxSystem {
         tile.setTileScale(scale, scale);
         tile.setDepth(depth);
         this.layers.push(tile);
+        this.textureKeys.push('buildings-back');
         this.scrollCompensation.push(1 / scale);
       } else if (i === SCROLLING_LAYERS - 5) {
         // Layer 3: big buildings image, scaled from bottom
@@ -121,6 +123,7 @@ export class ParallaxSystem {
         tile.setTileScale(scale, scale);
         tile.setDepth(depth);
         this.layers.push(tile);
+        this.textureKeys.push('buildings-big');
         this.scrollCompensation.push(1 / scale);
       } else if (i === SCROLLING_LAYERS - 4) {
         // Layer 4: front buildings image, scaled up more from bottom
@@ -143,6 +146,7 @@ export class ParallaxSystem {
         tile.setTileScale(scale, scale);
         tile.setDepth(depth);
         this.layers.push(tile);
+        this.textureKeys.push('buildings-front');
         this.scrollCompensation.push(1 / scale);
       } else if (i === SCROLLING_LAYERS - 3) {
         // Layer 5: front buildings image flipped horizontally, scaled up from bottom
@@ -165,6 +169,7 @@ export class ParallaxSystem {
         tile.setTileScale(-scale, scale); // negative X = horizontal flip
         tile.setDepth(depth);
         this.layers.push(tile);
+        this.textureKeys.push('buildings-front');
         this.scrollCompensation.push(-1 / scale); // negate to keep scroll direction correct
       } else if (i === SCROLLING_LAYERS - 2) {
         // Layer 6: front buildings image, scaled from bottom
@@ -187,6 +192,7 @@ export class ParallaxSystem {
         tile.setTileScale(scale, scale);
         tile.setDepth(depth);
         this.layers.push(tile);
+        this.textureKeys.push('buildings-front');
         this.scrollCompensation.push(1 / scale);
       } else if (i === 0) {
         // Layer 1: railing image, bottom-aligned at road top, rendered above road
@@ -224,6 +230,7 @@ export class ParallaxSystem {
         tile.setTileScale(scale, scale);
         tile.setDepth(RAILING_DEPTH);
         this.layers.push(tile);
+        this.textureKeys.push(texKey);
         this.scrollCompensation.push(1 / scale);
       } else {
         // Test pattern layers (layer 2)
@@ -251,13 +258,35 @@ export class ParallaxSystem {
         );
         tile.setDepth(depth);
         this.layers.push(tile);
+        this.textureKeys.push(texKey);
         this.scrollCompensation.push(1);
       }
     }
 
     // Reverse so index 0 = layer 0 (front) for easier update logic
     this.layers.reverse();
+    this.textureKeys.reverse();
     this.scrollCompensation.reverse();
+  }
+
+  /** Reset all tile scrolls to deterministic positions. offsets[] is per-layer screen px (index 0=front/railing). */
+  resetScroll(offsets: number[]): void {
+    for (let i = 0; i < this.layers.length; i++) {
+      const ox = i < offsets.length ? offsets[i] : 0;
+      this.layers[i].tilePositionX = ox * this.scrollCompensation[i];
+    }
+  }
+
+  /** Set a single layer's tile offset (screen px) for real-time debug adjustment. */
+  setLayerOffset(index: number, offsetX: number): void {
+    if (index >= 0 && index < this.layers.length) {
+      this.layers[index].tilePositionX = offsetX * this.scrollCompensation[index];
+    }
+  }
+
+  /** Shift the static sky background horizontally. */
+  setSkyOffsetX(offsetX: number): void {
+    this.staticBg.x = TUNING.GAME_WIDTH / 2 + offsetX;
   }
 
   update(roadSpeed: number, dt: number): void {
@@ -281,6 +310,10 @@ export class ParallaxSystem {
   toggleSky(): void {
     this.staticBg.setVisible(!this.staticBg.visible);
   }
+
+  getLayers(): readonly Phaser.GameObjects.TileSprite[] { return this.layers; }
+  getTextureKeys(): readonly string[] { return this.textureKeys; }
+  getSky(): Phaser.GameObjects.Image { return this.staticBg; }
 
   setVisible(visible: boolean): void {
     for (let i = 0; i < this.layers.length; i++) {

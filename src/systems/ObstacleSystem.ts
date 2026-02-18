@@ -71,6 +71,13 @@ export class ObstacleSystem {
   private carDeckIndex: number = 0;
   private lastCarSkin: number = -1;
 
+  // Puddle orientation deck: 8 combos (flipX × flipY × rot180), must use 3 others before repeating
+  private puddleOrientDeck: number[] = [];
+  private puddleOrientIdx: number = 0;
+  // Puddle size deck: 12 sizes, must use 6 others before repeating
+  private puddleSizeDeck: number[] = [];
+  private puddleSizeIdx: number = 0;
+
   // Debug: suppress explosion visuals (G key clean-screen mode)
   private suppressExplosions: boolean = false;
 
@@ -108,6 +115,9 @@ export class ObstacleSystem {
 
     // Initial car deck shuffle
     this.shuffleCarDeck();
+    // Initial puddle deck shuffles
+    this.shufflePuddleOrientDeck();
+    this.shufflePuddleSizeDeck();
   }
 
   /** Shuffle all 20 car skins into a new deck, ensuring no back-to-back repeat. */
@@ -151,6 +161,53 @@ export class ObstacleSystem {
     const skin = this.carDeck[this.carDeckIndex++];
     this.lastCarSkin = skin;
     return skin;
+  }
+
+  /** Shuffle puddle orientation deck: 8 combos, dealt in groups so 3 others appear before a repeat. */
+  private shufflePuddleOrientDeck(): void {
+    // 8 combos: bits 0=flipX, 1=flipY, 2=rot180
+    this.puddleOrientDeck = [0, 1, 2, 3, 4, 5, 6, 7];
+    for (let i = this.puddleOrientDeck.length - 1; i > 0; i--) {
+      const j = Math.floor(this.rng.next() * (i + 1));
+      const tmp = this.puddleOrientDeck[i];
+      this.puddleOrientDeck[i] = this.puddleOrientDeck[j];
+      this.puddleOrientDeck[j] = tmp;
+    }
+    this.puddleOrientIdx = 0;
+  }
+
+  /** Get the next puddle orientation combo. Returns { flipX, flipY, angle }. */
+  private nextPuddleOrientation(): { flipX: boolean; flipY: boolean; angle: number } {
+    if (this.puddleOrientIdx >= this.puddleOrientDeck.length) {
+      this.shufflePuddleOrientDeck();
+    }
+    const combo = this.puddleOrientDeck[this.puddleOrientIdx++];
+    return {
+      flipX: (combo & 1) !== 0,
+      flipY: (combo & 2) !== 0,
+      angle: (combo & 4) !== 0 ? 180 : 0,
+    };
+  }
+
+  /** Shuffle puddle size deck: 12 sizes, dealt in groups so 6 others appear before a repeat. */
+  private shufflePuddleSizeDeck(): void {
+    this.puddleSizeDeck = [];
+    for (let i = 1; i <= TUNING.SLOW_SIZE_COUNT; i++) this.puddleSizeDeck.push(i);
+    for (let i = this.puddleSizeDeck.length - 1; i > 0; i--) {
+      const j = Math.floor(this.rng.next() * (i + 1));
+      const tmp = this.puddleSizeDeck[i];
+      this.puddleSizeDeck[i] = this.puddleSizeDeck[j];
+      this.puddleSizeDeck[j] = tmp;
+    }
+    this.puddleSizeIdx = 0;
+  }
+
+  /** Get the next puddle size (1–12). Reshuffles after dealing half the deck (6 unique before repeat). */
+  private nextPuddleSize(): number {
+    if (this.puddleSizeIdx >= Math.floor(this.puddleSizeDeck.length / 2)) {
+      this.shufflePuddleSizeDeck();
+    }
+    return this.puddleSizeDeck[this.puddleSizeIdx++];
   }
 
   update(dt: number, roadSpeed: number, difficultyFactor: number, rageFactor: number = 0): void {
@@ -386,8 +443,8 @@ export class ObstacleSystem {
         break;
       }
       case ObstacleType.SLOW: {
-        textureKey = 'obstacle-slow';
-        const sizeIdx = 1 + Math.floor(this.rng.next() * TUNING.SLOW_SIZE_COUNT);
+        const sizeIdx = this.nextPuddleSize();
+        textureKey = 'puddle-tex';
         w = TUNING.SLOW_BASE_WIDTH * sizeIdx;
         h = this.laneHeight;
         obs.stop();
@@ -396,11 +453,20 @@ export class ObstacleSystem {
     }
 
     obs.setTexture(textureKey);
-    // Tint puddles blue (white circle texture); clear tint for other types (pool reuses sprites)
+    // Tint puddles blue; randomize flip/rotation for visual variety
     if (type === ObstacleType.SLOW) {
       obs.setTint(TUNING.SLOW_COLOR);
+      obs.setAlpha(0); // hidden — reflection system handles puddle visuals
+      const orient = this.nextPuddleOrientation();
+      obs.setFlipX(orient.flipX);
+      obs.setFlipY(orient.flipY);
+      obs.setAngle(orient.angle);
     } else {
       obs.clearTint();
+      obs.setAlpha(1);
+      obs.setFlipX(false);
+      obs.setFlipY(false);
+      obs.setAngle(0);
     }
     const obsScale = TUNING.OBSTACLE_DISPLAY_SCALE;
     const laneScale = TUNING.LANE_SCALES[laneIndex] ?? 1;
@@ -743,8 +809,10 @@ export class ObstacleSystem {
     if (seed !== undefined) {
       this.rng.reset(seed);
     }
-    // Reshuffle car deck for fresh playthrough
+    // Reshuffle decks for fresh playthrough
     this.shuffleCarDeck();
+    this.shufflePuddleOrientDeck();
+    this.shufflePuddleSizeDeck();
   }
 
   /** Return the lane index (0-based) closest to the given Y position */

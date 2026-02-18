@@ -21,6 +21,11 @@ export class RoadSystem {
     this.roadTile.setTileScale(this.tileScaleFactor, this.tileScaleFactor);
   }
 
+  /** Reset tile scroll to a deterministic position. offsetX is in screen pixels. */
+  resetScroll(offsetX: number = 0): void {
+    this.roadTile.tilePositionX = offsetX / this.tileScaleFactor;
+  }
+
   update(currentSpeed: number, dt: number): void {
     // Scroll in texture-space (divide by scale so pixel speed matches world speed)
     this.roadTile.tilePositionX += (currentSpeed * dt) / this.tileScaleFactor;

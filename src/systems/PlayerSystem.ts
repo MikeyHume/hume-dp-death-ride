@@ -543,7 +543,7 @@ export class PlayerSystem {
 
   reset(): void {
     this.cancelCurrentAnimation();
-    this.sprite.x = TUNING.PLAYER_START_X;
+    this.sprite.x = TUNING.PLAYER_START_X + TUNING.SPRITE_OFFSET_PLAYER;
     this.sprite.y = (TUNING.ROAD_TOP_Y + TUNING.ROAD_BOTTOM_Y) / 2;
     this.playerSpeed = 0;
     this.speedMultiplier = 0;
@@ -587,6 +587,10 @@ export class PlayerSystem {
 
   getPlayerSpeed(): number {
     return this.playerSpeed;
+  }
+
+  getSprite(): Phaser.GameObjects.Sprite {
+    return this.sprite;
   }
 
   /** Set display size and store base scales (before perspective multiplier) */
