@@ -2106,6 +2106,7 @@ export class GameScene extends Phaser.Scene {
       );
       if (hitX >= 0) {
         this.slashInvincibilityTimer = TUNING.KATANA_INVINCIBILITY;
+        this.audioSystem.playObstacleKill();
         this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION, TUNING.SHAKE_DEATH_INTENSITY * 0.25);
         // this.timeDilation.trigger(); // disabled — kept for potential reuse
 
@@ -2195,6 +2196,7 @@ export class GameScene extends Phaser.Scene {
     this.pickupSystem.update(hDt, roadSpeed, playerCollX, playerCollY);
     if (this.pickupSystem.wasCollected()) {
       this.playerSystem.playCollectRocket();
+      this.audioSystem.playAmmoPickup();
       this.scoreSystem.addBonus(TUNING.SCORE_PICKUP_ROCKET);
       this.spawnScorePopup(TUNING.SCORE_PICKUP_ROCKET, 'rocket');
     }
@@ -2203,6 +2205,7 @@ export class GameScene extends Phaser.Scene {
     this.shieldSystem.update(hDt, roadSpeed, playerCollX, playerCollY);
     if (this.shieldSystem.wasCollected()) {
       this.playerSystem.playCollectShield();
+      this.audioSystem.playPotionPickup();
       this.scoreSystem.addBonus(TUNING.SCORE_PICKUP_SHIELD);
       this.spawnScorePopup(TUNING.SCORE_PICKUP_SHIELD, 'shield');
     }
@@ -2244,6 +2247,7 @@ export class GameScene extends Phaser.Scene {
           this.shieldSystem.consumeShield();
           this.obstacleSystem.spawnExplosion(result.hitX, result.hitY);
           this.audioSystem.playExplosion();
+          this.audioSystem.playPotionUsed();
           this.playerSystem.playCollectHit();
           if (!this.hudHidden) this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 0.5, TUNING.SHAKE_DEATH_INTENSITY * 0.5);
           const shieldPts = result.hitType === ObstacleType.CAR

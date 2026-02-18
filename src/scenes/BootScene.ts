@@ -79,6 +79,10 @@ export class BootScene extends Phaser.Scene {
     this.load.audio('sfx-explode', 'assets/audio/sfx/explode.mp3');
     this.load.audio('sfx-rocket-fire', 'assets/audio/sfx/rocket_fire.mp3');
     this.load.audio('sfx-engine', 'assets/audio/sfx/motorcycle engine.mp3');
+    this.load.audio('sfx-ammo-pickup', 'assets/audio/sfx/ammo_pickup.mp3');
+    this.load.audio('sfx-obstacle-kill', 'assets/audio/sfx/obstacle_kill.mp3');
+    this.load.audio('sfx-potion-pickup', 'assets/audio/sfx/potion_pickup.mp3');
+    this.load.audio('sfx-potion-used', 'assets/audio/sfx/potion_used.mp3');
     this.load.spritesheet('pickup-rocket', 'assets/pickups/rocket pickup.png', {
       frameWidth: TUNING.PICKUP_FRAME_SIZE,
       frameHeight: TUNING.PICKUP_FRAME_SIZE,

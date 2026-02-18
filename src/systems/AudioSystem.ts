@@ -119,6 +119,34 @@ export class AudioSystem {
     }
   }
 
+  /** Ammo pickup sound */
+  playAmmoPickup(): void {
+    if (this.scene.cache.audio.exists('sfx-ammo-pickup')) {
+      this.scene.sound.play('sfx-ammo-pickup', { volume: TUNING.SFX_EXPLODE_VOLUME });
+    }
+  }
+
+  /** Obstacle killed by slash sound */
+  playObstacleKill(): void {
+    if (this.scene.cache.audio.exists('sfx-obstacle-kill')) {
+      this.scene.sound.play('sfx-obstacle-kill', { volume: TUNING.SFX_EXPLODE_VOLUME });
+    }
+  }
+
+  /** Potion/shield pickup sound */
+  playPotionPickup(): void {
+    if (this.scene.cache.audio.exists('sfx-potion-pickup')) {
+      this.scene.sound.play('sfx-potion-pickup', { volume: TUNING.SFX_EXPLODE_VOLUME });
+    }
+  }
+
+  /** Potion/shield consumed on hit sound */
+  playPotionUsed(): void {
+    if (this.scene.cache.audio.exists('sfx-potion-used')) {
+      this.scene.sound.play('sfx-potion-used', { volume: TUNING.SFX_EXPLODE_VOLUME });
+    }
+  }
+
   /** Katana whoosh sound */
   playSlash(): void {
     if (!this.ctx) return;

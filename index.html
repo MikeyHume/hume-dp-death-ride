@@ -167,12 +167,36 @@
       box-shadow: inset 0 0 4px var(--bios-glow-bright);
       transition: width 0.15s linear;
     }
+
+    /* "[ enter ]" prompt — shown before BIOS starts */
+    #boot-enter-prompt {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: var(--bios-title-font);
+      font-size: clamp(24px, 5vw, 56px);
+      color: var(--bios-color);
+      text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow),
+                   0 0 2px var(--bios-color);
+      z-index: 3;
+      animation: enter-blink 1350ms infinite;
+    }
+    @keyframes enter-blink {
+      0%   { opacity: 1; }
+      53%  { opacity: 1; }       /* visible 800ms / 1350ms ≈ 59% */
+      63%  { opacity: 0; }       /* fade out ~150ms */
+      83%  { opacity: 0; }       /* hidden 400ms */
+      93%  { opacity: 1; }       /* fade in ~150ms */
+      100% { opacity: 1; }
+    }
   </style>
 </head>
 <body>
   <!-- BIOS boot overlay — renders instantly before any JS -->
   <div id="boot-overlay">
-    <div id="boot-content">
+    <div id="boot-enter-prompt">[ enter ]</div>
+    <div id="boot-content" style="display:none;">
       <div id="boot-lines">
         <div class="line" data-text="DP MOTO BIOS      v0.1"></div>
         <div class="line" data-text="VIDEO  ............... OK"></div>
@@ -215,29 +239,47 @@
     var lineEls = document.querySelectorAll('#boot-lines .line');
     var overlay = document.getElementById('boot-overlay');
     var bootLinesEl = document.getElementById('boot-lines');
+    var enterPrompt = document.getElementById('boot-enter-prompt');
+    var bootContent = document.getElementById('boot-content');
+    var biosStarted = false;
+    var pendingProgress = [];  // buffer setProgress calls until BIOS starts
 
-    // Click sound during BIOS overlay
+    // Click sound during BIOS overlay (only after BIOS starts)
     var biosClickAudio = new Audio('assets/audio/sfx/mouse click.mp3');
     biosClickAudio.volume = 1.0;
     overlay.addEventListener('pointerdown', function() {
+      if (!biosStarted) return;
       biosClickAudio.currentTime = 0;
       biosClickAudio.play().catch(function() {});
     });
 
-    // Boot-up sound — plays when BIOS starts, faded out when dismissed
+    // Boot-up sound — only played when BIOS sequence begins
     var bootupAudio = new Audio('assets/audio/sfx/old_bootup.mp3');
     bootupAudio.volume = 1.0;
     bootupAudio.loop = false;
-    bootupAudio.play().catch(function() {
-      // Autoplay blocked — start on first user interaction
-      var startBootAudio = function() {
-        bootupAudio.play().catch(function() {});
-        document.removeEventListener('pointerdown', startBootAudio);
-        document.removeEventListener('keydown', startBootAudio);
-      };
-      document.addEventListener('pointerdown', startBootAudio);
-      document.addEventListener('keydown', startBootAudio);
-    });
+
+    // Wait for first keypress or click to start BIOS
+    function startBios() {
+      if (biosStarted) return;
+      biosStarted = true;
+      enterPrompt.style.display = 'none';
+      bootContent.style.display = '';
+      bootupAudio.play().catch(function() {});
+      // Flush any buffered progress updates
+      for (var p = 0; p < pendingProgress.length; p++) {
+        targetProgress = pendingProgress[p];
+      }
+      pendingProgress = [];
+      // If loading already finished while waiting for user, unlock everything
+      if (loadingDone) {
+        targetProgress = 2;
+      }
+      if (!dripScheduled) scheduleDrip(0);
+      document.removeEventListener('pointerdown', startBios);
+      document.removeEventListener('keydown', startBios);
+    }
+    document.addEventListener('pointerdown', startBios);
+    document.addEventListener('keydown', startBios);
 
     // Build flat character list, count dots/non-dots, assign progress thresholds
     var chars = [];
@@ -360,13 +402,14 @@
     window.__bootOverlay = {
       setProgress: function(p) {
         if (dismissed) return;
+        if (!biosStarted) { pendingProgress.push(p); return; }
         targetProgress = p;
-        // Bar is updated by syncBar() in drip() — not here
         if (!dripScheduled) scheduleDrip(0);
       },
       markStartScreenReady: function() {
         if (loadingDone) return;
         loadingDone = true;
+        if (!biosStarted) return; // BIOS will catch up when user clicks
         // Unlock all remaining chars (use 2 to avoid floating-point edge cases)
         // Bar will reach 100% naturally as typewriter finishes via syncBar()
         targetProgress = 2;
