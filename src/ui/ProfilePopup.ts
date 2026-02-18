@@ -149,11 +149,16 @@ export class ProfilePopup {
   private avatarPlaceholder: Phaser.GameObjects.Arc;
   private avatarImage: Phaser.GameObjects.Image | null = null;
   private avatarRing: Phaser.GameObjects.Arc;
+  private avatarHint!: Phaser.GameObjects.Text;
+  private avatarHit!: Phaser.GameObjects.Zone;
   private nameText: Phaser.GameObjects.Text;
   private nameBoxFocus: Phaser.GameObjects.Graphics;
   private currentName = 'ANON';
   private nameEditing = false;
   private currentAvatarUrl: string | null = null;
+  private profileLoadGen = 0;
+  private openedOnDeathScreen = false;
+  private openedDuringGameplay = false;
 
   // Spotify button
   private spotifyBg!: Phaser.GameObjects.Graphics;
@@ -227,20 +232,22 @@ export class ProfilePopup {
     this.avatarRing.setStrokeStyle(AVATAR_RING_WIDTH, AVATAR_RING_COLOR, AVATAR_RING_ALPHA);
     this.container.add(this.avatarRing);
 
-    this.container.add(
-      scene.add.text(AVATAR_X, avatarY + AVATAR_RADIUS + AVATAR_HINT_GAP, 'click to change', {
-        fontSize: AVATAR_HINT_FONT, fontFamily: 'monospace', color: AVATAR_HINT_COLOR,
-      }).setOrigin(0.5),
-    );
+    this.avatarHint = scene.add.text(AVATAR_X, avatarY + AVATAR_RADIUS + AVATAR_HINT_GAP, 'click to change', {
+      fontSize: AVATAR_HINT_FONT, fontFamily: 'monospace', color: AVATAR_HINT_COLOR,
+    }).setOrigin(0.5);
+    this.container.add(this.avatarHint);
 
-    const avatarHit = scene.add.zone(AVATAR_X, avatarY, AVATAR_RADIUS * 2, AVATAR_RADIUS * 2)
+    this.avatarHit = scene.add.zone(AVATAR_X, avatarY, AVATAR_RADIUS * 2, AVATAR_RADIUS * 2)
       .setInteractive(
         new Phaser.Geom.Circle(AVATAR_RADIUS, AVATAR_RADIUS, AVATAR_RADIUS),
         Phaser.Geom.Circle.Contains,
       );
-    avatarHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
-    avatarHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME }); this.openFilePicker(); });
-    this.container.add(avatarHit);
+    this.avatarHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
+    this.avatarHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME }); this.openFilePicker(); });
+    this.container.add(this.avatarHit);
+
+    // Show default anon avatar on init (overwritten by loadProfile if Spotify-connected)
+    this.showDefaultAvatar();
 
     /* ---- Right side: Name ---- */
     const nameLabelY = avatarY + NAME_LABEL_OFFSET_Y;
@@ -308,6 +315,12 @@ export class ProfilePopup {
         if (confirmed) {
           await disconnectProfile();
           disconnect();
+          // Reset to anonymous state — clear cached name/avatar
+          this.currentName = 'ANON';
+          this.currentAvatarUrl = null;
+          this.nameText.setText('ANON');
+          // Reload profile from Supabase (returns anonymous profile now)
+          await this.loadProfile();
           this.updateSpotifyButton();
           this.scene.events.emit('spotify-auth-changed');
           this.loadScoreData();
@@ -315,6 +328,10 @@ export class ProfilePopup {
       } else {
         const success = await startLogin();
         if (success) {
+          if (this.openedOnDeathScreen) {
+            window.location.reload();
+            return;
+          }
           this.updateSpotifyButton();
           await this.loadProfile();
           this.scene.events.emit('spotify-auth-changed');
@@ -429,12 +446,18 @@ export class ProfilePopup {
   /* ============ Public API ============ */
 
   loadProfile(): Promise<void> {
+    const gen = ++this.profileLoadGen;
     return loadOrCreateProfile().then((profile) => {
+      // Discard stale response — a newer loadProfile() already ran
+      if (gen !== this.profileLoadGen) return;
       this.currentName = profile.username;
       this.nameText.setText(profile.username);
       if (profile.avatar_url) {
         this.currentAvatarUrl = profile.avatar_url;
         this.loadAvatarFromUrl(profile.avatar_url);
+        this.enableAvatarEditing();
+      } else {
+        this.showDefaultAvatar();
       }
       if (this.profileChangedCallback) {
         this.profileChangedCallback(
@@ -445,9 +468,11 @@ export class ProfilePopup {
     }).catch((err) => console.warn('ProfilePopup: profile load failed', err));
   }
 
-  open(initialName?: string): void {
+  open(initialName?: string, onDeathScreen = false, duringGameplay = false): void {
     if (this._isOpen) return;
     this._isOpen = true;
+    this.openedOnDeathScreen = onDeathScreen;
+    this.openedDuringGameplay = duringGameplay;
     if (initialName !== undefined) {
       this.currentName = initialName;
       this.nameText.setText(initialName);
@@ -743,7 +768,26 @@ export class ProfilePopup {
     }).catch((err) => console.warn('ProfilePopup: username save failed', err));
   }
 
+  /** Show the default anon avatar (dp_anon_pic) and disable avatar editing. */
+  private showDefaultAvatar(): void {
+    // Load the preloaded default-avatar into the circular AVATAR_TEXTURE_KEY slot
+    if (this.scene.textures.exists('default-avatar')) {
+      const src = this.scene.textures.get('default-avatar').getSourceImage() as HTMLImageElement;
+      this.applyAvatarFromImageElement(src);
+    }
+    // Disable avatar change for anon users
+    this.avatarHint.setVisible(false);
+    this.avatarHit.disableInteractive();
+  }
+
+  /** Enable avatar editing (Spotify-connected users). */
+  private enableAvatarEditing(): void {
+    this.avatarHint.setVisible(true);
+    this.avatarHit.setInteractive();
+  }
+
   private openFilePicker(): void {
+    if (!isConnected()) return; // Only Spotify users can change avatar
     if (this.nameEditing) this.stopNameEditing();
     this.fileInput.click();
   }

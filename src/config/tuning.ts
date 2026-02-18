@@ -154,9 +154,37 @@ export const TUNING = {
   // Difficulty ramp
   DIFFICULTY_RAMP_DURATION: 120, // seconds to go from difficulty 0 to 1
 
-  // Score
+  // Score — base
   SCORE_DISTANCE_RATE: 1,         // base score per second of survival
   SCORE_SPEED_MULTIPLIER: 0.002,  // bonus multiplier per unit of player speed (faster = more points)
+
+  // Score — cars
+  SCORE_CAR_ROCKET: 420,          // points for destroying a car with a rocket
+  SCORE_CAR_INVINCIBLE: 1000,     // points for running into a car while invincible (rage)
+  SCORE_CAR_SHIELD: 240,          // points for running into a car and consuming a shield
+
+  // Score — obstacles (barriers)
+  SCORE_OBSTACLE_ROCKET: 300,     // points for blowing up an obstacle with a rocket
+  SCORE_OBSTACLE_INVINCIBLE: 500, // points for running into an obstacle while invincible (rage)
+  SCORE_OBSTACLE_SHIELD: 200,     // points for running into an obstacle and consuming a shield
+
+  // Score — pickups
+  SCORE_PICKUP_ROCKET: 1000,      // points for collecting a rocket pickup
+  SCORE_PICKUP_SHIELD: 1000,      // points for collecting a shield pickup
+
+  // Score — rage end explosion (clears screen)
+  SCORE_RAGE_END_OBSTACLE: 69,    // points per obstacle destroyed by rage-end shockwave
+  SCORE_RAGE_END_CAR: 420,        // points per car destroyed by rage-end shockwave
+
+  // Score popup animation
+  SCORE_POPUP_FONT_SIZE: 48,      // font size in px
+  SCORE_POPUP_OFFSET_X: 0,        // horizontal offset from player center (px)
+  SCORE_POPUP_OFFSET_Y: -80,      // vertical offset from player center (px, negative = above)
+  SCORE_POPUP_TRAVEL_Y: -60,      // how far the popup floats upward (px, negative = up)
+  SCORE_POPUP_FADE_IN: 0.1,       // seconds to fade in from 0 to full opacity
+  SCORE_POPUP_HOLD: 0.6,          // seconds to hold at full opacity
+  SCORE_POPUP_FADE_OUT: 0.8,      // seconds to fade out from full to 0 opacity
+  SCORE_POPUP_EASE: 'Cubic.easeOut', // easing for the upward travel (Phaser ease string)
 
   // FX — speed lines
   SPEED_LINE_COUNT: 20,            // pre-allocated horizontal speed lines
@@ -243,7 +271,7 @@ export const TUNING = {
   RAGE_SPAWN_RATE_MULTIPLIER: 5,   // spawn waves this many times faster during rage (10 = 10× more frequent)
   RAGE_CAR_CHANCE: 0.5,             // chance an obstacle is a car during rage (overrides normal car chance)
   RAGE_CRASH_CHANCE: 0.4,           // chance an obstacle is a crash during rage (overrides normal crash chance)
-  RAGE_CAR_KILL_BONUS: 250,         // score bonus per car destroyed during rage mode
+  RAGE_CAR_KILL_BONUS: 250,         // (legacy — use SCORE_CAR_INVINCIBLE instead)
   RAGE_SPEED_BOOST_PER_KILL: 0,     // permanent road speed increase (px/sec) per obstacle destroyed with katana
   RAGE_MUSIC_VOLUME_BOOST: 1.4,      // music volume multiplied by this during rage (1.0 = no change)
   RAGE_AUDIO_DISTORTION: 0.5,       // engine audio distortion during rage (0 = clean, 1 = full fuzz)
@@ -254,6 +282,11 @@ export const TUNING = {
   RAGE_EXPLOSION_SPEED_FACTOR: 0.25, // explosions scroll at this fraction of road speed during rage (0.25 = quarter speed)
   CAR_EXPLOSION_SCALE: 1.69,          // car explosions are this many times bigger than normal
   CAR_DEATH_LINGER: 4 / 60,           // seconds car remains visible after dying (4 frames at 60fps)
+  // Music volume multipliers (1.0 = default, >1 louder, <1 quieter)
+  MUSIC_VOL_TITLE: 1.0,             // title screen track volume multiplier
+  MUSIC_VOL_SPOTIFY: 2.0,           // Spotify playback volume multiplier
+  MUSIC_VOL_YOUTUBE: 3.0,           // YouTube playback volume multiplier
+
   // Music player UI positioning (game-unit values, scaled to canvas)
   MUSIC_UI_PAD_TOP: 40,            // game-unit padding above the music player group
   MUSIC_UI_PAD_RIGHT: 40,          // game-unit padding from right edge to music player container
@@ -364,7 +397,7 @@ export const TUNING = {
   ATTACK_COOLDOWN_SLASH: .5,       // seconds after katana before any attack allowed
   ATTACK_COOLDOWN_ROCKET: 1.0,      // seconds after rocket before any attack allowed
   ROCKET_EXPLOSION_SCALE: 1.5,      // explosion size when rocket hits something
-  ROCKET_KILL_POINTS: 50,           // score bonus for destroying obstacle with rocket
+  ROCKET_KILL_POINTS: 50,           // (legacy — use SCORE_CAR_ROCKET / SCORE_OBSTACLE_ROCKET instead)
 
   RAGE_BAR_WIDTH: 1500,              // HUD bar width in px
   RAGE_BAR_HEIGHT: 16,              // HUD bar height in px

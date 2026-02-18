@@ -14,6 +14,12 @@ export interface CollisionResult {
   slowOverlapping: boolean;
   hitX: number;
   hitY: number;
+  hitType: ObstacleType | null;
+}
+
+export interface DestroyAllResult {
+  obstacles: number;
+  cars: number;
 }
 
 export interface RageHit {
@@ -44,7 +50,7 @@ export class ObstacleSystem {
   private barrierDisplayH: number = 0;
 
   // Reused collision result to avoid per-frame allocation
-  private collisionResult: CollisionResult = { crashed: false, slowOverlapping: false, hitX: 0, hitY: 0 };
+  private collisionResult: CollisionResult = { crashed: false, slowOverlapping: false, hitX: 0, hitY: 0, hitType: null };
   private laneWarningResult: LaneWarning[][] = [];
 
   // Seeded RNG for deterministic obstacle patterns
@@ -453,6 +459,7 @@ export class ObstacleSystem {
     this.collisionResult.slowOverlapping = false;
     this.collisionResult.hitX = 0;
     this.collisionResult.hitY = 0;
+    this.collisionResult.hitType = null;
 
     for (let i = 0; i < this.pool.length; i++) {
       const obs = this.pool[i];
@@ -476,6 +483,7 @@ export class ObstacleSystem {
           this.collisionResult.crashed = true;
           this.collisionResult.hitX = obs.x;
           this.collisionResult.hitY = obs.y;
+          this.collisionResult.hitType = ObstacleType.CAR;
           this.startCarDeath(obs);
           this.spawnExplosion(obs.x, obs.y, TUNING.CAR_EXPLOSION_SCALE);
           if (this.onExplosion) this.onExplosion();
@@ -497,6 +505,7 @@ export class ObstacleSystem {
           this.collisionResult.crashed = true;
           this.collisionResult.hitX = obs.x;
           this.collisionResult.hitY = obs.y;
+          this.collisionResult.hitType = ObstacleType.CRASH;
           obs.setActive(false).setVisible(false);
           return this.collisionResult;
         }
@@ -633,8 +642,8 @@ export class ObstacleSystem {
   }
 
   /** Destroy all active obstacles on screen, spawning explosions for each. Returns hit count. */
-  destroyAllOnScreen(scale: number = 1): number {
-    let count = 0;
+  destroyAllOnScreen(scale: number = 1): DestroyAllResult {
+    const result: DestroyAllResult = { obstacles: 0, cars: 0 };
     for (let i = 0; i < this.pool.length; i++) {
       const obs = this.pool[i];
       if (!obs.active || obs.getData('dying')) continue;
@@ -643,14 +652,15 @@ export class ObstacleSystem {
       if (type === ObstacleType.CAR) {
         this.startCarDeath(obs);
         this.spawnExplosion(obs.x, obs.y, TUNING.CAR_EXPLOSION_SCALE);
+        result.cars++;
       } else {
         this.spawnExplosion(obs.x, obs.y, scale);
         obs.setActive(false).setVisible(false);
+        result.obstacles++;
       }
       if (this.onExplosion) this.onExplosion();
-      count++;
     }
-    return count;
+    return result;
   }
 
   /** Get all upcoming (off-screen right) obstacles per lane for warning indicators, sorted by arrival time. */
@@ -753,7 +763,7 @@ export class ObstacleSystem {
 
   /** Lane-based projectile collision: hits the nearest obstacle in the given lane
    *  whose center X the rocket has reached. Destroys the obstacle on hit. */
-  checkLaneProjectileCollision(rocketX: number, laneIndex: number): { x: number; y: number } | null {
+  checkLaneProjectileCollision(rocketX: number, laneIndex: number): { x: number; y: number; type: ObstacleType } | null {
     let bestObs: Phaser.GameObjects.Sprite | null = null;
     let bestDist = Infinity;
 
@@ -788,7 +798,7 @@ export class ObstacleSystem {
       }
       this.spawnExplosion(ex, ey, TUNING.ROCKET_EXPLOSION_SCALE);
       if (this.onExplosion) this.onExplosion();
-      return { x: ex, y: ey };
+      return { x: ex, y: ey, type };
     }
     return null;
   }

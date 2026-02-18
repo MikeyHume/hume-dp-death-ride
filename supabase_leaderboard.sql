@@ -125,12 +125,37 @@ GRANT EXECUTE ON FUNCTION public.get_player_weekly_history(text) TO anon, authen
 ALTER TABLE public.leaderboard_entries
   ADD COLUMN IF NOT EXISTS time_survived int;
 
--- 9) Re-add user_id column (was dropped earlier) + default to COALESCE(auth.uid(), gen_random_uuid())
+-- 9) user_id: ensure nullable, drop FK constraint if it references auth.users,
+--    and remove the column default (app sets user_id explicitly when auth is available)
 ALTER TABLE public.leaderboard_entries
   ADD COLUMN IF NOT EXISTS user_id uuid;
 
 ALTER TABLE public.leaderboard_entries
-  ALTER COLUMN user_id SET DEFAULT COALESCE(auth.uid(), gen_random_uuid());
+  ALTER COLUMN user_id DROP NOT NULL;
+
+ALTER TABLE public.leaderboard_entries
+  ALTER COLUMN user_id DROP DEFAULT;
+
+-- Drop any foreign key on user_id → auth.users (blocks anon inserts)
+DO $$
+DECLARE
+  fk_name text;
+BEGIN
+  SELECT tc.constraint_name INTO fk_name
+  FROM information_schema.table_constraints tc
+  JOIN information_schema.key_column_usage kcu
+    ON tc.constraint_name = kcu.constraint_name
+  WHERE tc.table_name = 'leaderboard_entries'
+    AND tc.constraint_type = 'FOREIGN KEY'
+    AND kcu.column_name = 'user_id'
+  LIMIT 1;
+
+  IF fk_name IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE public.leaderboard_entries DROP CONSTRAINT %I', fk_name);
+    RAISE NOTICE 'Dropped FK constraint: %', fk_name;
+  END IF;
+END
+$$;
 
 -- 10) Indexes for global queries
 CREATE INDEX IF NOT EXISTS idx_lb_week_user

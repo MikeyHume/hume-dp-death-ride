@@ -42,10 +42,19 @@ export interface GlobalLeaderboardEntry {
  */
 export async function submitScore(score: number, timeSurvived?: number, username?: string): Promise<string | null> {
   try {
-    // Guarantee an auth session exists (anonymous or Spotify) so RLS allows the insert
-    await ensureAnonUser();
+    console.log('[LB] submitScore called — score:', score, 'time:', timeSurvived, 'name:', username);
+
+    // Best-effort auth session — get a user_id if possible
+    let authUid: string | null = null;
+    try {
+      authUid = await ensureAnonUser();
+      console.log('[LB] auth uid:', authUid);
+    } catch (authErr) {
+      console.warn('[LB] ensureAnonUser FAILED:', authErr);
+    }
 
     const spotifyId = getLinkedSpotifyId();
+    console.log('[LB] spotifyId:', spotifyId || '(none)');
 
     // Fetch avatar for Spotify users (best-effort)
     let avatarUrl: string | null = null;
@@ -59,27 +68,36 @@ export async function submitScore(score: number, timeSurvived?: number, username
     }
 
     const weekId = getCurrentWeekKey();
-    const { data, error } = await supabase
+    const row: Record<string, unknown> = {
+      spotify_user_id: spotifyId || null,
+      week_id: weekId,
+      score,
+      time_survived: timeSurvived != null ? Math.round(timeSurvived) : null,
+      username: username || null,
+      avatar_url: avatarUrl,
+    };
+    // Only set user_id when we have a real auth uid — avoids FK violation
+    // against auth.users when no session exists
+    if (authUid) row.user_id = authUid;
+
+    console.log('[LB] inserting row:', JSON.stringify(row));
+
+    const { data, error, status, statusText } = await supabase
       .from('leaderboard_entries')
-      .insert({
-        // user_id defaults to COALESCE(auth.uid(), gen_random_uuid()) via column default
-        spotify_user_id: spotifyId || null,
-        week_id: weekId,
-        score,
-        time_survived: timeSurvived != null ? Math.round(timeSurvived) : null,
-        username: username || null,
-        avatar_url: avatarUrl,
-      })
+      .insert(row)
       .select('id')
       .single();
 
+    console.log('[LB] response — status:', status, statusText, 'data:', data, 'error:', error);
+
     if (error) {
-      console.warn('LeaderboardService: submit failed', error);
+      console.error('[LB] INSERT FAILED —', error.message, '| code:', error.code, '| details:', error.details, '| hint:', error.hint);
       return null;
     }
+    console.log('[LB] INSERT OK — id:', data?.id, 'week:', weekId);
     return data?.id != null ? String(data.id) : null;
   } catch (err) {
-    console.warn('LeaderboardService: submit error', err);
+    console.error('[LB] submitScore EXCEPTION:', err);
     return null;
   }
 }

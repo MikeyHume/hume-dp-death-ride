@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
-import { ObstacleSystem } from './ObstacleSystem';
+import { ObstacleSystem, ObstacleType } from './ObstacleSystem';
 
 export class RocketSystem {
   private scene: Phaser.Scene;
@@ -12,7 +12,7 @@ export class RocketSystem {
   private ages: number[] = [];
 
   // Callbacks
-  public onHit: ((x: number, y: number) => void) | null = null;
+  public onHit: ((x: number, y: number, type?: ObstacleType) => void) | null = null;
 
   constructor(scene: Phaser.Scene, obstacleSystem: ObstacleSystem) {
     this.scene = scene;
@@ -102,7 +102,7 @@ export class RocketSystem {
       if (hitResult) {
         rocket.stop();
         rocket.setActive(false).setVisible(false);
-        if (this.onHit) this.onHit(hitResult.x, hitResult.y);
+        if (this.onHit) this.onHit(hitResult.x, hitResult.y, hitResult.type);
       }
     }
   }

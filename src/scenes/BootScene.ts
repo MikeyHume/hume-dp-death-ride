@@ -136,6 +136,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('ui-unmuted', 'ui/unmuted.png');
     this.load.image('ui-muted', 'ui/muted.png');
     this.load.image('ui-insta', 'ui/insta.png');
+    this.load.image('default-avatar', 'assets/profiles/dp_anon_pic.jpg');
 
     // Tutorial assets
     this.load.image('tutorial-skip', 'assets/tutorial/skip_v02.png');

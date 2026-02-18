@@ -53,6 +53,7 @@ export class MusicPlayer {
   // Dual-source
   private source: MusicSource = 'youtube';
   private spotifyPlayer: SpotifyPlayerSystem | null = null;
+  private spotifyInitInProgress = false;
   private countdownMusic: Phaser.Sound.BaseSound | null = null;
   private crossfadeTimer: number = 0;
   private crossfadeAnim: number = 0;
@@ -64,18 +65,18 @@ export class MusicPlayer {
     // YouTube API loading is deferred until switchToPlaylist() to speed up initial boot
     this.tryInitSpotify();
 
-    // Re-try Spotify init when user completes auth in a new tab
-    scene.events.on('spotify-auth-changed', () => this.tryInitSpotify());
+    // Handle Spotify login/disconnect
+    scene.events.on('spotify-auth-changed', () => this.onSpotifyAuthChanged());
   }
 
   /** Start the in-game title music. Call from a user gesture handler. */
   startTitleMusic(): void {
     if (this.titleMusic) return; // already playing
     if (this.scene.cache.audio.exists('title-music')) {
-      this.titleMusic = this.scene.sound.add('title-music', { loop: true, volume: 0.5 });
+      this.titleMusic = this.scene.sound.add('title-music', { loop: true, volume: 0.5 * TUNING.MUSIC_VOL_TITLE });
       this.titleMusic.play();
     }
-    // Set up track info (UI stays hidden until revealForGameplay)
+    // Set up track info for the intro track
     const s = TUNING.MUSIC_UI_THUMB_SCALE;
     this.thumbnailImg.src = TUNING.INTRO_TRACK_THUMBNAIL;
     this.thumbnailImg.style.width = `${YT_THUMB_HEIGHT * s}px`;
@@ -359,22 +360,51 @@ export class MusicPlayer {
     });
   }
 
+  /** Handle Spotify login or disconnect. */
+  private onSpotifyAuthChanged(): void {
+    if (isConnected()) {
+      // Login — init Spotify player (guards inside prevent duplicates)
+      this.tryInitSpotify();
+      return;
+    }
+
+    // Disconnected — tear down Spotify player and fall back to YouTube
+    this.spotifyInitInProgress = false;
+    if (this.spotifyPlayer) {
+      this.spotifyPlayer.destroy();
+      this.spotifyPlayer = null;
+    }
+    if (this.source === 'spotify') {
+      this.source = 'youtube';
+      if (this.playlistStarted && this.ytReady) {
+        this.startYTPlaylist();
+      } else if (this.playlistStarted) {
+        this.pendingPlay = true;
+        this.loadYouTubeAPI();
+      }
+    }
+  }
+
   /** Attempt to initialize Spotify playback if connected + premium. Non-blocking. */
   private tryInitSpotify(): void {
     if (!isConnected()) return;
+    if (this.spotifyInitInProgress || this.spotifyPlayer) return;
+    this.spotifyInitInProgress = true;
 
     checkPremium().then(async (isPremium) => {
-      if (!isPremium) return;
+      if (!isPremium) { this.spotifyInitInProgress = false; return; }
 
       const sp = new SpotifyPlayerSystem();
       const ok = await sp.init();
       if (!ok) {
         console.warn('MusicPlayer: Spotify SDK init failed, staying on YouTube');
         sp.destroy();
+        this.spotifyInitInProgress = false;
         return;
       }
 
       this.spotifyPlayer = sp;
+      this.spotifyInitInProgress = false;
 
       // Wire track change updates
       sp.onTrackChanged((track) => {
@@ -402,6 +432,7 @@ export class MusicPlayer {
       }
     }).catch(() => {
       // Premium check failed — stay on YouTube silently
+      this.spotifyInitInProgress = false;
     });
   }
 
@@ -482,7 +513,7 @@ export class MusicPlayer {
 
     // Fade from -12 dB to 0 dB (relative to the player's base volume of 0.5)
     const startGain = Math.pow(10, CROSSFADE_START_DB / 20); // ~0.25
-    const baseVol = 0.5;
+    const baseVol = 0.5 * TUNING.MUSIC_VOL_SPOTIFY;
     const fadeMs = CROSSFADE_LEAD_S * 1000;
     const startTime = performance.now();
 
@@ -525,7 +556,7 @@ export class MusicPlayer {
   private startYTPlaylist(): void {
     if (!this.ytPlayer) return;
     this.source = 'youtube';
-    this.ytPlayer.setVolume(50);
+    this.ytPlayer.setVolume(Math.min(100, Math.round(50 * TUNING.MUSIC_VOL_YOUTUBE)));
     this.ytPlayer.playVideo();
     // Let the first song play for 5 seconds, then shuffle and skip
     setTimeout(() => {
@@ -628,11 +659,11 @@ export class MusicPlayer {
   /** Boost or restore music volume (multiplier: 1.0 = normal, >1 = louder) */
   setVolumeBoost(multiplier: number): void {
     if (this.source === 'spotify' && this.spotifyPlayer) {
-      this.spotifyPlayer.setVolumeBoost(multiplier);
+      this.spotifyPlayer.setVolumeBoost(multiplier * TUNING.MUSIC_VOL_SPOTIFY);
     } else if (this.playlistStarted && this.ytPlayer && !this.ytPlayer.isMuted()) {
-      this.ytPlayer.setVolume(Math.min(100, Math.round(50 * multiplier)));
+      this.ytPlayer.setVolume(Math.min(100, Math.round(50 * TUNING.MUSIC_VOL_YOUTUBE * multiplier)));
     } else if (this.titleMusic && !this.titleMuted) {
-      this.titleMusic.setVolume(0.5 * multiplier);
+      this.titleMusic.setVolume(0.5 * TUNING.MUSIC_VOL_TITLE * multiplier);
     }
   }
 
@@ -670,7 +701,7 @@ export class MusicPlayer {
     } else if (this.titleMusic) {
       // Toggle title music mute
       this.titleMuted = !this.titleMuted;
-      this.titleMusic.setVolume(this.titleMuted ? 0 : 0.5);
+      this.titleMusic.setVolume(this.titleMuted ? 0 : 0.5 * TUNING.MUSIC_VOL_TITLE);
       this.muteBtnImg.src = this.titleMuted ? 'ui/muted.png' : 'ui/unmuted.png';
       this.muteBtnSprite.setTexture(this.titleMuted ? 'ui-muted' : 'ui-unmuted');
     }

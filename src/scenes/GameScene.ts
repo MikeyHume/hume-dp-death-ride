@@ -39,54 +39,52 @@ const NAME_MAX_LENGTH = 10;
 const SKIP_BTN_MARGIN_RIGHT = 90;    // px from right edge of screen
 const SKIP_BTN_MARGIN_BOTTOM = 56;   // px from bottom edge of screen
 
-// ── Debug hotkeys (set active: false to disable) ──
+// ── Debug hotkeys (all start inactive — toggle on via debug panel [+]) ──
 const DEBUG_HOTKEYS = {
-  gameplayInfo:   { key: 'E',    active: false },  // toggle gameplay debug text (pos, speed, diff, time)
-  musicSource:    { key: 'W',    active: false },  // toggle music source label (SPOTIFY / YOUTUBE)
-  jumpLeaderboard:{ key: 'Q',    active: false },  // skip straight to death/leaderboard screen
-  toggleCRT:      { key: 'O',    active: true },  // toggle CRT shader on/off
-  crtDebug:       { key: 'P',    active: false },  // toggle CRT tuning overlay
-  instantRage:    { key: 'ZERO',    active: true },  // trigger instant rage mode
-  spectatorMode:  { key: 'I',       active: true },  // toggle spectator: invincible + auto-explode obstacles
-  toggleLayer1:   { key: 'ONE',     active: true },  // toggle parallax layer 1 (railing)
-  toggleLayer2:   { key: 'TWO',     active: true },  // toggle parallax layer 2
-  toggleLayer3:   { key: 'THREE',   active: true },  // toggle parallax layer 3 (buildings-big)
-  toggleLayer4:   { key: 'FOUR',    active: true },  // toggle parallax layer 4 (buildings-front close)
-  toggleLayer5:   { key: 'FIVE',    active: true },  // toggle parallax layer 5 (buildings-front flipped)
-  toggleLayer6:   { key: 'SIX',     active: true },  // toggle parallax layer 6 (buildings-front)
-  toggleLayer7:   { key: 'SEVEN',   active: true },  // toggle parallax layer 7 (buildings-back)
-  toggleSky:      { key: 'EIGHT',   active: true },  // toggle sky background
-  toggleRoad:     { key: 'NINE',    active: true },  // toggle road
-  hideHud:        { key: 'G',       active: true },  // hide HUD + music UI during gameplay
-  showHelp:       { key: 'PLUS',   active: true },  // toggle debug hotkey help overlay
-  showCollisions: { key: 'MINUS',  active: true },  // toggle collision hitbox overlay
-  startHold:      { key: 'BACKTICK', active: true }, // debug: skip the start hold phase
+  gameplayInfo:   { key: 'E',       active: false },  // toggle gameplay debug text
+  musicSource:    { key: 'W',       active: false },  // toggle music source label
+  jumpLeaderboard:{ key: 'Q',       active: false },  // skip straight to death/leaderboard screen
+  toggleCRT:      { key: 'O',       active: false },  // toggle CRT shader on/off
+  crtDebug:       { key: 'P',       active: false },  // toggle CRT tuning overlay
+  instantRage:    { key: 'ZERO',    active: false },  // trigger instant rage mode
+  spectatorMode:  { key: 'I',       active: false },  // toggle spectator mode
+  toggleLayer1:   { key: 'ONE',     active: false },  // toggle parallax layer 1
+  toggleLayer2:   { key: 'TWO',     active: false },  // toggle parallax layer 2
+  toggleLayer3:   { key: 'THREE',   active: false },  // toggle parallax layer 3
+  toggleLayer4:   { key: 'FOUR',    active: false },  // toggle parallax layer 4
+  toggleLayer5:   { key: 'FIVE',    active: false },  // toggle parallax layer 5
+  toggleLayer6:   { key: 'SIX',     active: false },  // toggle parallax layer 6
+  toggleLayer7:   { key: 'SEVEN',   active: false },  // toggle parallax layer 7
+  toggleSky:      { key: 'EIGHT',   active: false },  // toggle sky background
+  toggleRoad:     { key: 'NINE',    active: false },  // toggle road
+  hideHud:        { key: 'G',       active: false },  // hide HUD + music UI during gameplay
+  showHelp:       { key: 'PLUS',    active: true  },  // toggle debug panel (always active)
+  showCollisions: { key: 'MINUS',   active: false },  // toggle collision hitbox overlay
+  startHold:      { key: 'BACKTICK', active: false }, // skip the start hold phase
 };
+
+// ── Death screen leaderboard: Scale multipliers ──
+const DLB_T3_SCALE = 1.5;          // scale multiplier for top 3 font size
+const DLB_REST_SCALE = 1.0;        // scale multiplier for rows 4-10 font size
 
 // ── Death screen leaderboard: Top 3 group ──
 const DLB_T3_X = 560;              // left edge X of the entire top-3 group
 const DLB_T3_Y = 0;                // Y offset from leaderboard header bottom
-const DLB_T3_ROW_H = 58;           // row height per top-3 entry
-const DLB_T3_FONT = '34px';        // font size for top-3 text
-const DLB_T3_AVATAR_R = 22;        // avatar circle radius
+const DLB_T3_ROW_H = 80;           // row height per top-3 entry
+const DLB_T3_FONT = `${Math.round(34 * DLB_T3_SCALE)}px`;
+const DLB_T3_AVATAR_R = 30;        // avatar circle radius
 const DLB_T3_AVATAR_STROKE = 3;    // medal ring stroke width
 const DLB_T3_AVATAR_X = -55;       // avatar center X relative to group left
-const DLB_T3_RANK_X = 0;           // rank text X relative to group left
-const DLB_T3_NAME_X = 96;          // name text X relative to group left
-const DLB_T3_TIME_X = 380;         // time text X relative to group left
-const DLB_T3_SCORE_X = 520;        // score text X relative to group left
+const DLB_T3_RANK_X = 120;           // rank text X relative to group left
+const DLB_T3_NAME_X = 160;          // name text X relative to group left
+const DLB_T3_TIME_X = 600;         // time text X relative to group left
+const DLB_T3_SCORE_X = 900;        // score text X relative to group left
+const DLB_T3_MARKER_X = 960;       // ◄ marker X relative to group left
 const DLB_T3_MEDAL_COLORS = [0xFFD700, 0xC0C0C0, 0xCD7F32]; // gold, silver, bronze
-const DLB_GAP = 12;               // min px gap between adjacent elements in a row
-
 // ── Death screen leaderboard: Rows 4-10 group ──
-const DLB_REST_X = 615;            // left edge X of the 4-10 group
 const DLB_REST_Y = 8;              // Y gap between top-3 block and 4-10 block
 const DLB_REST_ROW_H = 38;         // row height per 4-10 entry
-const DLB_REST_FONT = '24px';      // font size for 4-10 text
-const DLB_REST_RANK_X = 0;         // rank X relative to group left
-const DLB_REST_NAME_X = 56;        // name X relative to group left
-const DLB_REST_TIME_X = 280;       // time X relative to group left
-const DLB_REST_SCORE_X = 400;      // score X relative to group left
+const DLB_REST_FONT = `${Math.round(24 * DLB_REST_SCALE)}px`;
 
 export class GameScene extends Phaser.Scene {
   // Systems
@@ -188,7 +186,11 @@ export class GameScene extends Phaser.Scene {
   private debugMusicSourceText: Phaser.GameObjects.Text | null = null;
   private spectatorLabel!: Phaser.GameObjects.Text;
   private debugHelpBg!: Phaser.GameObjects.Rectangle;
-  private debugHelpText!: Phaser.GameObjects.Text;
+  private debugHelpContainer!: Phaser.GameObjects.Container;
+  private debugPanelOpen: boolean = false;
+  private debugMasterEnabled: boolean = true;
+  private debugPanelRows: { label: string; text: Phaser.GameObjects.Text }[] = [];
+  private debugMasterText!: Phaser.GameObjects.Text;
   private collisionDebug: boolean = false;
   private collisionGfx!: Phaser.GameObjects.Graphics;
 
@@ -350,9 +352,10 @@ export class GameScene extends Phaser.Scene {
     };
 
     // Wire rocket hit: explosion sound + score bonus + popup + camera shake
-    this.rocketSystem.onHit = (_x: number, _y: number) => {
-      this.scoreSystem.addBonus(TUNING.ROCKET_KILL_POINTS);
-      this.spawnScorePopup(TUNING.ROCKET_KILL_POINTS);
+    this.rocketSystem.onHit = (_x: number, _y: number, hitType?: ObstacleType) => {
+      const pts = hitType === ObstacleType.CAR ? TUNING.SCORE_CAR_ROCKET : TUNING.SCORE_OBSTACLE_ROCKET;
+      this.scoreSystem.addBonus(pts);
+      this.spawnScorePopup(pts, 'rocket');
       this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 0.25, TUNING.SHAKE_DEATH_INTENSITY * 0.25);
     };
 
@@ -424,16 +427,19 @@ export class GameScene extends Phaser.Scene {
     // --- Profile Popup (opens on avatar click) ---
     this.profilePopup = new ProfilePopup(this);
     this.profileHud.onAvatarClick(() => {
-      this.profilePopup.open(this.profilePopup.getName());
+      const onDeath = this.state === GameState.DEAD || this.state === GameState.NAME_ENTRY || this.state === GameState.DYING;
+      const duringGameplay = this.state === GameState.PLAYING;
+      this.profilePopup.open(this.profilePopup.getName(), onDeath, duringGameplay);
     });
     this.profilePopup.onProfileChanged((name, hasAvatar) => {
       if (hasAvatar) {
         const key = this.profilePopup.getAvatarTextureKey();
         if (key) this.profileHud.setAvatarTexture(key);
       }
-      // Update profile mode display if on title or death screen
-      if (this.state === GameState.TITLE || this.state === GameState.DEAD) {
+      if (this.state === GameState.TITLE) {
         this.profileHud.showProfileMode(name, this.getProfileRankText());
+      } else if (this.state === GameState.PLAYING) {
+        this.profileHud.showPlayingMode(name);
       }
     });
     // Load profile from Supabase early so the HUD is populated before the player sees it
@@ -444,8 +450,10 @@ export class GameScene extends Phaser.Scene {
       const name = this.profilePopup.getName();
       const key = this.profilePopup.getAvatarTextureKey();
       if (key) this.profileHud.setAvatarTexture(key);
-      if (this.state === GameState.TITLE || this.state === GameState.DEAD) {
+      if (this.state === GameState.TITLE) {
         this.profileHud.showProfileMode(name, this.getProfileRankText());
+      } else if (this.state === GameState.PLAYING) {
+        this.profileHud.showPlayingMode(name);
       }
     });
 
@@ -584,7 +592,7 @@ export class GameScene extends Phaser.Scene {
     ).setOrigin(0.5, 0);
     this.deathLbEntriesContainer = this.add.container(0, 0);
     this.deathRestartText = this.add.text(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 380,
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 450,
       'Press SPACEBAR to try again', {
         fontSize: '28px',
         color: '#ffffff',
@@ -895,24 +903,23 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     // Debug hotkeys registered in create() (event-based)
-    if (DEBUG_HOTKEYS.toggleCRT.active) {
-      this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleCRT.key).on('down', () => {
-        this.crtEnabled = !this.crtEnabled;
-        const pipes = this.cameras.main.getPostPipeline(CRTPipeline);
-        if (Array.isArray(pipes)) {
-          pipes.forEach(p => p.active = this.crtEnabled);
-        } else if (pipes) {
-          pipes.active = this.crtEnabled;
-        }
-      });
-    }
-    if (DEBUG_HOTKEYS.crtDebug.active) {
-      this.input.keyboard?.addKey(DEBUG_HOTKEYS.crtDebug.key).on('down', () => {
-        this.crtDebugVisible = !this.crtDebugVisible;
-        this.crtDebugDom.setVisible(this.crtDebugVisible);
-        if (this.crtDebugVisible) this.updateCRTDebugText();
-      });
-    }
+    // All keys registered unconditionally — gated by master + active at runtime
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleCRT.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.toggleCRT.active || this.debugPanelOpen) return;
+      this.crtEnabled = !this.crtEnabled;
+      const pipes = this.cameras.main.getPostPipeline(CRTPipeline);
+      if (Array.isArray(pipes)) {
+        pipes.forEach(p => p.active = this.crtEnabled);
+      } else if (pipes) {
+        pipes.active = this.crtEnabled;
+      }
+    });
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.crtDebug.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.crtDebug.active || this.debugPanelOpen) return;
+      this.crtDebugVisible = !this.crtDebugVisible;
+      this.crtDebugDom.setVisible(this.crtDebugVisible);
+      if (this.crtDebugVisible) this.updateCRTDebugText();
+    });
 
     // Signal boot overlay that the start screen is ready
     (window as any).__bootOverlay?.markStartScreenReady?.();
@@ -920,24 +927,22 @@ export class GameScene extends Phaser.Scene {
     // Attempt to autoplay title music — skip overlay if browser allows it
     this.tryAutoplayMusic();
 
-    if (DEBUG_HOTKEYS.instantRage.active) {
-      this.input.keyboard?.addKey(DEBUG_HOTKEYS.instantRage.key).on('down', () => {
-        if (this.state === GameState.PLAYING && this.rageTimer <= 0) {
-          this.rageAmount = TUNING.RAGE_MAX;
-          this.rageTimer = TUNING.RAGE_DURATION;
-          this.playerSystem.playPoweredUp();
-          this.musicPlayer.setVolumeBoost(TUNING.RAGE_MUSIC_VOLUME_BOOST);
-          this.audioSystem.setDistortion(TUNING.RAGE_AUDIO_DISTORTION);
-        }
-      });
-    }
-    if (DEBUG_HOTKEYS.spectatorMode.active) {
-      this.input.keyboard?.addKey(DEBUG_HOTKEYS.spectatorMode.key).on('down', () => {
-        this.spectatorMode = !this.spectatorMode;
-        this.playerSystem.setSpectator(this.spectatorMode);
-        this.spectatorLabel.setVisible(this.spectatorMode);
-      });
-    }
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.instantRage.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.instantRage.active || this.debugPanelOpen) return;
+      if (this.state === GameState.PLAYING && this.rageTimer <= 0) {
+        this.rageAmount = TUNING.RAGE_MAX;
+        this.rageTimer = TUNING.RAGE_DURATION;
+        this.playerSystem.playPoweredUp();
+        this.musicPlayer.setVolumeBoost(TUNING.RAGE_MUSIC_VOLUME_BOOST);
+        this.audioSystem.setDistortion(TUNING.RAGE_AUDIO_DISTORTION);
+      }
+    });
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.spectatorMode.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.spectatorMode.active || this.debugPanelOpen) return;
+      this.spectatorMode = !this.spectatorMode;
+      this.playerSystem.setSpectator(this.spectatorMode);
+      this.spectatorLabel.setVisible(this.spectatorMode);
+    });
     // Parallax layer toggles (keys 1-7)
     for (let i = 0; i < 7; i++) {
       const hotkey = [
@@ -945,137 +950,227 @@ export class GameScene extends Phaser.Scene {
         DEBUG_HOTKEYS.toggleLayer4, DEBUG_HOTKEYS.toggleLayer5, DEBUG_HOTKEYS.toggleLayer6,
         DEBUG_HOTKEYS.toggleLayer7,
       ][i];
-      if (hotkey.active) {
-        const layerIdx = i;
-        this.input.keyboard?.addKey(hotkey.key).on('down', () => {
-          this.parallaxSystem.toggleLayer(layerIdx);
-        });
-      }
+      const layerIdx = i;
+      this.input.keyboard?.addKey(hotkey.key).on('down', () => {
+        if (!this.debugMasterEnabled || !hotkey.active || this.debugPanelOpen) return;
+        this.parallaxSystem.toggleLayer(layerIdx);
+      });
     }
     // Sky toggle (key 8)
-    if (DEBUG_HOTKEYS.toggleSky.active) {
-      this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleSky.key).on('down', () => {
-        this.parallaxSystem.toggleSky();
-      });
-    }
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleSky.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.toggleSky.active || this.debugPanelOpen) return;
+      this.parallaxSystem.toggleSky();
+    });
     // Road toggle (key 9)
-    if (DEBUG_HOTKEYS.toggleRoad.active) {
-      let roadVisible = true;
-      this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleRoad.key).on('down', () => {
-        roadVisible = !roadVisible;
-        this.roadSystem.setVisible(roadVisible);
-      });
-    }
+    let roadVisible = true;
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleRoad.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.toggleRoad.active || this.debugPanelOpen) return;
+      roadVisible = !roadVisible;
+      this.roadSystem.setVisible(roadVisible);
+    });
     // Hide HUD (G) — only during gameplay
-    if (DEBUG_HOTKEYS.hideHud.active) {
-      this.input.keyboard?.addKey(DEBUG_HOTKEYS.hideHud.key).on('down', () => {
-        if (this.state !== GameState.PLAYING) return;
-        this.hudHidden = !this.hudHidden;
-        const v = !this.hudHidden;
-        // UI elements
-        this.profileHud.setVisible(v);
-        this.hudLabel.setVisible(v);
-        this.hudHighScore.setVisible(v);
-        this.musicPlayer.setVisible(v);
-        this.spectatorLabel.setVisible(v && this.spectatorMode);
-        this.startHoldText.setVisible(v && this.startHoldActive);
-        // World objects
-        this.obstacleSystem.setVisible(v);
-        this.pickupSystem.setVisible(v);
-        this.shieldSystem.setVisible(v);
-        for (let i = 0; i < this.warningPool.length; i++) {
-          this.warningPool[i].circle.setVisible(v);
-          this.warningPool[i].preview.setVisible(v);
-        }
-        for (let i = 0; i < this.warningPillPool.length; i++) {
-          this.warningPillPool[i].gfx.setVisible(v);
-          this.warningPillPool[i].preview1.setVisible(v);
-          this.warningPillPool[i].preview2.setVisible(v);
-        }
-        for (let i = 0; i < this.laneHighlights.length; i++) {
-          this.laneHighlights[i].setVisible(false);
-        }
-        // Suppress explosions and screen shakes
-        this.obstacleSystem.setSuppressExplosions(this.hudHidden);
-        this.fxSystem.setSuppressShake(this.hudHidden);
-      });
-    }
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.hideHud.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.hideHud.active || this.debugPanelOpen) return;
+      if (this.state !== GameState.PLAYING) return;
+      this.hudHidden = !this.hudHidden;
+      const v = !this.hudHidden;
+      // UI elements
+      this.profileHud.setVisible(v);
+      this.hudLabel.setVisible(v);
+      this.hudHighScore.setVisible(v);
+      this.musicPlayer.setVisible(v);
+      this.spectatorLabel.setVisible(v && this.spectatorMode);
+      this.startHoldText.setVisible(v && this.startHoldActive);
+      // World objects
+      this.obstacleSystem.setVisible(v);
+      this.pickupSystem.setVisible(v);
+      this.shieldSystem.setVisible(v);
+      for (let i = 0; i < this.warningPool.length; i++) {
+        this.warningPool[i].circle.setVisible(v);
+        this.warningPool[i].preview.setVisible(v);
+      }
+      for (let i = 0; i < this.warningPillPool.length; i++) {
+        this.warningPillPool[i].gfx.setVisible(v);
+        this.warningPillPool[i].preview1.setVisible(v);
+        this.warningPillPool[i].preview2.setVisible(v);
+      }
+      for (let i = 0; i < this.laneHighlights.length; i++) {
+        this.laneHighlights[i].setVisible(false);
+      }
+      // Suppress explosions and screen shakes
+      this.obstacleSystem.setSuppressExplosions(this.hudHidden);
+      this.fxSystem.setSuppressShake(this.hudHidden);
+    });
 
-    if (DEBUG_HOTKEYS.startHold.active) {
-      this.input.keyboard?.addKey(DEBUG_HOTKEYS.startHold.key).on('down', () => {
-        this.startHoldMode = !this.startHoldMode; // when true, skips the start hold
-      });
-    }
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.startHold.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.startHold.active || this.debugPanelOpen) return;
+      this.startHoldMode = !this.startHoldMode;
+    });
 
-    // Debug help overlay — black box with neon green text listing active hotkeys
+    // Debug panel — interactive overlay to toggle hotkeys on/off
     {
-      const lines: string[] = [];
-      const entries: { label: string; key: string; desc: string }[] = [
-        { label: 'gameplayInfo',    key: DEBUG_HOTKEYS.gameplayInfo.key,    desc: 'Toggle gameplay debug info' },
-        { label: 'musicSource',     key: DEBUG_HOTKEYS.musicSource.key,     desc: 'Toggle music source label' },
-        { label: 'jumpLeaderboard', key: DEBUG_HOTKEYS.jumpLeaderboard.key, desc: 'Skip to death/leaderboard' },
+      const pad = 40;
+      const fontSize = 32;
+      const lineH = 44;
+      const panelEntries: { label: string; key: string; desc: string }[] = [
+        { label: 'gameplayInfo',    key: DEBUG_HOTKEYS.gameplayInfo.key,    desc: 'Gameplay debug info' },
+        { label: 'musicSource',     key: DEBUG_HOTKEYS.musicSource.key,     desc: 'Music source label' },
+        { label: 'jumpLeaderboard', key: DEBUG_HOTKEYS.jumpLeaderboard.key, desc: 'Jump to leaderboard' },
         { label: 'toggleCRT',       key: DEBUG_HOTKEYS.toggleCRT.key,       desc: 'Toggle CRT shader' },
-        { label: 'crtDebug',        key: DEBUG_HOTKEYS.crtDebug.key,        desc: 'Toggle CRT tuning overlay' },
-        { label: 'instantRage',     key: DEBUG_HOTKEYS.instantRage.key,     desc: 'Trigger instant rage' },
-        { label: 'spectatorMode',   key: DEBUG_HOTKEYS.spectatorMode.key,   desc: 'Toggle spectator mode' },
-        { label: 'toggleLayer 1-7', key: '1-7',                             desc: 'Toggle parallax layers' },
-        { label: 'toggleSky',       key: DEBUG_HOTKEYS.toggleSky.key,       desc: 'Toggle sky background' },
+        { label: 'crtDebug',        key: DEBUG_HOTKEYS.crtDebug.key,        desc: 'CRT tuning overlay' },
+        { label: 'instantRage',     key: DEBUG_HOTKEYS.instantRage.key,     desc: 'Instant rage mode' },
+        { label: 'spectatorMode',   key: DEBUG_HOTKEYS.spectatorMode.key,   desc: 'Spectator mode' },
+        { label: 'toggleLayers',    key: '1-7',                             desc: 'Parallax layers' },
+        { label: 'toggleSky',       key: DEBUG_HOTKEYS.toggleSky.key,       desc: 'Toggle sky' },
         { label: 'toggleRoad',      key: DEBUG_HOTKEYS.toggleRoad.key,      desc: 'Toggle road' },
-        { label: 'hideHud',         key: DEBUG_HOTKEYS.hideHud.key,         desc: 'Hide HUD + music UI' },
-        { label: 'showHelp',        key: '+',                               desc: 'Toggle this help overlay' },
-        { label: 'showCollisions',  key: '-',                               desc: 'Toggle collision hitboxes' },
+        { label: 'hideHud',         key: DEBUG_HOTKEYS.hideHud.key,         desc: 'Hide HUD' },
+        { label: 'showCollisions',  key: '-',                               desc: 'Collision hitboxes' },
         { label: 'startHold',       key: '`',                               desc: 'Skip start hold' },
       ];
-      // Only include active hotkeys
-      const activeLabels = new Set(
-        Object.entries(DEBUG_HOTKEYS).filter(([, v]) => v.active).map(([k]) => k)
-      );
-      for (const e of entries) {
-        // Layer toggles: show if any layer toggle is active
-        if (e.label === 'toggleLayer 1-7') {
-          const anyLayer = ['toggleLayer1','toggleLayer2','toggleLayer3','toggleLayer4','toggleLayer5','toggleLayer6','toggleLayer7'].some(k => activeLabels.has(k));
-          if (anyLayer) lines.push(`  [${e.key}]  ${e.desc}`);
-        } else if (activeLabels.has(e.label)) {
-          lines.push(`  [${e.key}]  ${e.desc}`);
-        }
-      }
-      const helpStr = '  DEBUG HOTKEYS\n  ─────────────────────────────────────\n' + lines.join('\n');
-      const pad = 40;
-      this.debugHelpText = this.add.text(pad + 30, pad + 30, helpStr, {
-        fontFamily: 'monospace',
-        fontSize: '40px',
-        color: '#00ff00',
-        lineSpacing: 14,
-      }).setDepth(9999).setScrollFactor(0).setVisible(false);
 
-      const bounds = this.debugHelpText.getBounds();
-      this.debugHelpBg = this.add.rectangle(
-        pad, pad,
-        bounds.width + 60, bounds.height + 60,
-        0x000000, 0.92
-      ).setOrigin(0, 0).setDepth(9998).setScrollFactor(0).setVisible(false);
+      this.debugHelpContainer = this.add.container(0, 0).setDepth(9999).setScrollFactor(0).setVisible(false);
 
-      if (DEBUG_HOTKEYS.showHelp.active) {
-        this.input.keyboard?.addKey(DEBUG_HOTKEYS.showHelp.key).on('down', () => {
-          const show = !this.debugHelpBg.visible;
-          this.debugHelpBg.setVisible(show);
-          this.debugHelpText.setVisible(show);
+      // Build rows
+      let y = pad + 30;
+      // Title
+      const titleT = this.add.text(pad + 30, y, '  DEBUG PANEL', {
+        fontFamily: 'monospace', fontSize: `${fontSize + 4}px`, color: '#ffffff',
+      });
+      this.debugHelpContainer.add(titleT);
+      y += lineH;
+      const divider = this.add.text(pad + 30, y, '  ─────────────────────────────────────', {
+        fontFamily: 'monospace', fontSize: `${fontSize}px`, color: '#444444',
+      });
+      this.debugHelpContainer.add(divider);
+      y += lineH;
+
+      // Master toggle row
+      this.debugMasterText = this.add.text(pad + 30, y, '', {
+        fontFamily: 'monospace', fontSize: `${fontSize}px`, color: '#ff4444',
+      });
+      this.debugHelpContainer.add(this.debugMasterText);
+      y += lineH + 8;
+
+      // Hotkey rows
+      this.debugPanelRows = [];
+      for (const entry of panelEntries) {
+        const rowText = this.add.text(pad + 30, y, '', {
+          fontFamily: 'monospace', fontSize: `${fontSize}px`, color: '#ff4444',
         });
+        this.debugHelpContainer.add(rowText);
+        this.debugPanelRows.push({ label: entry.label, text: rowText });
+        y += lineH;
       }
+
+      // Footer
+      y += 8;
+      const footerT = this.add.text(pad + 30, y, '  [+] Close panel', {
+        fontFamily: 'monospace', fontSize: `${fontSize - 4}px`, color: '#666666',
+      });
+      this.debugHelpContainer.add(footerT);
+      y += lineH;
+
+      // Background (sized to fit)
+      this.debugHelpBg = this.add.rectangle(pad, pad, 880, y - pad + 20, 0x000000, 0.94)
+        .setOrigin(0, 0).setDepth(9998).setScrollFactor(0).setVisible(false);
+
+      // Refresh panel text colors
+      const refreshPanel = () => {
+        const masterColor = this.debugMasterEnabled ? '#00ff00' : '#ff4444';
+        const masterLabel = this.debugMasterEnabled ? 'ON ' : 'OFF';
+        this.debugMasterText.setText(`  [M] MASTER: ${masterLabel}`).setColor(masterColor);
+
+        for (const row of this.debugPanelRows) {
+          const entry = panelEntries.find(e => e.label === row.label)!;
+          // For layer toggles, check if any layer is active
+          let isActive: boolean;
+          if (row.label === 'toggleLayers') {
+            isActive = ['toggleLayer1','toggleLayer2','toggleLayer3','toggleLayer4','toggleLayer5','toggleLayer6','toggleLayer7']
+              .some(k => (DEBUG_HOTKEYS as any)[k]?.active);
+          } else {
+            isActive = (DEBUG_HOTKEYS as any)[row.label]?.active ?? false;
+          }
+          const color = isActive ? '#00ff00' : '#ff4444';
+          const keyStr = entry.key.length === 1 ? entry.key.toUpperCase() : entry.key;
+          row.text.setText(`  [${keyStr}] ${entry.desc}`).setColor(color);
+        }
+      };
+
+      // Key handler when panel is open
+      const panelKeyHandler = (event: KeyboardEvent) => {
+        if (!this.debugPanelOpen) return;
+        const k = event.key.toUpperCase();
+
+        // M = master toggle
+        if (k === 'M') {
+          this.debugMasterEnabled = !this.debugMasterEnabled;
+          refreshPanel();
+          return;
+        }
+
+        // Match key to a panel row and toggle its active state
+        for (const row of this.debugPanelRows) {
+          const entry = panelEntries.find(e => e.label === row.label)!;
+          // Normalize the pressed key to match Phaser key names
+          let matchKey = entry.key.toUpperCase();
+          // Handle special key name mappings
+          const keyMap: Record<string, string> = {
+            'ZERO': '0', 'ONE': '1', 'TWO': '2', 'THREE': '3', 'FOUR': '4',
+            'FIVE': '5', 'SIX': '6', 'SEVEN': '7', 'EIGHT': '8', 'NINE': '9',
+            'PLUS': '+', 'MINUS': '-', 'BACKTICK': '`',
+          };
+          const displayKey = keyMap[matchKey] || matchKey;
+
+          if (row.label === 'toggleLayers' && k >= '1' && k <= '7') {
+            // Toggle all layer keys together
+            const layerKeys = ['toggleLayer1','toggleLayer2','toggleLayer3','toggleLayer4','toggleLayer5','toggleLayer6','toggleLayer7'];
+            const anyActive = layerKeys.some(lk => (DEBUG_HOTKEYS as any)[lk]?.active);
+            for (const lk of layerKeys) {
+              if ((DEBUG_HOTKEYS as any)[lk]) (DEBUG_HOTKEYS as any)[lk].active = !anyActive;
+            }
+            refreshPanel();
+            return;
+          } else if (k === displayKey && row.label !== 'toggleLayers') {
+            (DEBUG_HOTKEYS as any)[row.label].active = !(DEBUG_HOTKEYS as any)[row.label].active;
+            refreshPanel();
+            return;
+          }
+        }
+      };
+
+      // + key toggles the panel
+      this.input.keyboard?.addKey(DEBUG_HOTKEYS.showHelp.key).on('down', () => {
+        this.debugPanelOpen = !this.debugPanelOpen;
+        if (this.debugPanelOpen) refreshPanel();
+        this.debugHelpBg.setVisible(this.debugPanelOpen);
+        this.debugHelpContainer.setVisible(this.debugPanelOpen);
+      });
+
+      // Listen for raw keyboard events so we can intercept while panel is open
+      this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
+        if (this.debugPanelOpen) panelKeyHandler(event);
+      });
     }
 
     // Collision debug overlay
     this.collisionGfx = this.add.graphics().setDepth(9000);
-    if (DEBUG_HOTKEYS.showCollisions.active) {
-      this.input.keyboard?.addKey(DEBUG_HOTKEYS.showCollisions.key).on('down', () => {
-        this.collisionDebug = !this.collisionDebug;
-        if (!this.collisionDebug) this.collisionGfx.clear();
-      });
-    }
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.showCollisions.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.showCollisions.active || this.debugPanelOpen) return;
+      this.collisionDebug = !this.collisionDebug;
+      if (!this.collisionDebug) this.collisionGfx.clear();
+    });
   }
 
   update(_time: number, delta: number) {
     const dt = delta / 1000;
+
+    // Block all game input while debug panel is open
+    if (this.debugPanelOpen) {
+      this.inputSystem.getAttackPressed();
+      this.inputSystem.getRocketPressed();
+      this.inputSystem.getSpeedTap();
+      return;
+    }
 
     // Custom cursor follows pointer
     const ptr = this.input.activePointer;
@@ -1105,14 +1200,14 @@ export class GameScene extends Phaser.Scene {
       if (this.orientationOverlay.isPaused()) return;
     }
 
-    // Debug hotkeys polled in update()
-    if (DEBUG_HOTKEYS.gameplayInfo.active && this.input.keyboard
+    // Debug hotkeys polled in update() — gated by master toggle
+    if (this.debugMasterEnabled && DEBUG_HOTKEYS.gameplayInfo.active && this.input.keyboard
         && Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey(DEBUG_HOTKEYS.gameplayInfo.key))) {
       this.debugText.setVisible(!this.debugText.visible);
       if (!this.debugText.visible) this.debugText.setText('');
     }
 
-    if (DEBUG_HOTKEYS.musicSource.active && this.input.keyboard
+    if (this.debugMasterEnabled && DEBUG_HOTKEYS.musicSource.active && this.input.keyboard
         && Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey(DEBUG_HOTKEYS.musicSource.key))) {
       if (!this.debugMusicSourceText) {
         this.debugMusicSourceText = this.add.text(TUNING.GAME_WIDTH - 40, 150, '', {
@@ -1125,7 +1220,7 @@ export class GameScene extends Phaser.Scene {
       this.debugMusicSourceText.setText(`SRC: ${this.musicPlayer.getSource().toUpperCase()}`);
     }
 
-    if (DEBUG_HOTKEYS.jumpLeaderboard.active && this.input.keyboard
+    if (this.debugMasterEnabled && DEBUG_HOTKEYS.jumpLeaderboard.active && this.input.keyboard
         && Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey(DEBUG_HOTKEYS.jumpLeaderboard.key))
         && this.state !== GameState.DEAD) {
       if (this.leaderboardSystem.getDisplayEntries().length < 10) {
@@ -1138,6 +1233,37 @@ export class GameScene extends Phaser.Scene {
       this.elapsed = 42;
       const rank = this.leaderboardSystem.wouldMakeBoard(this.pendingScore);
       if (rank > 0) this.leaderboardSystem.submit(this.profilePopup.getName() || 'ANON', this.pendingScore, this.elapsed);
+
+      // Hide all game elements (same cleanup as dying 'snap' phase)
+      this.hudLabel.setVisible(false);
+      this.hudHighScore.setVisible(false);
+      this.profileHud.setVisible(false);
+      this.playerSystem.setVisible(false);
+      this.deathExplosion.setVisible(false);
+      this.slashSprite.setVisible(false);
+      this.slashActiveTimer = 0;
+      this.startHoldActive = false;
+      this.startHoldText.setVisible(false);
+      this.rageTimer = 0;
+      this.audioSystem.setDistortion(0);
+      CRT_TUNING.rageDistortion = 0;
+      this.obstacleSystem.hideAll();
+      this.pickupSystem.hideAll();
+      this.pickupSystem.setHUDVisible(false);
+      this.rocketSystem.hideAll();
+      this.shieldSystem.hideAll();
+      this.fxSystem.reset();
+      this.roadSystem.setVisible(false);
+      this.parallaxSystem.setVisible(false);
+      for (let i = 0; i < this.laneHighlights.length; i++) this.laneHighlights[i].setVisible(false);
+      this.hideWarningPool();
+      for (let i = 0; i < this.scorePopups.length; i++) {
+        this.scorePopups[i].setActive(false).setVisible(false);
+      }
+      this.titleContainer.setVisible(false);
+      this.musicPlayer.setVisible(false);
+      this.deathWhiteOverlay.setVisible(false);
+
       this.deathContainer.setVisible(true);
       this.showDeathScreen(rank || 3);
     }
@@ -1372,8 +1498,9 @@ export class GameScene extends Phaser.Scene {
     this.titleLoopSprite.play('title-loop');
     this.titleContainer.setVisible(true);
 
-    // Hide music player UI on title (music keeps playing)
-    this.musicPlayer.setVisible(false);
+    // Show music player in compact mode on title
+    this.musicPlayer.setVisible(true);
+    this.musicPlayer.setCompact(true);
 
     // ProfileHud in profile mode on title
     this.profileHud.showProfileMode(this.profilePopup.getName(), this.getProfileRankText());
@@ -1391,6 +1518,8 @@ export class GameScene extends Phaser.Scene {
       testSound.stop();
       testSound.destroy();
       this.musicPlayer.startTitleMusic();
+      this.musicPlayer.setVisible(true);
+      this.musicPlayer.setCompact(true);
       this.musicOverlayActive = false;
       this.playMusicOverlay.setVisible(false);
       this.profileHud.showProfileMode(this.profilePopup.getName(), this.getProfileRankText());
@@ -1405,6 +1534,8 @@ export class GameScene extends Phaser.Scene {
   private dismissMusicOverlay(): void {
     this.musicOverlayActive = false;
     this.musicPlayer.startTitleMusic();
+    this.musicPlayer.setVisible(true);
+    this.musicPlayer.setCompact(true);
     this.profileHud.showProfileMode(this.profilePopup.getName(), this.getProfileRankText());
     this.profileHud.setVisible(true);
     this.tweens.add({
@@ -1620,6 +1751,7 @@ export class GameScene extends Phaser.Scene {
     this.titleContainer.setVisible(false);
     this.titleLoopSprite.stop();
     this.titleLoopSprite.setVisible(false);
+    this.musicPlayer.setVisible(false);
 
     // Fade out profile HUD during countdown
     this.tweens.add({
@@ -1686,6 +1818,7 @@ export class GameScene extends Phaser.Scene {
     this.hudHighScore.setText(String(weeklyHigh).padStart(7, '0'));
     this.hudLabel.setVisible(true);
     this.hudHighScore.setVisible(true);
+    this.profileHud.setVisible(true);
     this.profileHud.showPlayingMode(this.profilePopup.getName());
     this.profileHud.setAlpha(0);
     this.tweens.add({
@@ -1850,11 +1983,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updatePlaying(dt: number): void {
-    // Drain gameplay input while popup is open (game world keeps running)
+    // Pause gameplay while profile popup is open
     if (this.profilePopup.isOpen()) {
       this.inputSystem.getAttackPressed();
       this.inputSystem.getRocketPressed();
       this.inputSystem.getSpeedTap();
+      return;
     }
 
     // Start-hold: freeze everything until spacebar after minimum 2s
@@ -1981,7 +2115,7 @@ export class GameScene extends Phaser.Scene {
         const t = Math.min(dist / slashWidth, 1); // 0 = left edge, 1 = right edge
         const bonus = Math.round(TUNING.KATANA_KILL_POINTS_MAX - t * t * (TUNING.KATANA_KILL_POINTS_MAX - TUNING.KATANA_KILL_POINTS_MIN));
         this.scoreSystem.addBonus(bonus);
-        this.spawnScorePopup(bonus);
+        this.spawnScorePopup(bonus, 'katana');
 
         // Only add permanent road speed outside rage (rage plows through too many)
         if (this.rageTimer <= 0) {
@@ -2061,12 +2195,16 @@ export class GameScene extends Phaser.Scene {
     this.pickupSystem.update(hDt, roadSpeed, playerCollX, playerCollY);
     if (this.pickupSystem.wasCollected()) {
       this.playerSystem.playCollectRocket();
+      this.scoreSystem.addBonus(TUNING.SCORE_PICKUP_ROCKET);
+      this.spawnScorePopup(TUNING.SCORE_PICKUP_ROCKET, 'rocket');
     }
 
     // Update shield pickups (scrolling + collection)
     this.shieldSystem.update(hDt, roadSpeed, playerCollX, playerCollY);
     if (this.shieldSystem.wasCollected()) {
       this.playerSystem.playCollectShield();
+      this.scoreSystem.addBonus(TUNING.SCORE_PICKUP_SHIELD);
+      this.spawnScorePopup(TUNING.SCORE_PICKUP_SHIELD, 'shield');
     }
 
     const pHalfW = TUNING.PLAYER_COLLISION_W / 2;
@@ -2082,10 +2220,11 @@ export class GameScene extends Phaser.Scene {
         this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 0.5, TUNING.SHAKE_DEATH_INTENSITY * 0.3);
         this.playerSystem.playCollectHit();
         for (let i = 0; i < hits.length; i++) {
-          if (hits[i].type === ObstacleType.CAR) {
-            this.scoreSystem.addBonus(TUNING.RAGE_CAR_KILL_BONUS);
-            this.spawnScorePopup(TUNING.RAGE_CAR_KILL_BONUS);
-          }
+          const pts = hits[i].type === ObstacleType.CAR
+            ? TUNING.SCORE_CAR_INVINCIBLE
+            : TUNING.SCORE_OBSTACLE_INVINCIBLE;
+          this.scoreSystem.addBonus(pts);
+          this.spawnScorePopup(pts, 'invincible');
         }
       }
       // Still check slow zones
@@ -2107,6 +2246,11 @@ export class GameScene extends Phaser.Scene {
           this.audioSystem.playExplosion();
           this.playerSystem.playCollectHit();
           if (!this.hudHidden) this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 0.5, TUNING.SHAKE_DEATH_INTENSITY * 0.5);
+          const shieldPts = result.hitType === ObstacleType.CAR
+            ? TUNING.SCORE_CAR_SHIELD
+            : TUNING.SCORE_OBSTACLE_SHIELD;
+          this.scoreSystem.addBonus(shieldPts);
+          this.spawnScorePopup(shieldPts, 'shield');
         } else {
           this.playerSystem.kill();
         }
@@ -2129,7 +2273,13 @@ export class GameScene extends Phaser.Scene {
         this.audioSystem.setDistortion(0);
 
         // End-of-rage shockwave: big explosion + destroy all obstacles to protect player
-        this.obstacleSystem.destroyAllOnScreen(TUNING.RAGE_END_EXPLOSION_SCALE);
+        const rageEndResult = this.obstacleSystem.destroyAllOnScreen(TUNING.RAGE_END_EXPLOSION_SCALE);
+        const rageEndPts = rageEndResult.obstacles * TUNING.SCORE_RAGE_END_OBSTACLE
+          + rageEndResult.cars * TUNING.SCORE_RAGE_END_CAR;
+        if (rageEndPts > 0) {
+          this.scoreSystem.addBonus(rageEndPts);
+          this.spawnScorePopup(rageEndPts, 'invincible');
+        }
         this.obstacleSystem.spawnExplosion(this.playerSystem.getX(), this.playerSystem.getY(), TUNING.RAGE_END_EXPLOSION_SCALE);
         this.audioSystem.playExplosion();
         if (!this.hudHidden) this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 2, TUNING.SHAKE_DEATH_INTENSITY * 1.5);
@@ -2150,6 +2300,9 @@ export class GameScene extends Phaser.Scene {
 
     // FX: speed lines + edge warnings
     this.fxSystem.update(hDt, this.playerSystem.getPlayerSpeed(), roadSpeed, this.playerSystem.getX());
+
+    // Rainbow-cycle active score popups
+    this.updateScorePopupRainbow();
 
     // Audio: engine pitch/volume
     this.audioSystem.updateEngine(this.playerSystem.getPlayerSpeed(), roadSpeed, this.inputSystem.isSpaceHeld());
@@ -2621,7 +2774,16 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setScroll(centerX - TUNING.GAME_WIDTH / 2, centerY - TUNING.GAME_HEIGHT / 2);
   }
 
-  private spawnScorePopup(points: number): void {
+  // Color palettes for score popups by interaction type
+  private static readonly POPUP_COLORS: Record<string, string[]> = {
+    shield:     ['#FF4444', '#FF7777', '#CC2222'],   // red monochrome (main, pale, dark)
+    rocket:     ['#FFDD00', '#FFEE55', '#CCB000'],   // yellow monochrome (main, pale, dark)
+    katana:     ['#88FF00', '#AAFF44', '#66CC00'],   // lime green monochrome (main, pale, dark)
+    invincible: ['#FF0000', '#FF8800', '#FFFF00', '#00FF00', '#00CCFF', '#0044FF', '#FF00FF'], // rainbow
+    default:    ['#FFFFFF', '#EEEEEE', '#DDDDDD'],   // white monochrome
+  };
+
+  private spawnScorePopup(points: number, popupType: string = 'default'): void {
     // Reuse an inactive popup or create a new one
     let popup: Phaser.GameObjects.Text | null = null;
     for (let i = 0; i < this.scorePopups.length; i++) {
@@ -2632,29 +2794,69 @@ export class GameScene extends Phaser.Scene {
     }
     if (!popup) {
       popup = this.add.text(0, 0, '', {
-        fontSize: '28px',
-        color: '#ffcc00',
-        fontFamily: 'monospace',
+        fontSize: `${TUNING.SCORE_POPUP_FONT_SIZE}px`,
+        color: '#ffffff',
+        fontFamily: 'Early GameBoy',
         fontStyle: 'bold',
       }).setOrigin(0.5).setDepth(100);
       this.scorePopups.push(popup);
     }
 
     popup.setText(`+${points}`);
-    popup.setPosition(this.playerSystem.getX(), this.playerSystem.getY() - 40);
-    popup.setAlpha(1);
+    popup.setFontSize(TUNING.SCORE_POPUP_FONT_SIZE);
+    popup.setData('popupType', popupType);
+    const startX = this.playerSystem.getX() + TUNING.SCORE_POPUP_OFFSET_X;
+    const startY = this.playerSystem.getY() + TUNING.SCORE_POPUP_OFFSET_Y;
+    popup.setPosition(startX, startY);
+    popup.setAlpha(0);
     popup.setActive(true).setVisible(true);
 
+    const fadeInMs = TUNING.SCORE_POPUP_FADE_IN * 1000;
+    const holdMs = TUNING.SCORE_POPUP_HOLD * 1000;
+    const fadeOutMs = TUNING.SCORE_POPUP_FADE_OUT * 1000;
+    const totalMs = fadeInMs + holdMs + fadeOutMs;
+
+    // Upward travel over the full duration
     this.tweens.add({
       targets: popup,
-      y: popup.y - 60,
-      alpha: 0,
-      duration: TUNING.KATANA_KILL_POPUP_DURATION * 1000,
-      ease: 'Power2',
+      y: startY + TUNING.SCORE_POPUP_TRAVEL_Y,
+      duration: totalMs,
+      ease: TUNING.SCORE_POPUP_EASE,
+    });
+
+    // Opacity: fade in → hold → fade out
+    this.tweens.addCounter({
+      from: 0,
+      to: totalMs,
+      duration: totalMs,
+      onUpdate: (tween) => {
+        const t = tween.getValue() ?? 0;
+        if (t <= fadeInMs) {
+          popup!.setAlpha(fadeInMs > 0 ? t / fadeInMs : 1);
+        } else if (t <= fadeInMs + holdMs) {
+          popup!.setAlpha(1);
+        } else {
+          const fadeT = (t - fadeInMs - holdMs) / fadeOutMs;
+          popup!.setAlpha(1 - Math.min(fadeT, 1));
+        }
+      },
       onComplete: () => {
         popup!.setActive(false).setVisible(false);
       },
     });
+  }
+
+  /** Cycle active score popup colors through their palette (called every frame in updatePlaying). */
+  private updateScorePopupRainbow(): void {
+    const now = Date.now();
+    for (let i = 0; i < this.scorePopups.length; i++) {
+      const p = this.scorePopups[i];
+      if (!p.active) continue;
+      const type = (p.getData('popupType') as string) || 'default';
+      const colors = GameScene.POPUP_COLORS[type] || GameScene.POPUP_COLORS.default;
+      const idx = Math.floor(now / 80) % colors.length;
+      p.setColor(colors[idx]);
+    }
   }
 
   private updateDying(dt: number): void {
@@ -2759,10 +2961,8 @@ export class GameScene extends Phaser.Scene {
           this.deathWhiteOverlay.setVisible(false);
           this.dyingPhase = 'done';
 
-          // Show profileHud in profile mode
-          const profileName = this.profilePopup.getName();
-          this.profileHud.showProfileMode(profileName, this.getProfileRankText());
-          this.profileHud.setVisible(true);
+          // Hide profileHud on death/high-score screens
+          this.profileHud.setVisible(false);
 
           // NOW activate the actual state
           if (!this.autoSubmitted) {
@@ -2992,9 +3192,15 @@ export class GameScene extends Phaser.Scene {
       const ring = this.add.circle(avatarX, rowCenterY, DLB_T3_AVATAR_R + DLB_T3_AVATAR_STROKE, DLB_T3_MEDAL_COLORS[i]);
       this.deathLbEntriesContainer.add(ring);
 
-      if (e.isCurrentPlayer && hasAvatar) {
-        const avatar = this.add.image(avatarX, rowCenterY, AVATAR_TEXTURE_KEY)
+      // Avatar: current player gets their pic, others get default anon
+      const avatarKey = (i === highlightIdx && hasAvatar) ? AVATAR_TEXTURE_KEY : 'default-avatar';
+      if (this.textures.exists(avatarKey)) {
+        const avatar = this.add.image(avatarX, rowCenterY, avatarKey)
           .setDisplaySize(DLB_T3_AVATAR_R * 2, DLB_T3_AVATAR_R * 2);
+        // Circular mask
+        const maskGfx = this.make.graphics({});
+        maskGfx.fillCircle(avatarX, rowCenterY, DLB_T3_AVATAR_R);
+        avatar.setMask(maskGfx.createGeometryMask());
         this.deathLbEntriesContainer.add(avatar);
       } else {
         const inner = this.add.circle(avatarX, rowCenterY, DLB_T3_AVATAR_R, 0x222222);
@@ -3005,38 +3211,42 @@ export class GameScene extends Phaser.Scene {
         this.deathLbEntriesContainer.add(numLabel);
       }
 
-      // Rank
-      let nextX = DLB_T3_X + DLB_T3_RANK_X;
-      const rankT = this.add.text(nextX, rowCenterY, `${String(i + 1).padStart(2, ' ')}.`, {
+      // Rank (right-justified so "." aligns)
+      const rankT = this.add.text(DLB_T3_X + DLB_T3_RANK_X, rowCenterY, `${String(i + 1).padStart(2, ' ')}.`, {
         fontSize: DLB_T3_FONT, color, fontFamily: 'Early GameBoy',
-      }).setOrigin(0, 0.5);
+      }).setOrigin(1, 0.5);
       this.deathLbEntriesContainer.add(rankT);
       rowTexts.push(rankT);
 
-      // Name — push right if rank text overflows its slot
-      nextX = Math.max(DLB_T3_X + DLB_T3_NAME_X, rankT.x + rankT.width + DLB_GAP);
-      const nameT = this.add.text(nextX, rowCenterY, (e.name || 'ANON').padEnd(NAME_MAX_LENGTH, ' '), {
+      // Name (left-justified)
+      const nameT = this.add.text(DLB_T3_X + DLB_T3_NAME_X, rowCenterY, (e.name || 'ANON'), {
         fontSize: DLB_T3_FONT, color, fontFamily: 'Early GameBoy',
       }).setOrigin(0, 0.5);
       this.deathLbEntriesContainer.add(nameT);
       rowTexts.push(nameT);
 
-      // Time — push right if name overflows its slot
-      nextX = Math.max(DLB_T3_X + DLB_T3_TIME_X, nameT.x + nameT.width + DLB_GAP);
-      const timeT = this.add.text(nextX, rowCenterY, `${e.time}s`, {
+      // Time (right-justified)
+      const timeT = this.add.text(DLB_T3_X + DLB_T3_TIME_X, rowCenterY, `${e.time}s`, {
         fontSize: DLB_T3_FONT, color, fontFamily: 'Early GameBoy',
-      }).setOrigin(0, 0.5);
+      }).setOrigin(1, 0.5);
       this.deathLbEntriesContainer.add(timeT);
       rowTexts.push(timeT);
 
-      // Score + marker — push right if time overflows its slot
-      const marker = (i === highlightIdx) ? ' ◄' : '';
-      nextX = Math.max(DLB_T3_X + DLB_T3_SCORE_X, timeT.x + timeT.width + DLB_GAP);
-      const scoreT = this.add.text(nextX, rowCenterY, `${String(e.score).padStart(8, ' ')}${marker}`, {
+      // Score (right-justified)
+      const scoreT = this.add.text(DLB_T3_X + DLB_T3_SCORE_X, rowCenterY, String(e.score), {
         fontSize: DLB_T3_FONT, color, fontFamily: 'Early GameBoy',
-      }).setOrigin(0, 0.5);
+      }).setOrigin(1, 0.5);
       this.deathLbEntriesContainer.add(scoreT);
       rowTexts.push(scoreT);
+
+      // ◄ marker (separate element)
+      if (i === highlightIdx) {
+        const markerT = this.add.text(DLB_T3_X + DLB_T3_MARKER_X, rowCenterY, '◄', {
+          fontSize: DLB_T3_FONT, color: '#ffffff', fontFamily: 'Early GameBoy',
+        }).setOrigin(0, 0.5);
+        this.deathLbEntriesContainer.add(markerT);
+        rowTexts.push(markerT);
+      }
 
       if (i === highlightIdx) this.highlightedRowTexts = rowTexts;
       curY += DLB_T3_ROW_H;
@@ -3050,38 +3260,42 @@ export class GameScene extends Phaser.Scene {
       const color = (i === highlightIdx) ? '#ffffff' : '#aaaaaa';
       const rowTexts: Phaser.GameObjects.Text[] = [];
 
-      // Rank
-      let nextX = DLB_REST_X + DLB_REST_RANK_X;
-      const rankT = this.add.text(nextX, rowCenterY, `${String(i + 1).padStart(2, ' ')}.`, {
+      // Rank (right-justified so "." aligns with top 3)
+      const rankT = this.add.text(DLB_T3_X + DLB_T3_RANK_X, rowCenterY, `${String(i + 1).padStart(2, ' ')}.`, {
         fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
-      }).setOrigin(0, 0.5);
+      }).setOrigin(1, 0.5);
       this.deathLbEntriesContainer.add(rankT);
       rowTexts.push(rankT);
 
-      // Name
-      nextX = Math.max(DLB_REST_X + DLB_REST_NAME_X, rankT.x + rankT.width + DLB_GAP);
-      const nameT = this.add.text(nextX, rowCenterY, (e.name || 'ANON').padEnd(NAME_MAX_LENGTH, ' '), {
+      // Name (left-justified)
+      const nameT = this.add.text(DLB_T3_X + DLB_T3_NAME_X, rowCenterY, (e.name || 'ANON'), {
         fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
       }).setOrigin(0, 0.5);
       this.deathLbEntriesContainer.add(nameT);
       rowTexts.push(nameT);
 
-      // Time
-      nextX = Math.max(DLB_REST_X + DLB_REST_TIME_X, nameT.x + nameT.width + DLB_GAP);
-      const timeT = this.add.text(nextX, rowCenterY, `${e.time}s`, {
+      // Time (right-justified)
+      const timeT = this.add.text(DLB_T3_X + DLB_T3_TIME_X, rowCenterY, `${e.time}s`, {
         fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
-      }).setOrigin(0, 0.5);
+      }).setOrigin(1, 0.5);
       this.deathLbEntriesContainer.add(timeT);
       rowTexts.push(timeT);
 
-      // Score + marker
-      const marker = (i === highlightIdx) ? ' ◄' : '';
-      nextX = Math.max(DLB_REST_X + DLB_REST_SCORE_X, timeT.x + timeT.width + DLB_GAP);
-      const scoreT = this.add.text(nextX, rowCenterY, `${String(e.score).padStart(8, ' ')}${marker}`, {
+      // Score (right-justified)
+      const scoreT = this.add.text(DLB_T3_X + DLB_T3_SCORE_X, rowCenterY, String(e.score), {
         fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
-      }).setOrigin(0, 0.5);
+      }).setOrigin(1, 0.5);
       this.deathLbEntriesContainer.add(scoreT);
       rowTexts.push(scoreT);
+
+      // ◄ marker (separate element)
+      if (i === highlightIdx) {
+        const markerT = this.add.text(DLB_T3_X + DLB_T3_MARKER_X, rowCenterY, '◄', {
+          fontSize: DLB_REST_FONT, color: '#ffffff', fontFamily: 'Early GameBoy',
+        }).setOrigin(0, 0.5);
+        this.deathLbEntriesContainer.add(markerT);
+        rowTexts.push(markerT);
+      }
 
       if (i === highlightIdx) this.highlightedRowTexts = rowTexts;
       curY += DLB_REST_ROW_H;
@@ -3159,19 +3373,26 @@ export class GameScene extends Phaser.Scene {
       // Submit score with name
       const name = this.enteredName.trim() || 'ANON';
       const rank = this.leaderboardSystem.submit(name, this.pendingScore, this.elapsed);
+
+      // Hide name entry UI, transition to DEAD (death screen shell already visible from hold phase)
+      this.nameEntryContainer.setVisible(false);
+      this.nameEnterBtn.setVisible(false);
+      this.state = GameState.DEAD;
+      this.deadInputDelay = 0.5;
+
+      // Async submit + fetch — render ONLY in .finally() to avoid local→global flash
       const gen3 = this.deathGen;
       submitScore(this.pendingScore, this.elapsed, name).then(id => {
         if (gen3 !== this.deathGen) return;
         this.lastSubmittedRunId = id;
         return fetchGlobalTop10(this.weekKey);
       }).then(data => {
-        if (gen3 !== this.deathGen || !data) return;
-        this.globalLeaderboardData = data;
+        if (gen3 !== this.deathGen) return;
+        if (data) this.globalLeaderboardData = data;
+      }).catch(() => {}).finally(() => {
+        if (gen3 !== this.deathGen) return;
         this.prepareDeathScreenVisuals(rank);
-      }).catch(() => { /* keep local fallback */ });
-      this.nameEntryContainer.setVisible(false);
-      this.nameEnterBtn.setVisible(false);
-      this.showDeathScreen(rank);
+      });
     }
   }
 
