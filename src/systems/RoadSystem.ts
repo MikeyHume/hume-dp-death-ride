@@ -35,6 +35,8 @@ export class RoadSystem {
     this.roadTile.setVisible(visible);
   }
 
+  getRoadTile(): Phaser.GameObjects.TileSprite { return this.roadTile; }
+
   destroy(): void {
     this.roadTile.destroy();
   }

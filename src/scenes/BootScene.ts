@@ -88,7 +88,8 @@ export class BootScene extends Phaser.Scene {
       frameHeight: TUNING.PICKUP_FRAME_SIZE,
     });
     this.load.image('obstacle-crash', 'assets/obstacles/road_barrier_01.png');
-    this.load.image('puddle-mask', 'assets/background/puddle_mask_01.png');
+    this.load.image('obstacle-reflection-alt', 'assets/obstacles/road_barrier_01_reflection_alt.png');
+    this.load.image('puddle-tex', 'assets/background/puddle example.png');
     this.load.image('road-img', 'assets/background/road.jpg');
     this.load.image('sky-img', 'assets/background/sky.jpg');
     this.load.image('buildings-back', 'assets/background/buildings_back_row_dark.png');
@@ -299,27 +300,6 @@ export class BootScene extends Phaser.Scene {
       frameRate: TUNING.SPEEDUP_FPS,
       repeat: 0,
     });
-
-    // Puddle texture: convert mask brightness to alpha (white=visible, black=transparent)
-    // Single mask stretched to any puddle width by Phaser's setDisplaySize
-    {
-      const maskSrc = this.textures.get('puddle-mask').getSourceImage() as HTMLImageElement;
-      const maskW = maskSrc.width;
-      const maskH = maskSrc.height;
-      const canvasTex = this.textures.createCanvas('puddle-tex', maskW, maskH);
-      const ctx = canvasTex!.getContext();
-      ctx.drawImage(maskSrc, 0, 0);
-      const imgData = ctx.getImageData(0, 0, maskW, maskH);
-      for (let p = 0; p < imgData.data.length; p += 4) {
-        const brightness = imgData.data[p]; // R channel (grayscale)
-        imgData.data[p] = 255;     // R
-        imgData.data[p + 1] = 255; // G
-        imgData.data[p + 2] = 255; // B
-        imgData.data[p + 3] = brightness; // A
-      }
-      ctx.putImageData(imgData, 0, 0);
-      canvasTex!.refresh();
-    }
 
     // Car drive animations (20 sprite sheets, 59 usable frames each at 12fps)
     for (let c = 1; c <= TUNING.CAR_COUNT; c++) {

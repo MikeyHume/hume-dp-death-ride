@@ -147,6 +147,11 @@ export const TUNING = {
   REFLECTION_ALPHA: 1.0,           // opacity of reflected background layers (0-1)
   REFLECTION_OFFSET_Y: 0,         // vertical offset of reflection group (px, positive = down)
   REFLECTION_SCALE_Y: 1.0,        // vertical scale of reflection, anchored at mirror line (top of flipped group)
+  REFLECTION_OBJ_PIVOT_Y: -3,      // barrier: px offset from sprite bottom edge (0 = flip at bottom, negative = higher, positive = lower)
+  REFLECTION_CAR_PIVOT_Y: -33,       // car: px offset from sprite bottom edge (0 = flip at bottom, negative = higher, positive = lower)
+  REFLECTION_PLAYER_PIVOT_Y: 0,    // player: px offset from sprite bottom edge
+  REFLECTION_PICKUP_PIVOT_Y: 0,    // pickups (rocket + shield): px offset from sprite bottom edge
+  REFLECTION_ROCKET_PIVOT_Y: 43,    // rocket projectile: px offset from sprite bottom edge
 
   // Obstacles — car (animated sprites, instant death, moves slower than road)
   CAR_COUNT: 20,                    // number of car sprite sheets
@@ -155,8 +160,10 @@ export const TUNING = {
   CAR_ANIM_FRAMES: 59,              // usable frames per sheet (61 total, last 2 empty)
   CAR_SPEED_FACTOR: 0.65,           // cars travel at this fraction of road speed (scroll left slower)
   CAR_DISPLAY_SCALE: 0.80,          // visual scale multiplier for car sprites (1.0 = fill lane)
-  CAR_COLLISION_WIDTH_RATIO: 0.8,   // ellipse width = 8/10 of sprite width
-  CAR_COLLISION_HEIGHT_RATIO: 0.667, // ellipse height = 2/3 of sprite height, bottom-aligned
+  CAR_COLLISION_W: 0.8,             // hitbox width as fraction of sprite width
+  CAR_COLLISION_H: 0.667,           // hitbox height as fraction of sprite height
+  CAR_COLLISION_OFFSET_X: 0,        // hitbox X offset from sprite center (px, positive = right)
+  CAR_COLLISION_OFFSET_Y: 0,        // hitbox Y offset from sprite center (px, positive = down)
 
   // Explosions (car-vs-crash collision)
   EXPLOSION_FRAME_SIZE: 440,       // px per frame in sprite sheet (square)

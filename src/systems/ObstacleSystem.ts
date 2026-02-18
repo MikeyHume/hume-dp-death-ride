@@ -306,11 +306,11 @@ export class ObstacleSystem {
         const statW = stat.getData('w') as number;
         const statH = stat.getData('h') as number;
 
-        // Use car's collision ellipse dimensions for Y overlap (prevents cross-lane triggers)
-        const carCollH = carH * TUNING.CAR_COLLISION_HEIGHT_RATIO;
-        const carCollCenterY = car.y + (carH - carCollH) / 2;
-        const overlapX = Math.abs(car.x - stat.x) < (carW + statW) / 2;
-        const overlapY = Math.abs(carCollCenterY - stat.y) < (carCollH + statH) / 2;
+        // Use car's collision rect for Y overlap (prevents cross-lane triggers)
+        const carCollW = carW * TUNING.CAR_COLLISION_W;
+        const carCollH = carH * TUNING.CAR_COLLISION_H;
+        const overlapX = Math.abs((car.x + TUNING.CAR_COLLISION_OFFSET_X) - stat.x) < (carCollW + statW) / 2;
+        const overlapY = Math.abs((car.y + TUNING.CAR_COLLISION_OFFSET_Y) - stat.y) < (carCollH + statH) / 2;
 
         if (overlapX && overlapY) {
           const ex = (car.x + stat.x) / 2;
@@ -438,7 +438,7 @@ export class ObstacleSystem {
         const skin = this.nextCarSkin();
         textureKey = `car-${String(skin).padStart(3, '0')}`;
         // Scale so collision ellipse height fills exactly one lane
-        h = this.laneHeight / TUNING.CAR_COLLISION_HEIGHT_RATIO;
+        h = this.laneHeight / TUNING.CAR_COLLISION_H;
         w = h * (TUNING.CAR_FRAME_WIDTH / TUNING.CAR_FRAME_HEIGHT);
         break;
       }
@@ -483,10 +483,10 @@ export class ObstacleSystem {
     }
     obs.setPosition(x, y);
 
-    // Shift car sprite up so collision ellipse center aligns with lane center
+    // Shift car sprite up so collision rect center aligns with lane center
     if (type === ObstacleType.CAR) {
-      const collisionOffsetY = (h - h * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
-      obs.y -= collisionOffsetY;
+      const spriteShift = (h - h * TUNING.CAR_COLLISION_H) / 2;
+      obs.y -= spriteShift;
     }
 
     obs.setDepth(type === ObstacleType.SLOW ? 1 : obs.y + 0.1);
@@ -538,12 +538,11 @@ export class ObstacleSystem {
 
       if (type === ObstacleType.CAR) {
         // Player rect vs car rect (AABB)
-        const halfW = (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2;
-        const halfH = (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
-        const coy = (obsH - obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
+        const halfW = (obsW * TUNING.CAR_COLLISION_W) / 2;
+        const halfH = (obsH * TUNING.CAR_COLLISION_H) / 2;
 
-        const overlapX = Math.abs(playerX - obs.x) < (halfW + playerHalfW);
-        const overlapY = Math.abs(playerY - (obs.y + coy)) < (halfH + playerHalfH);
+        const overlapX = Math.abs(playerX - (obs.x + TUNING.CAR_COLLISION_OFFSET_X)) < (halfW + playerHalfW);
+        const overlapY = Math.abs(playerY - (obs.y + TUNING.CAR_COLLISION_OFFSET_Y)) < (halfH + playerHalfH);
 
         if (overlapX && overlapY) {
           this.collisionResult.crashed = true;
@@ -623,11 +622,11 @@ export class ObstacleSystem {
 
       if (type === ObstacleType.CAR || type === ObstacleType.SLOW) {
         // Projectile circle vs car/puddle rect (AABB)
-        const halfW = type === ObstacleType.CAR ? (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2 : obsW / 2;
-        const halfH = type === ObstacleType.CAR ? (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2 : obsH / 2;
-        const coy = type === ObstacleType.CAR ? (obsH - obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2 : 0;
-        const cy = obs.y + coy;
-        const closestX = Math.max(obs.x - halfW, Math.min(projX, obs.x + halfW));
+        const halfW = type === ObstacleType.CAR ? (obsW * TUNING.CAR_COLLISION_W) / 2 : obsW / 2;
+        const halfH = type === ObstacleType.CAR ? (obsH * TUNING.CAR_COLLISION_H) / 2 : obsH / 2;
+        const cx = obs.x + (type === ObstacleType.CAR ? TUNING.CAR_COLLISION_OFFSET_X : 0);
+        const cy = obs.y + (type === ObstacleType.CAR ? TUNING.CAR_COLLISION_OFFSET_Y : 0);
+        const closestX = Math.max(cx - halfW, Math.min(projX, cx + halfW));
         const closestY = Math.max(cy - halfH, Math.min(projY, cy + halfH));
         const dx = projX - closestX;
         const dy = projY - closestY;
@@ -678,11 +677,10 @@ export class ObstacleSystem {
 
       if (type === ObstacleType.CAR) {
         // Rage player rect vs car rect (AABB)
-        const halfW = (obsW * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2;
-        const halfH = (obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
-        const coy = (obsH - obsH * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
-        const overlapX = Math.abs(playerX - obs.x) < (halfW + playerHalfW);
-        const overlapY = Math.abs(playerY - (obs.y + coy)) < (halfH + playerHalfH);
+        const halfW = (obsW * TUNING.CAR_COLLISION_W) / 2;
+        const halfH = (obsH * TUNING.CAR_COLLISION_H) / 2;
+        const overlapX = Math.abs(playerX - (obs.x + TUNING.CAR_COLLISION_OFFSET_X)) < (halfW + playerHalfW);
+        const overlapY = Math.abs(playerY - (obs.y + TUNING.CAR_COLLISION_OFFSET_Y)) < (halfH + playerHalfH);
         colliding = overlapX && overlapY;
       } else {
         const overlapX = Math.abs(playerX - obs.x) < (obsW / 2 + playerHalfW);

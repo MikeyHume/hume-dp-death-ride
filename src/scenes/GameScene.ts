@@ -65,7 +65,8 @@ const DEBUG_HOTKEYS = {
   showHelp:       { key: 'PLUS',    active: true  },  // toggle debug panel (always active)
   showCollisions: { key: 'MINUS',   active: false },  // toggle collision hitbox overlay
   startHold:      { key: 'BACKTICK', active: false }, // skip the start hold phase
-  toggleRefMask:  { key: 'M',       active: true },  // toggle puddle reflection mask
+  toggleRefMask:  { key: 'R',       active: true },  // toggle puddle reflection mask
+  freezeFrame:    { key: 'T',       active: true },  // freeze all movement for frame analysis
 
 };
 
@@ -196,6 +197,7 @@ export class GameScene extends Phaser.Scene {
   private debugHelpContainer!: Phaser.GameObjects.Container;
   private debugPanelOpen: boolean = false;
   private debugMasterEnabled: boolean = true;
+  private debugFrozen: boolean = false;
   private debugPanelRows: { label: string; text: Phaser.GameObjects.Text }[] = [];
   private debugMasterText!: Phaser.GameObjects.Text;
   private debugVolumeBg!: Phaser.GameObjects.Rectangle;
@@ -341,11 +343,14 @@ export class GameScene extends Phaser.Scene {
     this.parallaxSystem = new ParallaxSystem(this);
     this.roadSystem = new RoadSystem(this);
     this.obstacleSystem = new ObstacleSystem(this, this.weekSeed);
-    this.reflectionSystem = new ReflectionSystem(this, this.parallaxSystem, this.obstacleSystem.getPool());
+    this.reflectionSystem = new ReflectionSystem(this, this.parallaxSystem, this.obstacleSystem.getPool(), this.roadSystem.getRoadTile());
     this.pickupSystem = new PickupSystem(this);
     this.rocketSystem = new RocketSystem(this, this.obstacleSystem);
 
     this.shieldSystem = new ShieldSystem(this);
+    this.reflectionSystem.setPickupPool(this.pickupSystem.getPool());
+    this.reflectionSystem.setShieldPool(this.shieldSystem.getPool());
+    this.reflectionSystem.setRocketPool(this.rocketSystem.getPool());
 
     // Wire obstacle system to spawn pickups behind CRASH obstacles
     this.obstacleSystem.onPickupSpawn = (x: number, y: number) => {
@@ -368,6 +373,7 @@ export class GameScene extends Phaser.Scene {
     this.difficultySystem = new DifficultySystem();
     this.inputSystem = new InputSystem(this);
     this.playerSystem = new PlayerSystem(this, this.inputSystem);
+    this.reflectionSystem.setPlayerSprite(this.playerSystem.getSprite());
     this.scoreSystem = new ScoreSystem();
     this.fxSystem = new FXSystem(this);
     this.audioSystem = new AudioSystem(this);
@@ -969,6 +975,11 @@ export class GameScene extends Phaser.Scene {
       if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.toggleRefMask.active || this.debugPanelOpen) return;
       this.reflectionSystem.toggleMask();
     });
+    // Freeze frame toggle (T)
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.freezeFrame.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.freezeFrame.active || this.debugPanelOpen) return;
+      this.debugFrozen = !this.debugFrozen;
+    });
     // Road toggle (key 9)
     let roadVisible = true;
     this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleRoad.key).on('down', () => {
@@ -1102,6 +1113,7 @@ export class GameScene extends Phaser.Scene {
         { label: 'spritePosition', key: DEBUG_HOTKEYS.spritePosition.key,  desc: 'Sprite position ←→' },
         { label: 'preStartOverlay',key: DEBUG_HOTKEYS.preStartOverlay.key, desc: 'Pre-start last frame' },
         { label: 'toggleRefMask',   key: DEBUG_HOTKEYS.toggleRefMask.key,   desc: 'Reflection mask' },
+        { label: 'freezeFrame',    key: DEBUG_HOTKEYS.freezeFrame.key,     desc: 'Freeze frame' },
         { label: 'showCollisions',  key: '-',                               desc: 'Collision hitboxes' },
         { label: 'startHold',       key: '`',                               desc: 'Skip start hold' },
       ];
@@ -1116,7 +1128,7 @@ export class GameScene extends Phaser.Scene {
       });
       this.debugHelpContainer.add(titleT);
       y += lineH;
-      const divider = this.add.text(pad + 30, y, '  ─────────────────────────────────────', {
+      const divider = this.add.text(pad + 30, y, '  ──────────────────────────────────────────────────────────────────────', {
         fontFamily: 'monospace', fontSize: `${fontSize}px`, color: '#444444',
       });
       this.debugHelpContainer.add(divider);
@@ -1129,16 +1141,23 @@ export class GameScene extends Phaser.Scene {
       this.debugHelpContainer.add(this.debugMasterText);
       y += lineH + 8;
 
-      // Hotkey rows
+      // Hotkey rows — two-column layout
       this.debugPanelRows = [];
-      for (const entry of panelEntries) {
-        const rowText = this.add.text(pad + 30, y, '', {
+      const colWidth = 460;
+      const halfCount = Math.ceil(panelEntries.length / 2);
+      const startY = y;
+      for (let i = 0; i < panelEntries.length; i++) {
+        const col = i < halfCount ? 0 : 1;
+        const row = i < halfCount ? i : i - halfCount;
+        const xPos = pad + 30 + col * colWidth;
+        const yPos = startY + row * lineH;
+        const rowText = this.add.text(xPos, yPos, '', {
           fontFamily: 'monospace', fontSize: `${fontSize}px`, color: '#ff4444',
         });
         this.debugHelpContainer.add(rowText);
-        this.debugPanelRows.push({ label: entry.label, text: rowText });
-        y += lineH;
+        this.debugPanelRows.push({ label: panelEntries[i].label, text: rowText });
       }
+      y = startY + halfCount * lineH;
 
       // Footer
       y += 8;
@@ -1148,8 +1167,9 @@ export class GameScene extends Phaser.Scene {
       this.debugHelpContainer.add(footerT);
       y += lineH;
 
-      // Background (sized to fit)
-      this.debugHelpBg = this.add.rectangle(pad, pad, 880, y - pad + 20, 0x000000, 0.94)
+      // Background (sized to fit both columns)
+      const bgWidth = pad + 30 + colWidth * 2 + 30;
+      this.debugHelpBg = this.add.rectangle(pad, pad, bgWidth, y - pad + 20, 0x000000, 0.94)
         .setOrigin(0, 0).setDepth(9998).setScrollFactor(0).setVisible(false);
 
       // Refresh panel text colors
@@ -1255,6 +1275,9 @@ export class GameScene extends Phaser.Scene {
     this.cursorMain.setPosition(ptr.x, ptr.y);
     this.cursorStroke?.setPosition(ptr.x, ptr.y);
     this.crosshair.setPosition(ptr.x, ptr.y);
+
+    // Debug freeze — stop all game logic, cursor still tracks
+    if (this.debugFrozen) return;
 
     // Fade cursor/crosshair when hovering over music UI overlay
     const overUI = this.musicPlayer.isCursorOverUI();
@@ -2175,14 +2198,15 @@ export class GameScene extends Phaser.Scene {
       const h = obs.getData('h') as number;
 
       if (type === ObstacleType.CAR) {
-        // Ellipse: bottom-aligned, width * 0.8, height * 0.667
-        const a = (w * TUNING.CAR_COLLISION_WIDTH_RATIO) / 2;
-        const b = (h * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
-        const coy = (h - h * TUNING.CAR_COLLISION_HEIGHT_RATIO) / 2;
+        // Rectangle hitbox
+        const halfW = (w * TUNING.CAR_COLLISION_W) / 2;
+        const halfH = (h * TUNING.CAR_COLLISION_H) / 2;
+        const cx = obs.x + TUNING.CAR_COLLISION_OFFSET_X;
+        const cy = obs.y + TUNING.CAR_COLLISION_OFFSET_Y;
         g.lineStyle(2, 0xffffff, 1);
         g.fillStyle(0xffffff, ALPHA);
-        g.fillEllipse(obs.x, obs.y + coy, a * 2, b * 2);
-        g.strokeEllipse(obs.x, obs.y + coy, a * 2, b * 2);
+        g.fillRect(cx - halfW, cy - halfH, halfW * 2, halfH * 2);
+        g.strokeRect(cx - halfW, cy - halfH, halfW * 2, halfH * 2);
       } else if (type === ObstacleType.SLOW) {
         // Blue ellipse
         g.lineStyle(2, 0x0066ff, 1);

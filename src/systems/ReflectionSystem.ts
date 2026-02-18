@@ -15,19 +15,30 @@ export class ReflectionSystem {
   private reflectedSky: Phaser.GameObjects.Image;
   private sourceSky: Phaser.GameObjects.Image;
 
-  // Puddle mask (BitmapMask — uses puddle texture alpha for organic shapes)
+  // Puddle mask applied to the ROAD (inverted — cuts holes where puddles are)
   private maskRT: Phaser.GameObjects.RenderTexture;
   private puddleMask: Phaser.Display.Masks.BitmapMask;
   private obstaclePool: readonly Phaser.GameObjects.Sprite[];
+  private roadTile: Phaser.GameObjects.TileSprite;
   private maskEnabled: boolean = true;
+
+  // Game object reflections (drawn onto a RenderTexture above bg reflections, below road)
+  private objectRT: Phaser.GameObjects.RenderTexture;
+  private stamp: Phaser.GameObjects.Sprite;
+  private playerSprite: Phaser.GameObjects.Sprite | null = null;
+  private pickupPool: readonly Phaser.GameObjects.Sprite[] = [];
+  private shieldPool: readonly Phaser.GameObjects.Sprite[] = [];
+  private rocketPool: readonly Phaser.GameObjects.Sprite[] = [];
 
   constructor(
     scene: Phaser.Scene,
     parallaxSystem: ParallaxSystem,
     obstaclePool: readonly Phaser.GameObjects.Sprite[],
+    roadTile: Phaser.GameObjects.TileSprite,
   ) {
     this.scene = scene;
     this.obstaclePool = obstaclePool;
+    this.roadTile = roadTile;
     this.sourceLayers = parallaxSystem.getLayers();
     this.sourceSky = parallaxSystem.getSky();
     const sourceTexKeys = parallaxSystem.getTextureKeys();
@@ -36,7 +47,10 @@ export class ReflectionSystem {
     const railing = this.sourceLayers[0];
     this.mirrorY = railing.y + railing.height / 2;
 
-    const scaleY = TUNING.REFLECTION_SCALE_Y;
+    // Auto-scale reflection to fill from mirrorY to bottom of screen
+    // REFLECTION_SCALE_Y acts as a multiplier on top of the auto-computed base
+    const baseScaleY = (TUNING.GAME_HEIGHT - this.mirrorY) / this.mirrorY;
+    const scaleY = baseScaleY * TUNING.REFLECTION_SCALE_Y;
     const offsetY = TUNING.REFLECTION_OFFSET_Y;
     const alpha = TUNING.REFLECTION_ALPHA;
 
@@ -52,7 +66,7 @@ export class ReflectionSystem {
     this.reflectedSky.setScale(sky.scaleX, sky.scaleY * scaleY);
     this.reflectedSky.setAlpha(alpha);
     this.reflectedSky.setBlendMode(Phaser.BlendModes.NORMAL);
-    this.reflectedSky.setDepth(1.5);
+    this.reflectedSky.setDepth(-0.5);
 
     // --- Create reflected parallax layers (back to front for correct depth ordering) ---
     for (let i = this.sourceLayers.length - 1; i >= 0; i--) {
@@ -80,26 +94,35 @@ export class ReflectionSystem {
 
       ref.setAlpha(alpha);
       ref.setBlendMode(Phaser.BlendModes.NORMAL);
-      // Front layers (lower i) render on top — give them higher depth
-      ref.setDepth(1.5 + (this.sourceLayers.length - i) * 0.001);
+      // Reflected layers below road (depth 0). Front layers (lower i) get higher depth.
+      ref.setDepth(-0.5 + (this.sourceLayers.length - i) * 0.001);
 
       this.reflectedLayers.push(ref);
     }
     // Reverse so reflectedLayers[i] corresponds to sourceLayers[i]
     this.reflectedLayers.reverse();
 
-    // --- Create puddle mask (BitmapMask with RenderTexture) ---
+    // --- Create puddle mask (BitmapMask with RenderTexture, applied to ROAD) ---
     // RT must be visible (willRender check), placed behind sky so player never sees it
     this.maskRT = scene.add.renderTexture(0, 0, TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT);
     this.maskRT.setOrigin(0, 0);
     this.maskRT.setDepth(-100);
     this.puddleMask = this.maskRT.createBitmapMask();
+    this.puddleMask.invertAlpha = true; // road visible where NO puddles, hidden where puddles are
 
-    // Apply mask to all reflected layers + sky
-    for (const ref of this.reflectedLayers) {
-      ref.setMask(this.puddleMask);
-    }
-    this.reflectedSky.setMask(this.puddleMask);
+    // Apply inverted mask to road — puddle holes reveal reflections underneath
+    this.roadTile.setMask(this.puddleMask);
+
+    // --- Game object reflection RT (above bg reflections, below road) ---
+    this.objectRT = scene.add.renderTexture(0, 0, TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT);
+    this.objectRT.setOrigin(0, 0);
+    this.objectRT.setDepth(-0.49);
+    this.objectRT.setAlpha(alpha);
+
+    // Stamp sprite: drawing proxy for flipping game objects onto the RT
+    this.stamp = scene.add.sprite(0, 0, 'obstacle-crash');
+    this.stamp.setDepth(-200);
+    this.stamp.setAlpha(0);
 
     // Start hidden (shown when entering PLAYING state)
     this.setVisible(false);
@@ -125,6 +148,119 @@ export class ReflectionSystem {
       this.maskRT.draw(obs);
       obs.setAlpha(0);
     }
+
+    // --- Draw reflected game objects onto objectRT ---
+    this.objectRT.clear();
+
+    // Obstacles — Y-mirror around sprite bottom edge + per-type tunable offset
+    const barrierPivot = TUNING.REFLECTION_OBJ_PIVOT_Y;
+    const carPivot = TUNING.REFLECTION_CAR_PIVOT_Y;
+    for (let i = 0; i < this.obstaclePool.length; i++) {
+      const src = this.obstaclePool[i];
+      if (!src.active || !src.visible) continue;
+      const type = src.getData('type') as ObstacleType;
+      if (type !== ObstacleType.CRASH && type !== ObstacleType.CAR) continue;
+
+      // Bottom edge of sprite accounts for origin and displayHeight (scales with lane)
+      const bottomY = src.y + src.displayHeight * (1 - src.originY);
+      const anchor = bottomY + (type === ObstacleType.CAR ? carPivot : barrierPivot);
+      const reflectedY = 2 * anchor - src.y;
+
+      const texKey = type === ObstacleType.CRASH ? 'obstacle-reflection-alt' : src.texture.key;
+      this.stamp.setTexture(texKey, src.frame.name);
+      this.stamp.setDisplaySize(src.displayWidth, src.displayHeight);
+      this.stamp.setFlipX(src.flipX);
+      this.stamp.setFlipY(!src.flipY);
+      this.stamp.setOrigin(src.originX, src.originY);
+      this.stamp.setPosition(src.x, reflectedY);
+      this.stamp.setAlpha(1);
+      this.objectRT.draw(this.stamp);
+      this.stamp.setAlpha(0);
+    }
+
+    // Player reflection
+    if (this.playerSprite && this.playerSprite.visible) {
+      const p = this.playerSprite;
+      const playerPivot = TUNING.REFLECTION_PLAYER_PIVOT_Y;
+      const bottomY = p.y + p.displayHeight * (1 - p.originY);
+      const anchor = bottomY + playerPivot;
+      const reflectedY = 2 * anchor - p.y;
+
+      this.stamp.setTexture(p.texture.key, p.frame.name);
+      this.stamp.setDisplaySize(p.displayWidth, p.displayHeight);
+      this.stamp.setFlipX(p.flipX);
+      this.stamp.setFlipY(!p.flipY);
+      this.stamp.setOrigin(p.originX, p.originY);
+      this.stamp.setPosition(p.x, reflectedY);
+      this.stamp.setAlpha(1);
+      this.objectRT.draw(this.stamp);
+      this.stamp.setAlpha(0);
+    }
+
+    // Pickup reflections (rockets + shields) — pivot around baseY (resting position),
+    // so hover up = reflection moves down, hover down = reflection moves up
+    const pickupPivot = TUNING.REFLECTION_PICKUP_PIVOT_Y;
+    const pools = [this.pickupPool, this.shieldPool];
+    for (let p = 0; p < pools.length; p++) {
+      const pool = pools[p];
+      for (let i = 0; i < pool.length; i++) {
+        const src = pool[i];
+        if (!src.active || !src.visible) continue;
+
+        // Use baseY (rest position) for the anchor so hover motion mirrors naturally
+        const baseY = (src.getData('baseY') as number) ?? src.y;
+        const bottomY = baseY + src.displayHeight * (1 - src.originY);
+        const anchor = bottomY + pickupPivot;
+        const reflectedY = 2 * anchor - src.y;
+
+        this.stamp.setTexture(src.texture.key, src.frame.name);
+        this.stamp.setDisplaySize(src.displayWidth, src.displayHeight);
+        this.stamp.setFlipX(src.flipX);
+        this.stamp.setFlipY(!src.flipY);
+        this.stamp.setOrigin(src.originX, src.originY);
+        this.stamp.setPosition(src.x, reflectedY);
+        this.stamp.setAlpha(1);
+        this.objectRT.draw(this.stamp);
+        this.stamp.setAlpha(0);
+      }
+    }
+
+    // Rocket projectile reflections
+    const rocketPivot = TUNING.REFLECTION_ROCKET_PIVOT_Y;
+    for (let i = 0; i < this.rocketPool.length; i++) {
+      const src = this.rocketPool[i];
+      if (!src.active || !src.visible) continue;
+
+      const bottomY = src.y + src.displayHeight * (1 - src.originY);
+      const anchor = bottomY + rocketPivot;
+      const reflectedY = 2 * anchor - src.y;
+
+      this.stamp.setTexture(src.texture.key, src.frame.name);
+      this.stamp.setDisplaySize(src.displayWidth, src.displayHeight);
+      this.stamp.setFlipX(src.flipX);
+      this.stamp.setFlipY(!src.flipY);
+      this.stamp.setOrigin(src.originX, src.originY);
+      this.stamp.setPosition(src.x, reflectedY);
+      this.stamp.setAlpha(1);
+      this.objectRT.draw(this.stamp);
+      this.stamp.setAlpha(0);
+    }
+  }
+
+  setPlayerSprite(sprite: Phaser.GameObjects.Sprite): void {
+    this.playerSprite = sprite;
+  }
+
+  setPickupPool(pool: readonly Phaser.GameObjects.Sprite[]): void {
+    this.pickupPool = pool;
+  }
+
+  setShieldPool(pool: readonly Phaser.GameObjects.Sprite[]): void {
+    this.shieldPool = pool;
+  }
+
+  setRocketPool(pool: readonly Phaser.GameObjects.Sprite[]): void {
+    this.rocketPool = pool;
   }
 
   setVisible(visible: boolean): void {
@@ -132,16 +268,21 @@ export class ReflectionSystem {
       ref.setVisible(visible);
     }
     this.reflectedSky.setVisible(visible);
+    this.objectRT.setVisible(visible);
+    // Toggle road mask — when reflections are hidden, road should be solid
+    if (visible) {
+      this.roadTile.setMask(this.puddleMask);
+    } else {
+      this.roadTile.clearMask();
+    }
   }
 
   toggleMask(): void {
     this.maskEnabled = !this.maskEnabled;
     if (this.maskEnabled) {
-      for (const ref of this.reflectedLayers) ref.setMask(this.puddleMask);
-      this.reflectedSky.setMask(this.puddleMask);
+      this.roadTile.setMask(this.puddleMask);
     } else {
-      for (const ref of this.reflectedLayers) ref.clearMask();
-      this.reflectedSky.clearMask();
+      this.roadTile.clearMask();
     }
   }
 
@@ -157,13 +298,14 @@ export class ReflectionSystem {
   }
 
   destroy(): void {
+    this.roadTile.clearMask();
     for (const ref of this.reflectedLayers) {
-      ref.clearMask();
       ref.destroy();
     }
     this.reflectedLayers.length = 0;
-    this.reflectedSky.clearMask();
     this.reflectedSky.destroy();
     this.maskRT.destroy();
+    this.objectRT.destroy();
+    this.stamp.destroy();
   }
 }
