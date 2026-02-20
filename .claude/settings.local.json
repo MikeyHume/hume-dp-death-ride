@@ -1,7 +1,39 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:invidious.fdn.fr)",
+      "WebFetch(domain:www.shazam.com)",
+      "WebFetch(domain:invidious.nerdvpn.de)",
+      "WebFetch(domain:piped.video)",
+      "Bash(npx supabase functions deploy:*)",
+      "Bash(source:*)",
+      "Bash(curl -s -X POST \"https://wdaljqcoyhselitaxaeu.supabase.co/functions/v1/sync_music_catalog\" -H \"Authorization: Bearer $VITE_SUPABASE_ANON_KEY\" -H \"Content-Type: application/json\" -d '{\"\"artist_ids\"\":[\"\"5uzPIJDzWAujemRDKiJMRj\"\"],\"\"dryRun\"\":true}')",
+      "Bash(python3:*)",
+      "Bash(curl:*)",
+      "Bash(npx vite build)",
+      "Bash(node -e:*)",
+      "Bash(node:*)",
+      "WebFetch(domain:www.youtube.com)",
+      "Bash(ls:*)",
+      "Bash(npx supabase secrets list:*)",
+      "Bash(npx supabase --help:*)",
+      "Bash(npx supabase sql --help:*)",
+      "Bash(npx supabase:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:leemartin.dev)",
+      "WebFetch(domain:developer.spotify.com)",
+      "WebFetch(domain:media.discordapp.net)",
+      "Bash(npx esbuild:*)",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__get_project_url",
+      "mcp__supabase__get_publishable_keys",
+      "Bash(du:*)",
+      "Read(//c/Users/mikey/Claude_Playground/dp_moto/**)",
+      "Bash(wc:*)",
+      "WebFetch(domain:open.spotify.com)",
+      "Bash(done)"
     ]
   }
 }

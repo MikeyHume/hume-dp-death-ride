@@ -152,6 +152,7 @@ export const TUNING = {
   REFLECTION_PLAYER_PIVOT_Y: 0,    // player: px offset from sprite bottom edge
   REFLECTION_PICKUP_PIVOT_Y: 0,    // pickups (rocket + shield): px offset from sprite bottom edge
   REFLECTION_ROCKET_PIVOT_Y: 43,    // rocket projectile: px offset from sprite bottom edge
+  REFLECTION_SLASH_PIVOT_Y: 0,      // slash VFX: px offset from sprite bottom edge
 
   // Obstacles — car (animated sprites, instant death, moves slower than road)
   CAR_COUNT: 20,                    // number of car sprite sheets
@@ -271,7 +272,7 @@ export const TUNING = {
   // Katana slash
   KATANA_DURATION: 0.15,           // seconds the slash hitbox is active
   KATANA_COOLDOWN: 0.4,            // seconds before can slash again
-  KATANA_OFFSET_X: 160,             // px right of player center where hitbox starts
+  KATANA_OFFSET_X: 200,             // px right of player center where hitbox starts
   KATANA_WIDTH: 200,                // slash hitbox width
   KATANA_HEIGHT: 140,              // slash hitbox height (generous vertical)
   KATANA_COLOR: 0xccccff,          // slash visual color (silver)
@@ -289,9 +290,10 @@ export const TUNING = {
   SLASH_VFX_FRAMES: 7,             // usable frames (1-7, frame 0 is blank)
   SLASH_VFX_BASE_FPS: 12,          // designed playback rate
   SLASH_VFX_SPEED: 2,            // playback speed multiplier (adjust this to tune)
-  SLASH_VFX_SCALE: 2.0,            // display scale multiplier
+  SLASH_VFX_SCALE: 3.0,            // display scale multiplier
   SLASH_VFX_OFFSET_X: 160,         // px right of player center
   SLASH_VFX_OFFSET_Y: 0,           // px below player center
+  SLASH_VFX_ANGLE: 30,              // rotation in degrees (positive = clockwise)
 
   // Rage meter
   RAGE_FILL_MULTIPLIER: 6.9,        // scales rage gained per kill (2.0 = double fill rate, 0.5 = half)
@@ -315,22 +317,55 @@ export const TUNING = {
   CAR_EXPLOSION_SCALE: 1.69,          // car explosions are this many times bigger than normal
   CAR_DEATH_LINGER: 4 / 60,           // seconds car remains visible after dying (4 frames at 60fps)
   // Music volume multipliers (1.0 = default, >1 louder, <1 quieter)
-  MUSIC_VOL_TITLE: 0.2,             // title screen track volume multiplier
-  MUSIC_VOL_SPOTIFY: 0.25,           // Spotify playback volume multiplier
+  MUSIC_VOL_MASTER: 1.0,             // master music volume multiplier (scales all music output)
+  MUSIC_VOL_TITLE: 0.1,             // title screen track volume multiplier
+  MUSIC_VOL_SPOTIFY: 0.1,           // Spotify playback volume multiplier
   MUSIC_VOL_YOUTUBE: 1.0,           // YouTube playback volume multiplier
   MUSIC_VOL_COUNTDOWN: 0.69,         // countdown music volume before Spotify
-  SFX_BIOS_BOOTUP_VOLUME: 0.5,      // BIOS boot-up sound volume
-  SFX_BIOS_BEEP_VOLUME: 0.4,        // BIOS complete chime volume
+  SFX_BIOS_MASTER: 1,             // master multiplier for BIOS intro + end beep (scales both together)
+  SFX_BIOS_BOOTUP_VOLUME: .2,      // BIOS boot-up sound volume
+  SFX_BIOS_BEEP_VOLUME: 0.2,        // BIOS complete chime volume
+  SFX_CLICK_MASTER: 0.5,            // master multiplier for UI click sounds
 
   // Music player UI positioning (game-unit values, scaled to canvas)
   MUSIC_UI_PAD_TOP: 40,            // game-unit padding above the music player group
   MUSIC_UI_PAD_RIGHT: 40,          // game-unit padding from right edge to music player container
   MUSIC_UI_THUMB_SCALE: 1.3,       // thumbnail scale factor (1.0 = 96px base height)
-  MUSIC_UI_WIDTH: 620,             // fixed container width in game units
+  MUSIC_UI_WIDTH: 740,             // fixed container width in game units
+
+  // WMP popup window
+  WMP_WIDTH_PCT: 80,                 // popup width as % of overlay
+  WMP_TOP_PCT: 10,                   // popup top offset as % of overlay
+  WMP_TRANSPORT_SIZE: 52,            // transport button width + height px (play/pause/skip)
+  WMP_TRANSPORT_FONT: 44,           // transport button font size px
+  WMP_TRANSPORT_GAP: 2,             // gap between transport buttons px
+
+  // WMP popup video/library split
+  WMP_VIDEO_MAX_W_FRAC: 0.667,      // max video width as fraction of window content width (2/3)
+  WMP_SPLIT_H: 800,                 // total height of video + library content area (px)
+  WMP_SPLIT_VIDEO_FRAC: 0.375,      // initial fraction of split area given to video (0-1)
+  WMP_SPLIT_VIDEO_MIN: 0.375,       // minimum video fraction (300px at SPLIT_H 800)
+  WMP_SPLIT_VIDEO_MAX: 0.85,        // maximum video fraction (prevents library from vanishing)
+  WMP_DIVIDER_H: 6,                 // divider bar height between video and library (px)
+  WMP_CELL_SCROLL_SPEED: 40,        // library cell hover-scroll speed (px/s)
+  WMP_CELL_SCROLL_PAUSE: 1.0,       // pause duration at start/end of scroll (seconds)
+  WMP_INFO_PAD: 40,                 // track info panel padding px
+  WMP_INFO_TITLE_FONT: 18,         // track info title font size px
+  WMP_INFO_ARTIST_FONT: 14,        // track info artist font size px
+  WMP_INFO_BTN_FONT: 12,           // "Listen on Spotify" button font size px
+  WMP_INFO_BTN_GROUP_SCALE: 0.85,   // scale of text + logo group inside the button
+  WMP_INFO_GAP: 8,                 // gap between info elements px
+  WMP_LIB_ROW_H: 120,              // library row height in px (constant during resize)
+  WMP_MIN_W: 400,                   // minimum window width px (resize clamp)
+  WMP_MIN_H: 300,                   // minimum window height px (resize clamp)
+  WMP_RESIZE_HANDLE: 8,             // resize handle thickness px (edges)
+  WMP_RESIZE_CORNER: 20,            // corner resize hitbox size px (larger for easy grabbing)
 
   // Intro track (title screen music player display)
-  INTRO_TRACK_TITLE: 'Malibu - deathpixie',               // display title for the title screen track
-  INTRO_TRACK_THUMBNAIL: 'assets/audio/intro_track_thumbnail.jpg',  // path to square thumbnail
+  INTRO_TRACK_TITLE: 'RED MALIBU',                             // title track song name
+  INTRO_TRACK_ARTIST: 'deathpixie',                            // title track artist name
+  INTRO_TRACK_SPOTIFY_URL: 'https://open.spotify.com/track/19KIMjXBvqibE0QNq0kGjQ', // title track Spotify link
+  INTRO_TRACK_THUMBNAIL: 'https://img.youtube.com/vi/n5BsRaPlglc/mqdefault.jpg',  // YouTube thumbnail
 
   // Countdown (5→1 before gameplay starts)
   COUNTDOWN_FRAME_SIZE: 600,         // px per frame in countdown sprite sheet (square)
@@ -454,6 +489,8 @@ export const TUNING = {
   CURSOR_STROKE_W: ((window as any).__cursorConfig?.strokeW ?? 0) as number,
   CURSOR_STROKE_COLOR: ((window as any).__cursorConfig?.strokeColor ?? 0xffffff) as number,
   CURSOR_DEPTH: 9998,              // render depth (on top of game, under debug)
+  CURSOR_OFFSET_X: ((window as any).__cursorConfig?.offsetX ?? 0) as number,  // px offset to align tip (+ = right)
+  CURSOR_OFFSET_Y: ((window as any).__cursorConfig?.offsetY ?? 0) as number,  // px offset to align tip (+ = down)
   CROSSHAIR_SCALE: 3.0,            // multiplier to adjust crosshair size
 
   // Debug — set to true to enable hotkeys (0 = instant rage)

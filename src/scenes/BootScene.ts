@@ -12,6 +12,12 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload() {
+    // Apply BIOS volume as early as possible (bootup audio is already playing from index.html)
+    const bootOverlay = (window as any).__bootOverlay;
+    if (bootOverlay?.bootupAudio) bootOverlay.bootupAudio.volume = TUNING.SFX_BIOS_BOOTUP_VOLUME * TUNING.SFX_BIOS_MASTER;
+    if (bootOverlay?.biosCompleteAudio) bootOverlay.biosCompleteAudio.volume = TUNING.SFX_BIOS_BEEP_VOLUME * TUNING.SFX_BIOS_MASTER;
+    if (bootOverlay?.biosClickAudio) bootOverlay.biosClickAudio.volume = TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER;
+
     // Report real load progress to the boot overlay (clamped 0..0.9)
     this.load.on('progress', (value: number) => {
       (window as any).__bootOverlay?.setProgress?.(value);
@@ -72,7 +78,6 @@ export class BootScene extends Phaser.Scene {
       frameWidth: TUNING.ROCKET_PROJ_FRAME_W,
       frameHeight: TUNING.ROCKET_PROJ_FRAME_H,
     });
-    this.load.audio('title-music', 'assets/audio/music/red malibu - deathpixie.mp3');
     this.load.audio('countdown-music', 'assets/audio/music/hell_girl_countdown.mp3');
     this.load.audio('sfx-click', 'assets/audio/sfx/mouse click.mp3');
     this.load.audio('sfx-hover', 'assets/audio/sfx/mouse hover.mp3');
@@ -137,11 +142,13 @@ export class BootScene extends Phaser.Scene {
     });
     this.load.image('shield-icon', 'assets/pickups/shield_icon.png');
     this.load.image('shield-icon-empty', 'assets/pickups/shield_empty_icon.png');
+    this.load.image('ui-music-menu', 'ui/music menu.png');
     this.load.image('ui-skip', 'ui/skip.png');
     this.load.image('ui-unmuted', 'ui/unmuted.png');
     this.load.image('ui-muted', 'ui/muted.png');
     this.load.image('ui-insta', 'ui/insta.png');
     this.load.image('default-avatar', 'assets/profiles/dp_anon_pic.jpg');
+    this.load.image('add-pic-icon', 'ui/add_pic_icon.png');
 
     // Tutorial assets
     this.load.image('tutorial-skip', 'assets/tutorial/skip_v02.png');

@@ -25,12 +25,14 @@ const TITLE_COLOR = '#ffffff';
 // ── Avatar ──
 const AVATAR_RADIUS = 100;
 const AVATAR_TEX_SIZE = 512;
-const AVATAR_RING_WIDTH = 3;
+const AVATAR_RING_WIDTH = 6;          // stroke thickness of the ring around the avatar
 const AVATAR_RING_COLOR = 0xffffff;
-const AVATAR_RING_ALPHA = 0.8;
-const AVATAR_HINT_FONT = '22px';
+const AVATAR_RING_ALPHA = 1;
+const AVATAR_HINT_FONT = '32px';
 const AVATAR_HINT_COLOR = '#666666';
 const AVATAR_HINT_GAP = 40;              // space below avatar to "click to change"
+const AVATAR_OVERLAY_ALPHA = 0.2;        // black overlay opacity on avatar (behind add-pic icon)
+const AVATAR_ADD_ICON_SCALE = 0.1;       // scale of add_pic_icon on avatar
 export const AVATAR_TEXTURE_KEY = 'profile-avatar';
 
 // ── Header layout (avatar left, name+spotify right) ──
@@ -150,6 +152,8 @@ export class ProfilePopup {
   private avatarImage: Phaser.GameObjects.Image | null = null;
   private avatarRing: Phaser.GameObjects.Arc;
   private avatarHint!: Phaser.GameObjects.Text;
+  private avatarOverlay!: Phaser.GameObjects.Arc;
+  private avatarAddIcon!: Phaser.GameObjects.Image;
   private avatarHit!: Phaser.GameObjects.Zone;
   private nameText: Phaser.GameObjects.Text;
   private nameBoxFocus: Phaser.GameObjects.Graphics;
@@ -228,11 +232,22 @@ export class ProfilePopup {
     this.avatarPlaceholder = scene.add.circle(AVATAR_X, avatarY, AVATAR_RADIUS, 0x000000, 1);
     this.container.add(this.avatarPlaceholder);
 
-    this.avatarRing = scene.add.circle(AVATAR_X, avatarY, AVATAR_RADIUS + AVATAR_RING_WIDTH, 0x000000, 0);
+    this.avatarRing = scene.add.circle(AVATAR_X, avatarY, AVATAR_RADIUS + AVATAR_RING_WIDTH / 2, 0x000000, 0);
     this.avatarRing.setStrokeStyle(AVATAR_RING_WIDTH, AVATAR_RING_COLOR, AVATAR_RING_ALPHA);
     this.container.add(this.avatarRing);
 
-    this.avatarHint = scene.add.text(AVATAR_X, avatarY + AVATAR_RADIUS + AVATAR_HINT_GAP, 'click to change', {
+    // Black circle overlay on avatar (behind add-pic icon)
+    this.avatarOverlay = scene.add.circle(AVATAR_X, avatarY, AVATAR_RADIUS, 0x000000, AVATAR_OVERLAY_ALPHA)
+      .setVisible(false);
+    this.container.add(this.avatarOverlay);
+
+    // Add-pic icon centered on avatar
+    this.avatarAddIcon = scene.add.image(AVATAR_X, avatarY, 'add-pic-icon')
+      .setScale(AVATAR_ADD_ICON_SCALE)
+      .setVisible(false);
+    this.container.add(this.avatarAddIcon);
+
+    this.avatarHint = scene.add.text(AVATAR_X, avatarY + AVATAR_RADIUS + AVATAR_HINT_GAP, 'click to upload', {
       fontSize: AVATAR_HINT_FONT, fontFamily: 'monospace', color: AVATAR_HINT_COLOR,
     }).setOrigin(0.5);
     this.container.add(this.avatarHint);
@@ -243,7 +258,7 @@ export class ProfilePopup {
         Phaser.Geom.Circle.Contains,
       );
     this.avatarHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
-    this.avatarHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME }); this.openFilePicker(); });
+    this.avatarHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER }); this.openFilePicker(); });
     this.container.add(this.avatarHit);
 
     // Show default anon avatar on init (overwritten by loadProfile if Spotify-connected)
@@ -281,7 +296,7 @@ export class ProfilePopup {
     const nameHit = scene.add.zone(RIGHT_CENTER_X, nameBoxY, RIGHT_BOX_W, NAME_BOX_H)
       .setInteractive({ useHandCursor: true });
     nameHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
-    nameHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME }); this.startNameEditing(); });
+    nameHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER }); this.startNameEditing(); });
     this.container.add(nameHit);
 
     /* ---- Right side: Spotify button ---- */
@@ -309,7 +324,7 @@ export class ProfilePopup {
       .setInteractive({ useHandCursor: true }).setVisible(false);
     this.spotifyHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
     this.spotifyHit.on('pointerdown', async () => {
-      this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME });
+      this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
       if (isConnected()) {
         const confirmed = await this.disconnectModal.show();
         if (confirmed) {
@@ -429,7 +444,7 @@ export class ProfilePopup {
     const exitHit = scene.add.zone(0, EXIT_Y, EXIT_BTN_W, EXIT_BTN_H)
       .setInteractive({ useHandCursor: true });
     exitHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
-    exitHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME }); this.close(); });
+    exitHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER }); this.close(); });
     this.container.add(exitHit);
 
     /* ---- Misc ---- */
@@ -777,12 +792,16 @@ export class ProfilePopup {
     }
     // Disable avatar change for anon users
     this.avatarHint.setVisible(false);
+    this.avatarOverlay.setVisible(false);
+    this.avatarAddIcon.setVisible(false);
     this.avatarHit.disableInteractive();
   }
 
   /** Enable avatar editing (Spotify-connected users). */
   private enableAvatarEditing(): void {
     this.avatarHint.setVisible(true);
+    this.avatarOverlay.setVisible(true);
+    this.avatarAddIcon.setVisible(true);
     this.avatarHit.setInteractive();
   }
 

@@ -7,6 +7,9 @@ const HUD_SCALE = 1.0;                    // uniform scale for entire HUD (1.0 =
 const HUD_ORIGIN_X = 40;                  // container X position on screen
 const HUD_ORIGIN_Y = 40;                  // container Y position on screen
 const AVATAR_RADIUS = 64;                 // avatar circle radius in px
+const AVATAR_STROKE_WIDTH = 10;            // stroke thickness around profile pic
+const AVATAR_STROKE_COLOR = 0xffffff;     // stroke color
+const AVATAR_STROKE_ALPHA = 1;          // stroke opacity (max 1 — higher causes flash during fade transitions)
 const SCORE_FONT_SIZE = 48;               // score text font size in px
 const SCORE_GAP_X = 12;                   // horizontal gap between avatar and score
 const SCORE_GAP_Y = 4;                    // vertical offset of score from container top
@@ -68,7 +71,7 @@ export class ProfileHud {
 
     // --- Avatar placeholder (filled circle) ---
     this.avatarCircle = scene.add.circle(AVATAR_X, AVATAR_Y, AVATAR_RADIUS, 0x555555, 1);
-    this.avatarCircle.setStrokeStyle(2, 0xffffff, 0.6);
+    this.avatarCircle.setStrokeStyle(AVATAR_STROKE_WIDTH, AVATAR_STROKE_COLOR, AVATAR_STROKE_ALPHA);
     this.container.add(this.avatarCircle);
 
     // --- Clickable hit zone over avatar ---
@@ -91,7 +94,7 @@ export class ProfileHud {
       this.avatarHoverOverlay.setVisible(false);
     });
     hitZone.on('pointerdown', () => {
-      scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME });
+      scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
       if (this.clickCallback) this.clickCallback();
     });
     this.container.add(hitZone);

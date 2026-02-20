@@ -12,6 +12,7 @@ const SKIP_TRACK_IDS = new Set([
 ]);
 
 export interface SpotifyTrackInfo {
+  trackId: string;
   name: string;
   artist: string;
   albumImageUrl: string | null;
@@ -27,6 +28,12 @@ export class SpotifyPlayerSystem {
   private sdkLoaded: boolean = false;
   private muted: boolean = false;
   private volume: number = 0.5;
+
+  // Position tracking (updated via player_state_changed)
+  private lastPositionMs = 0;
+  private lastDurationMs = 0;
+  private lastPosTime = 0;       // performance.now() when position was captured
+  private isPaused = true;
 
   /** Load the SDK script and initialize the player. Resolves true if playback is ready. */
   async init(): Promise<boolean> {
@@ -109,8 +116,15 @@ export class SpotifyPlayerSystem {
           return;
         }
 
+        // Track position for progress bar sync
+        this.lastPositionMs = state.position || 0;
+        this.lastDurationMs = track.duration_ms || 0;
+        this.lastPosTime = performance.now();
+        this.isPaused = state.paused;
+
         if (this.onTrackChange) {
           this.onTrackChange({
+            trackId: trackId || '',
             name: track.name,
             artist: track.artists?.map((a: any) => a.name).join(', ') || '',
             albumImageUrl: track.album?.images?.[0]?.url || null,
@@ -165,8 +179,23 @@ export class SpotifyPlayerSystem {
       await this.next();
       // Wait for the skip to register before restoring volume
       await new Promise((r) => setTimeout(r, 600));
-      this.restoreVolume();
 
+      // Avoid repeating the same first track as last session
+      try {
+        const state = await this.player.getCurrentState();
+        const trackId = state?.track_window?.current_track?.uri?.split(':').pop();
+        const lastFirst = localStorage.getItem('dp_last_first_spotify');
+        if (trackId && trackId === lastFirst) {
+          await this.next();
+          await new Promise((r) => setTimeout(r, 600));
+        }
+        // Save new first track
+        const newState = await this.player.getCurrentState();
+        const newId = newState?.track_window?.current_track?.uri?.split(':').pop();
+        if (newId) localStorage.setItem('dp_last_first_spotify', newId);
+      } catch { /* state check failed — proceed anyway */ }
+
+      this.restoreVolume();
       return true;
     } catch {
       this.restoreVolume();
@@ -174,9 +203,57 @@ export class SpotifyPlayerSystem {
     }
   }
 
+  /** Play a single track by ID, optionally on repeat. */
+  async playTrack(trackId: string, repeat = false): Promise<boolean> {
+    if (!this.ready || !this.deviceId) return false;
+    const token = getAccessToken();
+    if (!token) return false;
+
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    };
+
+    try {
+      if (repeat) {
+        await fetch(
+          `https://api.spotify.com/v1/me/player/repeat?state=track&device_id=${this.deviceId}`,
+          { method: 'PUT', headers },
+        );
+      }
+
+      const res = await fetch(
+        `https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ uris: [`spotify:track:${trackId}`] }),
+        },
+      );
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
   private restoreVolume(): void {
     if (this.player && !this.muted) {
       this.player.setVolume(this.volume).catch(() => {});
+    }
+  }
+
+  async pause(): Promise<void> {
+    if (this.player && this.ready) {
+      await this.player.pause().catch(() => {});
+    }
+  }
+
+  togglePlayPause(): void {
+    if (!this.player || !this.ready) return;
+    if (this.isPaused) {
+      this.player.resume().catch(() => {});
+    } else {
+      this.player.pause().catch(() => {});
     }
   }
 
@@ -217,12 +294,32 @@ export class SpotifyPlayerSystem {
 
   isMuted(): boolean { return this.muted; }
 
-  setVolumeBoost(multiplier: number): void {
-    const vol = Math.min(1, 0.5 * multiplier);
+  setVolumeBoost(vol: number): void {
     if (this.player && this.ready && !this.muted) {
-      this.player.setVolume(vol).catch(() => {});
+      this.player.setVolume(Math.min(1, vol)).catch(() => {});
     }
   }
+
+  /** Synchronous position estimate (interpolates from last state event). Returns seconds. */
+  getPositionSync(): { current: number; duration: number } {
+    let posMs = this.lastPositionMs;
+    if (!this.isPaused) {
+      posMs += performance.now() - this.lastPosTime;
+    }
+    return {
+      current: Math.min(posMs, this.lastDurationMs) / 1000,
+      duration: this.lastDurationMs / 1000,
+    };
+  }
+
+  /** Seek to a position in milliseconds. */
+  async seek(positionMs: number): Promise<void> {
+    if (!this.player || !this.ready) return;
+    await this.player.seek(positionMs).catch(() => {});
+  }
+
+  /** Current volume level (0-1), ignoring mute state. */
+  getVolumeLevel(): number { return this.volume; }
 
   onTrackChanged(cb: TrackChangeCallback): void {
     this.onTrackChange = cb;

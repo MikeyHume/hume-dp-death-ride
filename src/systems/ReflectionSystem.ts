@@ -26,6 +26,7 @@ export class ReflectionSystem {
   private objectRT: Phaser.GameObjects.RenderTexture;
   private stamp: Phaser.GameObjects.Sprite;
   private playerSprite: Phaser.GameObjects.Sprite | null = null;
+  private slashSprite: Phaser.GameObjects.Sprite | null = null;
   private pickupPool: readonly Phaser.GameObjects.Sprite[] = [];
   private shieldPool: readonly Phaser.GameObjects.Sprite[] = [];
   private rocketPool: readonly Phaser.GameObjects.Sprite[] = [];
@@ -197,6 +198,27 @@ export class ReflectionSystem {
       this.stamp.setAlpha(0);
     }
 
+    // Slash VFX reflection — mirrors rotation (negate angle) for natural reflection
+    if (this.slashSprite && this.slashSprite.visible) {
+      const s = this.slashSprite;
+      const slashPivot = TUNING.REFLECTION_SLASH_PIVOT_Y;
+      const bottomY = s.y + s.displayHeight * (1 - s.originY);
+      const anchor = bottomY + slashPivot;
+      const reflectedY = 2 * anchor - s.y;
+
+      this.stamp.setTexture(s.texture.key, s.frame.name);
+      this.stamp.setDisplaySize(s.displayWidth, s.displayHeight);
+      this.stamp.setFlipX(s.flipX);
+      this.stamp.setFlipY(!s.flipY);
+      this.stamp.setOrigin(s.originX, s.originY);
+      this.stamp.setPosition(s.x, reflectedY);
+      this.stamp.setAngle(-s.angle);
+      this.stamp.setAlpha(1);
+      this.objectRT.draw(this.stamp);
+      this.stamp.setAlpha(0);
+      this.stamp.setAngle(0);
+    }
+
     // Pickup reflections (rockets + shields) — pivot around baseY (resting position),
     // so hover up = reflection moves down, hover down = reflection moves up
     const pickupPivot = TUNING.REFLECTION_PICKUP_PIVOT_Y;
@@ -249,6 +271,10 @@ export class ReflectionSystem {
 
   setPlayerSprite(sprite: Phaser.GameObjects.Sprite): void {
     this.playerSprite = sprite;
+  }
+
+  setSlashSprite(sprite: Phaser.GameObjects.Sprite): void {
+    this.slashSprite = sprite;
   }
 
   setPickupPool(pool: readonly Phaser.GameObjects.Sprite[]): void {

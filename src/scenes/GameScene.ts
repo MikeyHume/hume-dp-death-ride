@@ -39,6 +39,9 @@ enum GameState {
 const NAME_MAX_LENGTH = 10;
 const SKIP_BTN_MARGIN_RIGHT = 90;    // px from right edge of screen
 const SKIP_BTN_MARGIN_BOTTOM = 56;   // px from bottom edge of screen
+const SKIP_BTN_PULSE_MIN = 0.15;     // minimum alpha during pulse
+const SKIP_BTN_PULSE_MAX = 0.69;     // maximum alpha during pulse
+const SKIP_BTN_PULSE_DURATION = 1200; // ms for one fade-in or fade-out half-cycle
 
 // ── Debug hotkeys (all start inactive — toggle on via debug panel [+]) ──
 const DEBUG_HOTKEYS = {
@@ -67,6 +70,8 @@ const DEBUG_HOTKEYS = {
   startHold:      { key: 'BACKTICK', active: false }, // skip the start hold phase
   toggleRefMask:  { key: 'R',       active: true },  // toggle puddle reflection mask
   freezeFrame:    { key: 'T',       active: true },  // freeze all movement for frame analysis
+  textInspect:    { key: 'N',       active: true },  // cycle through all text elements to identify mystery text
+  clickInspect:   { key: 'B',       active: true },  // click any element to identify it
 
 };
 
@@ -111,6 +116,7 @@ export class GameScene extends Phaser.Scene {
   private rocketSystem!: RocketSystem;
   private profileHud!: ProfileHud;
   private profilePopup!: ProfilePopup;
+  private profileWasOpen = false;
   private perfSystem!: PerfSystem;
   private orientationOverlay: OrientationOverlay | null = null;
   private shieldSystem!: ShieldSystem;
@@ -121,7 +127,12 @@ export class GameScene extends Phaser.Scene {
   private cursorStroke?: Phaser.GameObjects.Image;
   private cursorMain!: Phaser.GameObjects.Image;
   private crosshair!: Phaser.GameObjects.Image;
+  private crosshairActive = false;          // true when crosshair mode is on (gameplay)
+  private crosshairHiddenByWMP = false;     // true when crosshair was faded out for WMP
   private cursorOverUI: boolean = false;
+  private globalCursorX = 0;
+  private globalCursorY = 0;
+  private htmlCursor!: HTMLDivElement;  // HTML cursor overlay (renders above everything incl. iframe)
 
   // Weekly seed
   private weekKey!: string;
@@ -212,6 +223,23 @@ export class GameScene extends Phaser.Scene {
   private debugRepeatTimers: Record<string, number> = {};
   private collisionDebug: boolean = false;
   private collisionGfx!: Phaser.GameObjects.Graphics;
+
+  // Text inspector debug (N — cycle all texts)
+  private _tiActive = false;
+  private _tiIdx = 0;
+  private _tiLabel!: Phaser.GameObjects.Text;
+  private _tiItems: Array<{ id: string; obj: Phaser.GameObjects.Text | HTMLElement }> = [];
+  private _tiOutlinedEl: HTMLElement | null = null;
+
+  // Click inspector debug (B — click to identify elements, ←→ cycle)
+  private _ciActive = false;
+  private _ciIdx = 0;
+  private _ciGfx!: Phaser.GameObjects.Graphics;
+  private _ciLabel!: Phaser.GameObjects.Text;
+  private _ciOutlinedEl: HTMLElement | null = null;
+  private _ciClickHandler: ((e: MouseEvent) => void) | null = null;
+  private _ciClipboard = '';
+  private _ciHits: Array<{ id: string; phaser?: Phaser.GameObjects.Text; html?: HTMLElement }> = [];
 
   // Name entry
   private nameEntryContainer!: Phaser.GameObjects.Container;
@@ -317,6 +345,8 @@ export class GameScene extends Phaser.Scene {
         if (isAdvanceKey) {
           this.anyInputPressed = true;
         }
+      } else if (this.state === GameState.STARTING) {
+        this.anyInputPressed = true;
       }
     });
     this.input.on('pointerdown', () => {
@@ -325,11 +355,13 @@ export class GameScene extends Phaser.Scene {
       const biosOverlay = document.getElementById('boot-overlay');
       if (biosOverlay && !biosOverlay.classList.contains('hidden')) return;
       if (this.state === GameState.TUTORIAL || this.state === GameState.TITLE || this.state === GameState.STARTING) {
-        this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME });
+        this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
       }
       if (this.state === GameState.TUTORIAL) {
         this.tutorialAdvance = true;
       } else if (this.state === GameState.TITLE) {
+        this.anyInputPressed = true;
+      } else if (this.state === GameState.STARTING) {
         this.anyInputPressed = true;
       }
     });
@@ -441,7 +473,25 @@ export class GameScene extends Phaser.Scene {
     this.profileHud.onAvatarClick(() => {
       const onDeath = this.state === GameState.DEAD || this.state === GameState.NAME_ENTRY || this.state === GameState.DYING;
       const duringGameplay = this.state === GameState.PLAYING;
+      this.musicPlayer.closeWMP();
       this.profilePopup.open(this.profilePopup.getName(), onDeath, duringGameplay);
+    });
+    this.musicPlayer.onWMPOpen(() => {
+      if (this.profilePopup.isOpen()) this.profilePopup.close();
+      // Fade out crosshair while WMP is open
+      if (this.crosshairActive && !this.crosshairHiddenByWMP) {
+        this.crosshairHiddenByWMP = true;
+        this.tweens.killTweensOf(this.crosshair);
+        this.tweens.add({ targets: this.crosshair, alpha: 0, duration: 200 });
+      }
+    });
+    this.musicPlayer.onWMPClose(() => {
+      // Restore crosshair if it was active before WMP opened
+      if (this.crosshairHiddenByWMP && this.crosshairActive) {
+        this.crosshairHiddenByWMP = false;
+        this.tweens.killTweensOf(this.crosshair);
+        this.tweens.add({ targets: this.crosshair, alpha: 1, duration: 200 });
+      }
     });
     this.profilePopup.onProfileChanged((name, hasAvatar) => {
       if (hasAvatar) {
@@ -662,7 +712,7 @@ export class GameScene extends Phaser.Scene {
         fontFamily: 'monospace',
         fontStyle: 'bold',
         backgroundColor: '#003300',
-        padding: { x: 20, y: 10 },
+        padding: { x: 24, y: 12 },
       }
     ).setOrigin(0.5).setDepth(211).setInteractive({ useHandCursor: true });
     this.nameEnterBtn.on('pointerover', () => {
@@ -673,7 +723,7 @@ export class GameScene extends Phaser.Scene {
       this.nameEnterBtn.setColor('#00ff00').setBackgroundColor('#003300');
     });
     this.nameEnterBtn.on('pointerdown', () => {
-      this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME });
+      this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
       if (this.state === GameState.NAME_ENTRY) {
         this.confirmNameEntry();
       }
@@ -704,7 +754,7 @@ export class GameScene extends Phaser.Scene {
     this.emptyNameYesBtn.on('pointerover', () => { this.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }); this.emptyNameYesBtn.setColor('#ffffff').setBackgroundColor('#660000'); });
     this.emptyNameYesBtn.on('pointerout', () => this.emptyNameYesBtn.setColor('#ff4444').setBackgroundColor('#330000'));
     this.emptyNameYesBtn.on('pointerdown', () => {
-      this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME });
+      this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
       if (this.state === GameState.NAME_ENTRY && this.emptyNameVisible) {
         this.submitAsAnon();
       }
@@ -717,7 +767,7 @@ export class GameScene extends Phaser.Scene {
     this.emptyNameNoBtn.on('pointerover', () => { this.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }); this.emptyNameNoBtn.setColor('#ffffff').setBackgroundColor('#006600'); });
     this.emptyNameNoBtn.on('pointerout', () => this.emptyNameNoBtn.setColor('#00ff00').setBackgroundColor('#003300'));
     this.emptyNameNoBtn.on('pointerdown', () => {
-      this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME });
+      this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
       if (this.state === GameState.NAME_ENTRY && this.emptyNameVisible) {
         this.hideEmptyNamePrompt();
       }
@@ -774,12 +824,26 @@ export class GameScene extends Phaser.Scene {
 
     // Tutorial skip button (bottom-right, above tutorial content, below black overlay)
     this.tutorialSkipBtn = this.add.image(0, 0, 'tutorial-skip')
-      .setOrigin(0.5, 0.5).setScale(0.5).setAlpha(0.69).setDepth(248).setVisible(false).setInteractive({ useHandCursor: true }).setTintFill(0xffffff);
+      .setOrigin(0.5, 0.5).setScale(0.5).setAlpha(SKIP_BTN_PULSE_MAX).setDepth(248).setVisible(false).setInteractive({ useHandCursor: true }).setTintFill(0xffffff);
     // Position so bottom-right edge sits 30px from screen edges
     this.tutorialSkipBtn.setPosition(
       TUNING.GAME_WIDTH - SKIP_BTN_MARGIN_RIGHT - this.tutorialSkipBtn.displayWidth / 2,
       TUNING.GAME_HEIGHT - SKIP_BTN_MARGIN_BOTTOM - this.tutorialSkipBtn.displayHeight / 2,
     );
+
+    // Looping fade pulse — runs whenever button is not hovered
+    const startSkipPulse = () => {
+      this.tweens.killTweensOf(this.tutorialSkipBtn);
+      this.tweens.add({
+        targets: this.tutorialSkipBtn,
+        alpha: { from: SKIP_BTN_PULSE_MAX, to: SKIP_BTN_PULSE_MIN },
+        duration: SKIP_BTN_PULSE_DURATION,
+        ease: 'Sine.easeInOut',
+        yoyo: true,
+        repeat: -1,
+      });
+    };
+
     this.tutorialSkipBtn.on('pointerover', () => {
       this.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME });
       this.tweens.killTweensOf(this.tutorialSkipBtn);
@@ -795,14 +859,17 @@ export class GameScene extends Phaser.Scene {
       this.tweens.killTweensOf(this.tutorialSkipBtn);
       this.tweens.add({
         targets: this.tutorialSkipBtn,
-        alpha: 0.69,
+        alpha: SKIP_BTN_PULSE_MAX,
         scale: 0.5,
         duration: 400,
         ease: 'Sine.easeInOut',
+        onComplete: () => startSkipPulse(),
       });
     });
+    // Stash the starter so we can kick it off when the button becomes visible
+    this.tutorialSkipBtn.setData('startPulse', startSkipPulse);
     this.tutorialSkipBtn.on('pointerdown', () => {
-      this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME });
+      this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
       if (this.state === GameState.TUTORIAL && this.tutorialPhase !== 'skip_fade' && this.tutorialPhase !== 'done') {
         // Flash red, shrink smoothly from current scale to base, fade out over 0.5s
         this.tweens.killTweensOf(this.tutorialSkipBtn);
@@ -817,7 +884,7 @@ export class GameScene extends Phaser.Scene {
           onComplete: () => {
             this.tutorialSkipBtn.setVisible(false);
             this.tutorialSkipBtn.setTintFill(0xffffff);
-            this.tutorialSkipBtn.setAlpha(0.69);
+            this.tutorialSkipBtn.setAlpha(SKIP_BTN_PULSE_MAX);
             this.tutorialPhase = 'skip_fade';
             this.tutorialTimer = 0;
             this.blackOverlay.setVisible(true).setAlpha(0);
@@ -833,6 +900,7 @@ export class GameScene extends Phaser.Scene {
     // Katana slash VFX sprite (hidden until activated)
     this.slashSprite = this.add.sprite(0, 0, 'slash-vfx');
     this.slashSprite.setVisible(false).setDepth(4);
+    this.reflectionSystem.setSlashSprite(this.slashSprite);
     this.slashActiveTimer = 0;
     this.slashCooldownTimer = 0;
 
@@ -851,6 +919,7 @@ export class GameScene extends Phaser.Scene {
 
     // --- Custom cursor (under CRT shader) ---
     this.game.canvas.style.cursor = 'none';
+    document.body.style.cursor = 'none';
     const cursorTex = this.textures.get('cursor').getSourceImage();
     const aspect = cursorTex.width / cursorTex.height;
     const curH = TUNING.CURSOR_SIZE;
@@ -881,6 +950,52 @@ export class GameScene extends Phaser.Scene {
       .setDepth(TUNING.CURSOR_DEPTH + 1)
       .setScrollFactor(0)
       .setVisible(false);
+
+    // --- HTML cursor overlay (renders above everything including iframe) ---
+    this.htmlCursor = document.createElement('div');
+    Object.assign(this.htmlCursor.style, {
+      position: 'fixed', pointerEvents: 'none', zIndex: '999999', display: 'none',
+    });
+    const htmlCursorImg = new Image();
+    htmlCursorImg.onload = () => {
+      const cc = (window as any).__cursorConfig || { size: 48, strokeW: 0, tint: 0xff0000, strokeColor: 0x000000 };
+      const aspect = htmlCursorImg.naturalWidth / htmlCursorImg.naturalHeight;
+      const h = cc.size;
+      const sw = cc.strokeW;
+      const tintHex = '#' + cc.tint.toString(16).padStart(6, '0');
+      const strokeHex = '#' + cc.strokeColor.toString(16).padStart(6, '0');
+      const mask = '-webkit-mask-image:url(ui/cursor.png);mask-image:url(ui/cursor.png);' +
+        '-webkit-mask-size:contain;mask-size:contain;' +
+        '-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;' +
+        '-webkit-mask-position:center;mask-position:center;' +
+        'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);';
+      if (sw > 0) {
+        const sH = h + sw * 2;
+        const sW = Math.round(sH * aspect);
+        const strokeDiv = document.createElement('div');
+        strokeDiv.style.cssText = mask + 'width:' + sW + 'px;height:' + sH + 'px;background:' + strokeHex + ';';
+        this.htmlCursor.appendChild(strokeDiv);
+      }
+      const mainW = Math.round(h * aspect);
+      const mainDiv = document.createElement('div');
+      mainDiv.style.cssText = mask + 'width:' + mainW + 'px;height:' + h + 'px;background:' + tintHex + ';';
+      this.htmlCursor.appendChild(mainDiv);
+    };
+    htmlCursorImg.src = 'ui/cursor.png';
+    document.body.appendChild(this.htmlCursor);
+
+    // Global cursor tracking (works even when HTML overlays capture pointer events)
+    document.addEventListener('mousemove', (e) => {
+      const rect = this.game.canvas.getBoundingClientRect();
+      const cx = e.clientX + TUNING.CURSOR_OFFSET_X;
+      const cy = e.clientY + TUNING.CURSOR_OFFSET_Y;
+      this.globalCursorX = ((cx - rect.left) / rect.width) * TUNING.GAME_WIDTH;
+      this.globalCursorY = ((cy - rect.top) / rect.height) * TUNING.GAME_HEIGHT;
+      // Position HTML cursor at offset mouse
+      this.htmlCursor.style.display = '';
+      this.htmlCursor.style.left = cx + 'px';
+      this.htmlCursor.style.top = cy + 'px';
+    });
 
     // CRT debug overlay (DOM element — not affected by CRT shader)
     this.crtDebugEl = document.createElement('pre');
@@ -921,8 +1036,8 @@ export class GameScene extends Phaser.Scene {
 
     // Apply TUNING volumes to BIOS audio elements before triggering the beep
     const bootOverlay = (window as any).__bootOverlay;
-    if (bootOverlay?.bootupAudio) bootOverlay.bootupAudio.volume = TUNING.SFX_BIOS_BOOTUP_VOLUME;
-    if (bootOverlay?.biosCompleteAudio) bootOverlay.biosCompleteAudio.volume = TUNING.SFX_BIOS_BEEP_VOLUME;
+    if (bootOverlay?.bootupAudio) bootOverlay.bootupAudio.volume = TUNING.SFX_BIOS_BOOTUP_VOLUME * TUNING.SFX_BIOS_MASTER;
+    if (bootOverlay?.biosCompleteAudio) bootOverlay.biosCompleteAudio.volume = TUNING.SFX_BIOS_BEEP_VOLUME * TUNING.SFX_BIOS_MASTER;
 
     // Signal boot overlay that the start screen is ready
     (window as any).__bootOverlay?.markStartScreenReady?.();
@@ -1090,6 +1205,45 @@ export class GameScene extends Phaser.Scene {
       if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.preStartOverlay.active || this.debugPanelOpen) return;
       if (this.state !== GameState.PLAYING) return;
       this.debugPreStartOverlay.setVisible(!this.debugPreStartOverlay.visible);
+    });
+
+    // Text inspector (N) — cycle through all text objects to identify mystery text
+    this._tiLabel = this.add.text(TUNING.GAME_WIDTH / 2, 60, '', {
+      fontSize: '28px', color: '#00ff00', fontFamily: 'monospace',
+      backgroundColor: '#000000', padding: { x: 12, y: 8 },
+      wordWrap: { width: TUNING.GAME_WIDTH - 100 },
+    }).setOrigin(0.5, 0).setDepth(99999).setScrollFactor(0).setVisible(false);
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.textInspect.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.textInspect.active || this.debugPanelOpen) return;
+      this._tiActive = !this._tiActive;
+      if (this._tiActive) {
+        this._tiCollect();
+        this._tiIdx = 0;
+        this._tiShow();
+      } else {
+        this._tiClear();
+        this._tiLabel.setVisible(false);
+      }
+    });
+
+    // Click inspector (B) — click any element on screen to identify it
+    this._ciGfx = this.add.graphics().setDepth(99999).setScrollFactor(0).setVisible(false);
+    this._ciLabel = this.add.text(16, 16, '', {
+      fontSize: '26px', color: '#00ff00', fontFamily: 'monospace',
+      backgroundColor: '#000000', padding: { x: 10, y: 6 },
+    }).setOrigin(0, 0).setDepth(99999).setScrollFactor(0).setVisible(false);
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.clickInspect.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.clickInspect.active || this.debugPanelOpen) return;
+      this._ciActive = !this._ciActive;
+      if (this._ciActive) {
+        this._ciGfx.setVisible(true);
+        this._ciLabel.setText('CLICK INSPECT: click any element (B exit)');
+        this._ciLabel.setVisible(true);
+        this._ciClickHandler = (e: MouseEvent) => this._ciOnClick(e);
+        document.addEventListener('mousedown', this._ciClickHandler, true);
+      } else {
+        this._ciCleanup();
+      }
     });
 
     // Debug panel — interactive overlay to toggle hotkeys on/off
@@ -1270,20 +1424,19 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Custom cursor follows pointer
-    const ptr = this.input.activePointer;
-    this.cursorMain.setPosition(ptr.x, ptr.y);
-    this.cursorStroke?.setPosition(ptr.x, ptr.y);
-    this.crosshair.setPosition(ptr.x, ptr.y);
+    // Custom cursor follows pointer (uses global tracking to work over HTML overlays)
+    this.cursorMain.setPosition(this.globalCursorX, this.globalCursorY);
+    this.cursorStroke?.setPosition(this.globalCursorX, this.globalCursorY);
+    this.crosshair.setPosition(this.globalCursorX, this.globalCursorY);
 
     // Debug freeze — stop all game logic, cursor still tracks
     if (this.debugFrozen) return;
 
-    // Fade cursor/crosshair when hovering over music UI overlay
-    const overUI = this.musicPlayer.isCursorOverUI();
-    if (overUI !== this.cursorOverUI) {
-      this.cursorOverUI = overUI;
-      const alpha = overUI ? 0 : 1;
+    // Fade cursor only when over the YouTube iframe (can't render Phaser on top of HTML video)
+    const overIframe = this.musicPlayer.isCursorOverIframe();
+    if (overIframe !== this.cursorOverUI) {
+      this.cursorOverUI = overIframe;
+      const alpha = overIframe ? 0 : 1;
       this.tweens.killTweensOf(this.cursorMain);
       this.tweens.add({ targets: this.cursorMain, alpha, duration: 200 });
       if (this.cursorStroke) {
@@ -1294,11 +1447,57 @@ export class GameScene extends Phaser.Scene {
       this.tweens.add({ targets: this.crosshair, alpha, duration: 200 });
     }
 
+    // Z-order: hide WMP iframe when profile popup is in front
+    const profOpen = this.profilePopup.isOpen();
+    if (profOpen !== this.profileWasOpen) {
+      this.profileWasOpen = profOpen;
+      this.musicPlayer.setWMPBehind(profOpen);
+    }
+
     this.perfSystem.update(dt);
     this.inputSystem.update(dt);
     if (this.orientationOverlay) {
       this.orientationOverlay.update();
       if (this.orientationOverlay.isPaused()) return;
+    }
+
+    // Click inspector — ←→ cycle hits, enter copies
+    if (this._ciActive && this.input.keyboard && this._ciHits.length > 0) {
+      const lk = this.input.keyboard.addKey('LEFT');
+      const rk = this.input.keyboard.addKey('RIGHT');
+      const ek = this.input.keyboard.addKey('ENTER');
+      if (Phaser.Input.Keyboard.JustDown(lk)) {
+        this._ciIdx = (this._ciIdx - 1 + this._ciHits.length) % this._ciHits.length;
+        this._ciShowHit();
+      }
+      if (Phaser.Input.Keyboard.JustDown(rk)) {
+        this._ciIdx = (this._ciIdx + 1) % this._ciHits.length;
+        this._ciShowHit();
+      }
+      if (Phaser.Input.Keyboard.JustDown(ek)) {
+        navigator.clipboard.writeText(this._ciClipboard).catch(() => {});
+      }
+    }
+
+    // Text inspector — left/right cycle, enter copies ID
+    if (this._tiActive && this.input.keyboard && this._tiItems.length > 0) {
+      const lk = this.input.keyboard.addKey('LEFT');
+      const rk = this.input.keyboard.addKey('RIGHT');
+      const ek = this.input.keyboard.addKey('ENTER');
+      if (Phaser.Input.Keyboard.JustDown(lk)) {
+        this._tiClear();
+        this._tiIdx = (this._tiIdx - 1 + this._tiItems.length) % this._tiItems.length;
+        this._tiShow();
+      }
+      if (Phaser.Input.Keyboard.JustDown(rk)) {
+        this._tiClear();
+        this._tiIdx = (this._tiIdx + 1) % this._tiItems.length;
+        this._tiShow();
+      }
+      if (Phaser.Input.Keyboard.JustDown(ek)) {
+        const item = this._tiItems[this._tiIdx];
+        if (item) navigator.clipboard.writeText(item.id).catch(() => {});
+      }
     }
 
     // Debug hotkeys polled in update() — gated by master toggle
@@ -1566,6 +1765,30 @@ export class GameScene extends Phaser.Scene {
     this.inputSystem.getAttackPressed();
     this.inputSystem.getRocketPressed();
 
+    // Skip countdown on any click or key press
+    if (this.anyInputPressed && this.countdownPhase !== 'done') {
+      this.anyInputPressed = false;
+      this.countdownPhase = 'done';
+      this.countdownSprite.setVisible(false);
+      this.tweens.killTweensOf(this.blackOverlay);
+      this.tweens.killTweensOf(this.cursorMain);
+      if (this.cursorStroke) this.tweens.killTweensOf(this.cursorStroke);
+      this.tweens.killTweensOf(this.preStartSprite);
+      this.blackOverlay.setAlpha(0).setVisible(false);
+      this.cursorMain.setAlpha(0);
+      if (this.cursorStroke) this.cursorStroke.setAlpha(0);
+      this.preStartSprite.stop();
+      this.preStartSprite.setVisible(false);
+      this.titleLoopSprite.stop();
+      this.titleLoopSprite.setVisible(false);
+      this.musicPlayer.skipCountdownAudio();
+      this.musicPlayer.revealForGameplay();
+      this.playerSystem.reset();
+      this.startGame();
+      this.spawnGraceTimer = TUNING.COUNTDOWN_SPAWN_DELAY;
+      return;
+    }
+
     if (this.countdownPhase === 'done') return;
 
     this.countdownPhaseTimer += dt;
@@ -1787,7 +2010,8 @@ export class GameScene extends Phaser.Scene {
       this.tutorialPhase = 'controls_wait';
       this.tutorialTimer = 0;
       this.tutorialAdvance = false;
-      this.tutorialSkipBtn.setVisible(true).setAlpha(0.69).setScale(0.5).setTintFill(0xffffff).setInteractive({ useHandCursor: true });
+      this.tutorialSkipBtn.setVisible(true).setAlpha(SKIP_BTN_PULSE_MAX).setScale(0.5).setTintFill(0xffffff).setInteractive({ useHandCursor: true });
+      (this.tutorialSkipBtn.getData('startPulse') as () => void)();
     });
 
     // Prepare tutorial layers underneath the cutscene (hidden by black overlay)
@@ -1977,6 +2201,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setCrosshairMode(enabled: boolean): void {
+    this.crosshairActive = enabled;
+    this.crosshairHiddenByWMP = false;
     this.tweens.killTweensOf(this.crosshair);
     if (enabled) {
       this.crosshair.setVisible(true).setAlpha(0);
@@ -1989,6 +2215,166 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Returns true on first press, then repeats after an initial delay when held. */
+  // ─── Text Inspector helpers ────────────────────────────────
+  private _tiCollect(): void {
+    this._tiItems = [];
+    // 1. All Phaser Text objects in the scene
+    for (const obj of this.children.list) {
+      if (obj instanceof Phaser.GameObjects.Text && obj !== this._tiLabel) {
+        const t = obj.text.length > 40 ? obj.text.slice(0, 40) + '…' : obj.text;
+        this._tiItems.push({
+          id: `Phaser | "${t}" | d=${obj.depth} (${Math.round(obj.x)},${Math.round(obj.y)}) vis=${obj.visible} alpha=${obj.alpha}`,
+          obj,
+        });
+      }
+    }
+    // 2. All HTML elements with direct text content
+    const walk = (el: HTMLElement) => {
+      for (let i = 0; i < el.childNodes.length; i++) {
+        const n = el.childNodes[i];
+        if (n.nodeType === 3 && n.textContent && n.textContent.trim()) {
+          const txt = n.textContent.trim();
+          const cs = getComputedStyle(el);
+          const r = el.getBoundingClientRect();
+          const tag = el.tagName.toLowerCase();
+          const id = el.id ? `#${el.id}` : '';
+          const cls = el.className && typeof el.className === 'string' ? `.${el.className.split(' ')[0]}` : '';
+          this._tiItems.push({
+            id: `HTML <${tag}${id}${cls}> | "${txt.slice(0, 40)}" | color=${cs.color} display=${cs.display} rect=(${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)},${Math.round(r.height)})`,
+            obj: el,
+          });
+        }
+      }
+      for (let i = 0; i < el.children.length; i++) {
+        walk(el.children[i] as HTMLElement);
+      }
+    };
+    walk(document.body);
+  }
+
+  private _tiShow(): void {
+    if (this._tiItems.length === 0) { this._tiLabel.setText('No text items found'); this._tiLabel.setVisible(true); return; }
+    const item = this._tiItems[this._tiIdx];
+    if (item.obj instanceof Phaser.GameObjects.Text) {
+      item.obj.setTint(0xff0000);
+      item.obj.setVisible(true);
+    } else if (item.obj instanceof HTMLElement) {
+      item.obj.style.outline = '4px solid red';
+      item.obj.style.outlineOffset = '-2px';
+      this._tiOutlinedEl = item.obj;
+    }
+    this._tiLabel.setText(`[${this._tiIdx + 1}/${this._tiItems.length}] ${item.id}\n(← → cycle | ENTER copy | N exit)`);
+    this._tiLabel.setVisible(true);
+  }
+
+  private _tiClear(): void {
+    if (this._tiItems.length === 0) return;
+    const item = this._tiItems[this._tiIdx];
+    if (item.obj instanceof Phaser.GameObjects.Text) {
+      item.obj.clearTint();
+    }
+    if (this._tiOutlinedEl) {
+      this._tiOutlinedEl.style.outline = '';
+      this._tiOutlinedEl.style.outlineOffset = '';
+      this._tiOutlinedEl = null;
+    }
+  }
+
+  // ─── Click Inspector helpers ───────────────────────────────
+  private _ciOnClick(e: MouseEvent): void {
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    const cx = e.clientX, cy = e.clientY;
+    this._ciClearHighlight();
+    this._ciHits = [];
+    this._ciIdx = 0;
+
+    const canvas = this.game.canvas;
+    const cr = canvas.getBoundingClientRect();
+    const gx = ((cx - cr.left) / cr.width) * TUNING.GAME_WIDTH;
+    const gy = ((cy - cr.top) / cr.height) * TUNING.GAME_HEIGHT;
+
+    // Collect ALL Phaser Text objects at click point
+    for (const obj of this.children.list) {
+      if (!(obj instanceof Phaser.GameObjects.Text)) continue;
+      if (obj === this._tiLabel || obj === this._ciLabel) continue;
+      const b = obj.getBounds();
+      if (gx >= b.x && gx <= b.x + b.width && gy >= b.y && gy <= b.y + b.height) {
+        const t = obj.text.length > 60 ? obj.text.slice(0, 60) + '…' : obj.text;
+        this._ciHits.push({
+          id: `Phaser.Text d=${obj.depth} "${t}" @(${Math.round(obj.x)},${Math.round(obj.y)}) vis=${obj.visible} a=${obj.alpha}`,
+          phaser: obj,
+        });
+      }
+    }
+
+    // Collect ALL HTML elements at click point
+    const htmlEls = document.elementsFromPoint(cx, cy) as HTMLElement[];
+    for (const el of htmlEls) {
+      if (el === document.body || el === document.documentElement || el.tagName === 'CANVAS') continue;
+      let directText = '';
+      for (let i = 0; i < el.childNodes.length; i++) {
+        const n = el.childNodes[i];
+        if (n.nodeType === 3 && n.textContent?.trim()) directText += n.textContent.trim();
+      }
+      const tag = el.tagName.toLowerCase();
+      const elId = el.id ? `#${el.id}` : '';
+      const cls = el.className && typeof el.className === 'string' ? `.${el.className.split(' ')[0]}` : '';
+      const cs = getComputedStyle(el);
+      const r = el.getBoundingClientRect();
+      const txt = directText ? `"${directText.slice(0, 60)}"` : '(no text)';
+      this._ciHits.push({
+        id: `HTML <${tag}${elId}${cls}> ${txt} color=${cs.color} display=${cs.display} rect=(${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)},${Math.round(r.height)})`,
+        html: el,
+      });
+    }
+
+    if (this._ciHits.length === 0) {
+      this._ciLabel.setText('nothing at click point');
+    } else {
+      this._ciShowHit();
+    }
+  }
+
+  private _ciShowHit(): void {
+    this._ciClearHighlight();
+    const hit = this._ciHits[this._ciIdx];
+    if (!hit) return;
+    if (hit.phaser) {
+      const b = hit.phaser.getBounds();
+      this._ciGfx.lineStyle(3, 0x00ff00, 1);
+      this._ciGfx.strokeRect(b.x, b.y, b.width, b.height);
+    } else if (hit.html) {
+      hit.html.style.outline = '3px solid #00ff00';
+      hit.html.style.outlineOffset = '-1px';
+      this._ciOutlinedEl = hit.html;
+    }
+    this._ciClipboard = hit.id;
+    this._ciLabel.setText(`[${this._ciIdx + 1}/${this._ciHits.length}] ${hit.id}`);
+  }
+
+  private _ciClearHighlight(): void {
+    this._ciGfx.clear();
+    if (this._ciOutlinedEl) {
+      this._ciOutlinedEl.style.outline = '';
+      this._ciOutlinedEl.style.outlineOffset = '';
+      this._ciOutlinedEl = null;
+    }
+  }
+
+  private _ciCleanup(): void {
+    this._ciClearHighlight();
+    this._ciGfx.setVisible(false);
+    this._ciLabel.setVisible(false);
+    this._ciClipboard = '';
+    this._ciHits = [];
+    if (this._ciClickHandler) {
+      document.removeEventListener('mousedown', this._ciClickHandler, true);
+      this._ciClickHandler = null;
+    }
+  }
+
   private debugKeyHeld(key: Phaser.Input.Keyboard.Key, dt: number, id: string): boolean {
     if (!key.isDown) {
       delete this.debugRepeatTimers[id];
@@ -2448,6 +2834,7 @@ export class GameScene extends Phaser.Scene {
         this.playerSystem.getY() + TUNING.SLASH_VFX_OFFSET_Y
       );
       this.slashSprite.setScale(TUNING.SLASH_VFX_SCALE);
+      this.slashSprite.setAngle(TUNING.SLASH_VFX_ANGLE);
       this.slashSprite.setVisible(true);
       this.slashSprite.setDepth(this.playerSystem.getY() - 0.3);
       this.slashSprite.play('slash-vfx-play');
@@ -3244,10 +3631,22 @@ export class GameScene extends Phaser.Scene {
               if (gen !== this.deathGen) return;
               this.prepareDeathScreenVisuals(rank);
             });
-          } else {
-            // No profile name — always show name entry for anon users
+          } else if (this.pendingRank > 0 && this.pendingRank <= 10) {
+            // Anon user scored top 10 — prompt for name before recording
             this.autoSubmitted = false;
             this.prepareNameEntryVisuals();
+          } else {
+            // Anon user outside top 10 — discard score, skip name entry,
+            // just show the global leaderboard
+            this.autoSubmitted = true;
+            const gen = this.deathGen;
+            fetchGlobalTop10(this.weekKey).then(data => {
+              if (gen !== this.deathGen) return;
+              if (data) this.globalLeaderboardData = data;
+            }).catch(() => {}).finally(() => {
+              if (gen !== this.deathGen) return;
+              this.prepareDeathScreenVisuals(0);
+            });
           }
         }
         break;
