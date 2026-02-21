@@ -1671,7 +1671,11 @@ export class GameScene extends Phaser.Scene {
         const artist = this.musicPlayer.getTrackArtist().toLowerCase();
         const isDeathPixie = artist === TUNING.INTRO_TRACK_ARTIST.toLowerCase();
 
-        if (!isDeathPixie) {
+        if (isDeathPixie) {
+          this.skyGlowSystem.clearHue();
+          this.laneHighlightColor = 0xff0000;
+          for (const h of this.laneHighlights) h.setFillStyle(0xff0000, 0.1);
+        } else {
           getDominantColor(curTrackId).then((color) => {
             if (this.lastBeatTrackId !== curTrackId) return; // stale
             if (color !== null) {
