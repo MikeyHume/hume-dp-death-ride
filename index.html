@@ -289,13 +289,25 @@
     document.addEventListener('pointerdown', tryPlayBootAudio);
     document.addEventListener('keydown', tryPlayBootAudio);
 
-    // Dismiss handler — any key or click after [ENTER] prompt is shown
-    function handleDismiss() {
+    // Dismiss handler — any key or tap after [ENTER] prompt is shown
+    var dismissPointerStart = 0;
+    var BIOS_TAP_THRESHOLD = 250; // ms — touch shorter than this = tap
+    function handleDismissDown() {
+      dismissPointerStart = Date.now();
+    }
+    function handleDismissUp() {
+      if (!readyForEnter) return;
+      if (Date.now() - dismissPointerStart < BIOS_TAP_THRESHOLD) {
+        dismissOverlay();
+      }
+    }
+    function handleDismissKey() {
       if (!readyForEnter) return;
       dismissOverlay();
     }
-    document.addEventListener('pointerdown', handleDismiss);
-    document.addEventListener('keydown', handleDismiss);
+    document.addEventListener('pointerdown', handleDismissDown);
+    document.addEventListener('pointerup', handleDismissUp);
+    document.addEventListener('keydown', handleDismissKey);
 
     // Build flat character list, count dots/non-dots, assign progress thresholds
     var chars = [];
@@ -457,8 +469,9 @@
         }
       } catch(e) {}
 
-      document.removeEventListener('pointerdown', handleDismiss);
-      document.removeEventListener('keydown', handleDismiss);
+      document.removeEventListener('pointerdown', handleDismissDown);
+      document.removeEventListener('pointerup', handleDismissUp);
+      document.removeEventListener('keydown', handleDismissKey);
       overlay.style.transition = 'opacity 0.3s ease-out';
       overlay.style.opacity = '0';
       setTimeout(function() {
