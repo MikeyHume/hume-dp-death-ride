@@ -47,6 +47,7 @@ export class MusicPlayer {
   private compact: boolean = true;
   private hovered: boolean = false;
   private cursorOver: boolean = false;
+  private mobileExpanded: boolean = false;  // mobile-only: tracks tap-to-toggle state
 
   // Phaser sprites that mirror HTML buttons (rendered through CRT shader)
   private btnSprites: Phaser.GameObjects.Image[] = [];
@@ -332,6 +333,15 @@ export class MusicPlayer {
     });
     this.canvasOverlay.appendChild(this.container);
 
+    // Mobile: tap or touch outside the player → collapse
+    if (GAME_MODE.mobileMode) {
+      document.addEventListener('pointerdown', (e) => {
+        if (!this.mobileExpanded) return;
+        if (this.container.contains(e.target as Node)) return;
+        this.mobileCollapse();
+      });
+    }
+
     // Thumbnail (left side) — links to Spotify
     const thumbLink = document.createElement('a');
     thumbLink.href = SPOTIFY_URL;
@@ -354,16 +364,14 @@ export class MusicPlayer {
     this.thumbnailImg.crossOrigin = 'anonymous';
     thumbLink.appendChild(this.thumbnailImg);
 
-    // Mobile: tap thumbnail to expand/collapse instead of opening Spotify link
+    // Mobile: tap thumbnail to expand; tap again to collapse
     if (GAME_MODE.mobileMode) {
       thumbLink.addEventListener('click', (e) => {
         e.preventDefault();
-        if (this.compact) {
-          this.hovered = true;
-          this.expandUI();
+        if (this.mobileExpanded) {
+          this.mobileCollapse();
         } else {
-          this.hovered = false;
-          this.collapseUI();
+          this.mobileExpand();
         }
       });
     }
@@ -409,8 +417,7 @@ export class MusicPlayer {
     if (GAME_MODE.mobileMode) {
       this.trackTitle.addEventListener('click', (e) => {
         e.preventDefault();
-        this.hovered = false;
-        this.collapseUI();
+        this.mobileCollapse();
       });
     }
     this.trackTitle.addEventListener('mouseenter', () => {
@@ -423,7 +430,8 @@ export class MusicPlayer {
 
     // Control buttons row with source indicator
     const btnContainer = document.createElement('div');
-    Object.assign(btnContainer.style, { display: 'flex', justifyContent: 'flex-end', gap: '14px', alignItems: 'center', transform: `scale(${MUSIC_BTN_SCALE})`, transformOrigin: 'bottom right' });
+    const btnScale = GAME_MODE.mobileMode ? 1 : MUSIC_BTN_SCALE;
+    Object.assign(btnContainer.style, { display: 'flex', justifyContent: 'flex-end', gap: '14px', alignItems: 'center', transform: `scale(${btnScale})`, transformOrigin: 'bottom right' });
     const menuBtn = this.createIconButton('ui/music menu.png', () => {
       if (!this.wmpPopup?.getIsOpen()) this.onWMPOpenCb?.();
       this.wmpPopup?.toggle();
@@ -1393,6 +1401,20 @@ export class MusicPlayer {
       this.scene.tweens.killTweensOf(s);
       this.scene.tweens.add({ targets: s, alpha: 1, duration: 400, ease: 'Sine.easeInOut' });
     }
+  }
+
+  /** Mobile: expand the music player via tap */
+  private mobileExpand(): void {
+    this.mobileExpanded = true;
+    this.hovered = true;
+    this.expandUI();
+  }
+
+  /** Mobile: collapse the music player via tap or outside touch */
+  private mobileCollapse(): void {
+    this.mobileExpanded = false;
+    this.hovered = false;
+    this.collapseUI();
   }
 
   /** Reveal music player during gameplay: fade in thumbnail, wait 1.5s, then expand */
