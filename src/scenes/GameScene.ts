@@ -395,25 +395,26 @@ export class GameScene extends Phaser.Scene {
         this.anyInputPressed = true;
       }
     });
+    // Track pointer start for mobile tap detection
+    let pointerDownTime = 0;
     this.input.on('pointerdown', () => {
-      if (this.profilePopup?.isOpen()) return;
-      // Block clicks while BIOS overlay is still visible
-      const biosOverlay = document.getElementById('boot-overlay');
-      if (biosOverlay && !biosOverlay.classList.contains('hidden')) return;
-      // iOS audio unlock fallback — activate Spotify/YT from any user gesture
+      pointerDownTime = performance.now();
+      // iOS audio unlock fallback — must happen in gesture context
       try {
         const sp = (window as any).__spotifyPlayer;
         if (sp?.activateElement) sp.activateElement();
       } catch {}
-      if (this.state === GameState.TUTORIAL || this.state === GameState.TITLE || this.state === GameState.STARTING) {
-        this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
+      // Desktop: fire click logic immediately (no tap ambiguity with mouse)
+      if (!GAME_MODE.mobileMode) {
+        this.handleScreenTap();
       }
-      if (this.state === GameState.TUTORIAL) {
-        this.tutorialAdvance = true;
-      } else if (this.state === GameState.TITLE) {
-        this.anyInputPressed = true;
-      } else if (this.state === GameState.STARTING) {
-        this.anyInputPressed = true;
+    });
+    // Mobile: fire click logic on pointerup only if it was a quick tap
+    this.input.on('pointerup', () => {
+      if (!GAME_MODE.mobileMode) return;
+      const held = performance.now() - pointerDownTime;
+      if (held < TUNING.MOBILE_TAP_THRESHOLD) {
+        this.handleScreenTap();
       }
     });
 
@@ -1100,6 +1101,9 @@ export class GameScene extends Phaser.Scene {
 
     // Global cursor tracking (works even when HTML overlays capture pointer events)
     const updateCursorFromEvent = (clientX: number, clientY: number) => {
+      // Don't show GameScene cursor while BIOS overlay is visible
+      const bios = document.getElementById('boot-overlay');
+      if (bios && !bios.classList.contains('hidden')) return;
       const rect = this.game.canvas.getBoundingClientRect();
       const cx = clientX + TUNING.CURSOR_OFFSET_X;
       const cy = clientY + TUNING.CURSOR_OFFSET_Y;
@@ -2494,6 +2498,23 @@ export class GameScene extends Phaser.Scene {
     this.profileHud.setVisible(true);
   }
 
+  /** Handle a screen tap/click for UI navigation (title, tutorial, countdown). */
+  private handleScreenTap(): void {
+    if (this.profilePopup?.isOpen()) return;
+    const biosOverlay = document.getElementById('boot-overlay');
+    if (biosOverlay && !biosOverlay.classList.contains('hidden')) return;
+    if (this.state === GameState.TUTORIAL || this.state === GameState.TITLE || this.state === GameState.STARTING) {
+      this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
+    }
+    if (this.state === GameState.TUTORIAL) {
+      this.tutorialAdvance = true;
+    } else if (this.state === GameState.TITLE) {
+      this.anyInputPressed = true;
+    } else if (this.state === GameState.STARTING) {
+      this.anyInputPressed = true;
+    }
+  }
+
   private tryAutoplayMusic(): void {
     this.musicPlayer.startTitleMusic();
     this.musicPlayer.setVisible(true);
@@ -2754,13 +2775,26 @@ export class GameScene extends Phaser.Scene {
     this.crosshairHiddenByWMP = false;
     this.tweens.killTweensOf(this.crosshair);
     if (enabled) {
-      this.crosshair.setVisible(true).setAlpha(0);
-      this.tweens.add({ targets: this.crosshair, alpha: 1, duration: 1500 });
+      // Mobile: hide all cursors during gameplay (no crosshair or pointer cursor)
+      if (GAME_MODE.mobileMode) {
+        this.crosshair.setVisible(false).setAlpha(0);
+        this.cursorMain.setVisible(false);
+        if (this.cursorStroke) this.cursorStroke.setVisible(false);
+        this.htmlCursor.style.display = 'none';
+      } else {
+        this.crosshair.setVisible(true).setAlpha(0);
+        this.tweens.add({ targets: this.crosshair, alpha: 1, duration: 1500 });
+        this.cursorMain.setVisible(false);
+        if (this.cursorStroke) this.cursorStroke.setVisible(false);
+      }
     } else {
       this.crosshair.setVisible(false).setAlpha(0);
+      // Mobile: also hide pointer cursor on non-gameplay screens (title will show it via resetToTitle)
+      if (!GAME_MODE.mobileMode) {
+        this.cursorMain.setVisible(true);
+        if (this.cursorStroke) this.cursorStroke.setVisible(true);
+      }
     }
-    this.cursorMain.setVisible(!enabled);
-    if (this.cursorStroke) this.cursorStroke.setVisible(!enabled);
   }
 
   /** Returns true on first press, then repeats after an initial delay when held. */
@@ -4371,6 +4405,14 @@ export class GameScene extends Phaser.Scene {
     this.autoSubmitted = false;
     this.debugPreStartOverlay.setVisible(false);
     this.reflectionSystem.setVisible(false);
+
+    // Mobile: hide all cursors on death/high score screen
+    if (GAME_MODE.mobileMode) {
+      this.cursorMain.setVisible(false);
+      if (this.cursorStroke) this.cursorStroke.setVisible(false);
+      this.crosshair.setVisible(false);
+      this.htmlCursor.style.display = 'none';
+    }
 
     // Reset time dilation and restore music rate
     if (this.timeDilation) {

@@ -522,12 +522,15 @@
       overlay.appendChild(bootCursor);
     };
     cursorImg.src = 'ui/cursor.png';
-    document.addEventListener('mousemove', function(e) {
+    function updateBootCursor(clientX, clientY) {
       if (dismissed) return;
       bootCursor.style.display = '';
-      bootCursor.style.left = (e.clientX + (cc.offsetX || 0)) + 'px';
-      bootCursor.style.top = (e.clientY + (cc.offsetY || 0)) + 'px';
-    });
+      bootCursor.style.left = (clientX + (cc.offsetX || 0)) + 'px';
+      bootCursor.style.top = (clientY + (cc.offsetY || 0)) + 'px';
+    }
+    document.addEventListener('mousemove', function(e) { updateBootCursor(e.clientX, e.clientY); });
+    document.addEventListener('pointerdown', function(e) { updateBootCursor(e.clientX, e.clientY); });
+    document.addEventListener('pointermove', function(e) { updateBootCursor(e.clientX, e.clientY); });
   })();
   </script>
 
