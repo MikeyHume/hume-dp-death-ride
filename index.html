@@ -156,6 +156,11 @@
       font-family: var(--bios-title-font);
       font-size: var(--bios-title-size);
     }
+    #boot-lines .bios-version {
+      font-family: var(--bios-title-font);
+      font-size: var(--bios-title-size);
+      transform-origin: left center;
+    }
 
     #boot-bar-wrap {
       position: absolute;
@@ -214,6 +219,7 @@
     <div id="boot-content">
       <div id="boot-lines">
         <div class="line" data-text="DP MOTO BIOS      v0.1"></div>
+        <div class="line bios-version" data-text=""></div>
         <div class="line" data-text="VIDEO  ............... OK"></div>
         <div class="line" data-text="AUDIO  ............. SURE"></div>
         <div class="line" data-text="LOADING GAME ........ WTV"></div>
@@ -252,6 +258,48 @@
     var DOT_TIME_PERCENT = 0.85;  // fraction of loading progress that dots consume
     var DOT_POP_MS       = 60;    // min ms between each dot popping on
     var WORD_POP_MS      = 30;    // ms pause after a word chunk appears
+
+    // Populate version line with timestamp and scale to match title width
+    (function() {
+      var now = new Date();
+      var dd = String(now.getDate()).padStart(2, '0');
+      var mm = String(now.getMonth() + 1).padStart(2, '0');
+      var yy = String(now.getFullYear()).slice(-2);
+      var hh = String(now.getHours()).padStart(2, '0');
+      var mi = String(now.getMinutes()).padStart(2, '0');
+      var ss = String(now.getSeconds()).padStart(2, '0');
+      var versionText = 'ver 0.00.02 . . . last saved [ ' + dd + ' : ' + mm + ' : ' + yy + ' ]  [ ' + hh + ' : ' + mi + ' : ' + ss + ' ]';
+      var versionEl = document.querySelector('.bios-version');
+      if (versionEl) {
+        versionEl.setAttribute('data-text', versionText);
+        // Scale version line to match title width after fonts load
+        function scaleVersion() {
+          var titleEl = document.querySelector('#boot-lines .line:first-child');
+          if (!titleEl || !versionEl) return;
+          // Temporarily make both visible to measure
+          titleEl.style.visibility = 'visible';
+          titleEl.textContent = titleEl.getAttribute('data-text') || '';
+          versionEl.style.visibility = 'visible';
+          versionEl.textContent = versionText;
+          versionEl.style.transform = 'none';
+          var titleW = titleEl.getBoundingClientRect().width;
+          var versionW = versionEl.getBoundingClientRect().width;
+          if (versionW > 0 && titleW > 0) {
+            versionEl.style.transform = 'scaleX(' + (titleW / versionW) + ')';
+          }
+          // Reset visibility — the typewriter will reveal them
+          titleEl.style.visibility = '';
+          titleEl.textContent = '';
+          versionEl.style.visibility = '';
+          versionEl.textContent = '';
+        }
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(scaleVersion);
+        } else {
+          setTimeout(scaleVersion, 100);
+        }
+      }
+    })();
 
     var fill = document.getElementById('boot-bar-fill');
     var lineEls = document.querySelectorAll('#boot-lines .line');
