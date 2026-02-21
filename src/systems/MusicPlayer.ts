@@ -564,6 +564,8 @@ export class MusicPlayer {
       events: {
         onReady: () => {
           this.ytReady = true;
+          // Expose YT player globally so BIOS dismiss gesture can unlock iOS audio
+          (window as any).__ytPlayer = this.ytPlayer;
           if (this.pendingTitlePlay) {
             this.pendingTitlePlay = false;
             this.playTitleVideo();

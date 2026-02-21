@@ -132,6 +132,9 @@ export class SpotifyPlayerSystem {
         }
       });
 
+      // Expose player globally so BIOS dismiss gesture can call activateElement() for iOS
+      (window as any).__spotifyPlayer = this.player;
+
       this.player.connect();
 
       // Safety timeout
@@ -330,6 +333,9 @@ export class SpotifyPlayerSystem {
   destroy(): void {
     if (this.player) {
       this.player.disconnect();
+      if ((window as any).__spotifyPlayer === this.player) {
+        (window as any).__spotifyPlayer = null;
+      }
       this.player = null;
     }
     this.ready = false;

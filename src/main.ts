@@ -32,6 +32,9 @@ handleCallback().then((wasCallback) => {
 
   const game = new Phaser.Game(config);
 
+  // Expose game instance so BIOS overlay can unlock Phaser's audio context
+  (window as any).__phaserGame = game;
+
   // Register CRT as a post-processing pipeline
   const renderer = game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
   renderer.pipelines.addPostPipeline('CRTPipeline', CRTPipeline);

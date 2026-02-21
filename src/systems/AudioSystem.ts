@@ -24,6 +24,10 @@ export class AudioSystem {
 
     try {
       this.ctx = new AudioContext();
+      // iOS: AudioContext starts suspended — resume it
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
     } catch (e) {
       console.warn('AudioSystem: AudioContext creation failed', e);
     }

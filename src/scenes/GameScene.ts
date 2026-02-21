@@ -400,6 +400,11 @@ export class GameScene extends Phaser.Scene {
       // Block clicks while BIOS overlay is still visible
       const biosOverlay = document.getElementById('boot-overlay');
       if (biosOverlay && !biosOverlay.classList.contains('hidden')) return;
+      // iOS audio unlock fallback — activate Spotify/YT from any user gesture
+      try {
+        const sp = (window as any).__spotifyPlayer;
+        if (sp?.activateElement) sp.activateElement();
+      } catch {}
       if (this.state === GameState.TUTORIAL || this.state === GameState.TITLE || this.state === GameState.STARTING) {
         this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
       }
@@ -2551,10 +2556,13 @@ export class GameScene extends Phaser.Scene {
     // Black overlay starts hidden — will be shown when cutscene finishes
     this.blackOverlay.setVisible(false);
 
-    // Tutorial phases start as 'done' — cutscene callback will kick off 'black_reveal'
-    this.tutorialPhase = 'done';
-    this.tutorialTimer = 0;
-    this.tutorialAdvance = false;
+    // Desktop: start in 'done' — cutscene animationcomplete callback kicks off controls_wait
+    // Mobile: introTutSprite is null so the else branch already set phase to 'controls_wait'
+    if (this.introTutSprite) {
+      this.tutorialPhase = 'done';
+      this.tutorialTimer = 0;
+      this.tutorialAdvance = false;
+    }
   }
 
   private updateTutorial(dt: number): void {

@@ -15,10 +15,10 @@ export class OrientationOverlay {
 
     this.label = scene.add.text(
       TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
-      'Rotate your device', {
+      "this isn't tik tok...\nrotate your shit", {
         fontSize: '48px',
-        color: '#ffffff',
-        fontFamily: 'Retro Gaming',
+        color: '#ff2a2a',
+        fontFamily: 'Alagard',
         align: 'center',
       }
     ).setOrigin(0.5).setDepth(2001).setScrollFactor(0).setVisible(false);
