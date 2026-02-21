@@ -51,7 +51,9 @@
       "Bash(find:*)",
       "Bash(sort:*)",
       "Bash(python:*)",
-      "WebFetch(domain:cdn.discordapp.com)"
+      "WebFetch(domain:cdn.discordapp.com)",
+      "Bash(identify:*)",
+      "Bash(npm install:*)"
     ],
     "additionalDirectories": [
       "c:\\Users\\mikey\\Claude_Playground\\dp_moto\\scripts\\beat_data"

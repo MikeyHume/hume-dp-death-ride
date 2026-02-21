@@ -251,6 +251,17 @@ Spotify and YouTube TOS prohibit syncing streamed audio to gameplay visuals. Bea
 - **Juice matters.** Screen shake, speed lines, flashes, reflections, CRT effects — these aren't extras, they're core to the arcade cabinet identity.
 - **Simplicity over cleverness.** Prefer straightforward solutions. Don't over-abstract. Three similar lines beat a premature utility function.
 
+### Mikey's Request Format
+
+Mikey's requests follow this structure:
+1. **[CHANGE]** — what to add or change
+2. **[PROTECT]** — what NOT to touch or break by any means (protect at all costs, it works the way he wants)
+3. **[GOAL]** — the overall goal, so Claude can get creative achieving the change while protecting everything that works
+
+Claude must always parse requests through this lens: implement the change, safeguard the protected items, and find creative solutions that serve the goal without breaking what's already good.
+
+**Default [PROTECT]:** If Mikey doesn't specify a [PROTECT], assume all "Perfect Items" (see table below) and any recent features he seems happy with are implicitly protected.
+
 ### Rules
 
 **ALWAYS:**

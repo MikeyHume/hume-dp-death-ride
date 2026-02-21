@@ -45,45 +45,53 @@ export class BootScene extends Phaser.Scene {
       // Mobile: load only first frame of title loop for static title background
       this.load.image('start-loop-00', 'assets/start/start_loop/DP_Death_Ride_Title_Loop00.jpg');
     }
-    this.load.spritesheet('player-start', 'assets/dp_player/dp_start.png', {
-      frameWidth: TUNING.START_ANIM_FRAME_WIDTH,
-      frameHeight: TUNING.START_ANIM_FRAME_HEIGHT,
+    // Mobile: load half-res nearest-neighbor sprite sheets (_mobile suffix)
+    // Same texture keys, same animations, just smaller textures + frame dims
+    const mob = GAME_MODE.mobileMode;
+    const sfx = mob ? '_mobile' : '';                                     // file suffix
+    const ms = TUNING.MOBILE_SPRITE_SCALE;
+    const fw = (w: number) => mob ? Math.floor(w * ms) : w;              // scale frame width
+    const fh = (h: number) => mob ? Math.floor(h * ms) : h;              // scale frame height
+
+    this.load.spritesheet('player-ride', `assets/dp_player/dp_moto_v03${sfx}.png`, {
+      frameWidth: fw(TUNING.PLAYER_FRAME_WIDTH),
+      frameHeight: fh(TUNING.PLAYER_FRAME_HEIGHT),
     });
-    this.load.spritesheet('player-ride', 'assets/dp_player/dp_moto_v03.png', {
-      frameWidth: TUNING.PLAYER_FRAME_WIDTH,
-      frameHeight: TUNING.PLAYER_FRAME_HEIGHT,
+    this.load.spritesheet('player-start', `assets/dp_player/dp_start${sfx}.png`, {
+      frameWidth: fw(TUNING.START_ANIM_FRAME_WIDTH),
+      frameHeight: fh(TUNING.START_ANIM_FRAME_HEIGHT),
     });
-    this.load.spritesheet('player-attack', 'assets/dp_player/dp_attack.png', {
-      frameWidth: TUNING.PLAYER_ATTACK_FRAME_WIDTH,
-      frameHeight: TUNING.PLAYER_ATTACK_FRAME_HEIGHT,
+    this.load.spritesheet('player-attack', `assets/dp_player/dp_attack${sfx}.png`, {
+      frameWidth: fw(TUNING.PLAYER_ATTACK_FRAME_WIDTH),
+      frameHeight: fh(TUNING.PLAYER_ATTACK_FRAME_HEIGHT),
     });
-    this.load.spritesheet('player-powered', 'assets/dp_player/dp_powered_up.png', {
-      frameWidth: TUNING.POWERED_FRAME_WIDTH,
-      frameHeight: TUNING.POWERED_FRAME_HEIGHT,
+    this.load.spritesheet('player-powered', `assets/dp_player/dp_powered_up${sfx}.png`, {
+      frameWidth: fw(TUNING.POWERED_FRAME_WIDTH),
+      frameHeight: fh(TUNING.POWERED_FRAME_HEIGHT),
     });
-    this.load.spritesheet('player-speedup', 'assets/dp_player/dp_speed_up.png', {
-      frameWidth: TUNING.SPEEDUP_FRAME_WIDTH,
-      frameHeight: TUNING.SPEEDUP_FRAME_HEIGHT,
+    this.load.spritesheet('player-speedup', `assets/dp_player/dp_speed_up${sfx}.png`, {
+      frameWidth: fw(TUNING.SPEEDUP_FRAME_WIDTH),
+      frameHeight: fh(TUNING.SPEEDUP_FRAME_HEIGHT),
     });
-    this.load.spritesheet('player-rocket-launch', 'assets/dp_player/dp_rocket_lancher_v2.png', {
-      frameWidth: TUNING.ROCKET_LAUNCHER_FRAME_WIDTH,
-      frameHeight: TUNING.ROCKET_LAUNCHER_FRAME_HEIGHT,
+    this.load.spritesheet('player-rocket-launch', `assets/dp_player/dp_rocket_lancher_v2${sfx}.png`, {
+      frameWidth: fw(TUNING.ROCKET_LAUNCHER_FRAME_WIDTH),
+      frameHeight: fh(TUNING.ROCKET_LAUNCHER_FRAME_HEIGHT),
     });
-    this.load.spritesheet('player-collect-rocket', 'assets/COL/COL_rocket.png', {
-      frameWidth: TUNING.COL_FRAME_WIDTH,
-      frameHeight: TUNING.COL_FRAME_HEIGHT,
+    this.load.spritesheet('player-collect-rocket', `assets/COL/COL_rocket${sfx}.png`, {
+      frameWidth: fw(TUNING.COL_FRAME_WIDTH),
+      frameHeight: fh(TUNING.COL_FRAME_HEIGHT),
     });
-    this.load.spritesheet('player-collect-shield', 'assets/COL/COL_shield.png', {
-      frameWidth: TUNING.COL_FRAME_WIDTH,
-      frameHeight: TUNING.COL_FRAME_HEIGHT,
+    this.load.spritesheet('player-collect-shield', `assets/COL/COL_shield${sfx}.png`, {
+      frameWidth: fw(TUNING.COL_FRAME_WIDTH),
+      frameHeight: fh(TUNING.COL_FRAME_HEIGHT),
     });
-    this.load.spritesheet('player-collect-hit', 'assets/COL/COL_hit.png', {
-      frameWidth: TUNING.COL_FRAME_WIDTH,
-      frameHeight: TUNING.COL_FRAME_HEIGHT,
+    this.load.spritesheet('player-collect-hit', `assets/COL/COL_hit${sfx}.png`, {
+      frameWidth: fw(TUNING.COL_FRAME_WIDTH),
+      frameHeight: fh(TUNING.COL_FRAME_HEIGHT),
     });
-    this.load.spritesheet('rocket-projectile', 'assets/pickups/rocket_Projectile.png', {
-      frameWidth: TUNING.ROCKET_PROJ_FRAME_W,
-      frameHeight: TUNING.ROCKET_PROJ_FRAME_H,
+    this.load.spritesheet('rocket-projectile', `assets/pickups/rocket_Projectile${sfx}.png`, {
+      frameWidth: fw(TUNING.ROCKET_PROJ_FRAME_W),
+      frameHeight: fh(TUNING.ROCKET_PROJ_FRAME_H),
     });
     this.load.audio('countdown-music', 'assets/audio/music/hell_girl_countdown.mp3');
     this.load.audio('sfx-click', 'assets/audio/sfx/mouse click.mp3');
@@ -95,9 +103,9 @@ export class BootScene extends Phaser.Scene {
     this.load.audio('sfx-obstacle-kill', 'assets/audio/sfx/obstacle_kill.mp3');
     this.load.audio('sfx-potion-pickup', 'assets/audio/sfx/potion_pickup.mp3');
     this.load.audio('sfx-potion-used', 'assets/audio/sfx/potion_used.mp3');
-    this.load.spritesheet('pickup-rocket', 'assets/pickups/rocket pickup.png', {
-      frameWidth: TUNING.PICKUP_FRAME_SIZE,
-      frameHeight: TUNING.PICKUP_FRAME_SIZE,
+    this.load.spritesheet('pickup-rocket', `assets/pickups/rocket pickup${sfx}.png`, {
+      frameWidth: fw(TUNING.PICKUP_FRAME_SIZE),
+      frameHeight: fh(TUNING.PICKUP_FRAME_SIZE),
     });
     this.load.image('obstacle-crash', 'assets/obstacles/road_barrier_01.png');
     this.load.image('obstacle-reflection-alt', 'assets/obstacles/road_barrier_01_reflection_alt.png');
@@ -109,31 +117,31 @@ export class BootScene extends Phaser.Scene {
     this.load.image('buildings-big', 'assets/background/buildings_Front_row_dark.png');
     this.load.image('railing', 'assets/background/railing_dark.jpg');
 
-    // Car sprite sheets (20 animated cars)
+    // Car sprite sheets (all 20, mobile uses _mobile half-res variants)
     for (let c = 1; c <= TUNING.CAR_COUNT; c++) {
       const key = `car-${String(c).padStart(3, '0')}`;
-      this.load.spritesheet(key, `assets/cars/car_${String(c).padStart(3, '0')}.png`, {
-        frameWidth: TUNING.CAR_FRAME_WIDTH,
-        frameHeight: TUNING.CAR_FRAME_HEIGHT,
+      this.load.spritesheet(key, `assets/cars/car_${String(c).padStart(3, '0')}${sfx}.png`, {
+        frameWidth: fw(TUNING.CAR_FRAME_WIDTH),
+        frameHeight: fh(TUNING.CAR_FRAME_HEIGHT),
       });
     }
 
     // Explosion sprite sheet
-    this.load.spritesheet('explosion', 'assets/vfx/vfx_explosion.png', {
-      frameWidth: TUNING.EXPLOSION_FRAME_SIZE,
-      frameHeight: TUNING.EXPLOSION_FRAME_SIZE,
+    this.load.spritesheet('explosion', `assets/vfx/vfx_explosion${sfx}.png`, {
+      frameWidth: fw(TUNING.EXPLOSION_FRAME_SIZE),
+      frameHeight: fh(TUNING.EXPLOSION_FRAME_SIZE),
     });
 
     // Slash VFX sprite sheet (8 frames horizontal strip, frame 0 is blank)
-    this.load.spritesheet('slash-vfx', 'assets/vfx/slash.png', {
-      frameWidth: TUNING.SLASH_VFX_FRAME_WIDTH,
-      frameHeight: TUNING.SLASH_VFX_FRAME_HEIGHT,
+    this.load.spritesheet('slash-vfx', `assets/vfx/slash${sfx}.png`, {
+      frameWidth: fw(TUNING.SLASH_VFX_FRAME_WIDTH),
+      frameHeight: fh(TUNING.SLASH_VFX_FRAME_HEIGHT),
     });
 
     // Countdown sprite sheet (3×2 grid, 600×600 per frame, last frame blank)
-    this.load.spritesheet('countdown', 'assets/start/countdown.png', {
-      frameWidth: TUNING.COUNTDOWN_FRAME_SIZE,
-      frameHeight: TUNING.COUNTDOWN_FRAME_SIZE,
+    this.load.spritesheet('countdown', `assets/start/countdown${sfx}.png`, {
+      frameWidth: fw(TUNING.COUNTDOWN_FRAME_SIZE),
+      frameHeight: fh(TUNING.COUNTDOWN_FRAME_SIZE),
     });
 
     // UI assets
@@ -143,9 +151,9 @@ export class BootScene extends Phaser.Scene {
     this.load.image('crosshair', 'ui/crosshair.png');
     this.load.image('rocket-icon', 'assets/pickups/rocket_icon.png');
     this.load.image('rocket-icon-empty', 'assets/pickups/rocket_empty_icon.png');
-    this.load.spritesheet('pickup-shield', 'assets/pickups/shield_pickup.png', {
-      frameWidth: TUNING.SHIELD_FRAME_WIDTH,
-      frameHeight: TUNING.SHIELD_FRAME_HEIGHT,
+    this.load.spritesheet('pickup-shield', `assets/pickups/shield_pickup${sfx}.png`, {
+      frameWidth: fw(TUNING.SHIELD_FRAME_WIDTH),
+      frameHeight: fh(TUNING.SHIELD_FRAME_HEIGHT),
     });
     this.load.image('shield-icon', 'assets/pickups/shield_icon.png');
     this.load.image('shield-icon-empty', 'assets/pickups/shield_empty_icon.png');
@@ -301,7 +309,7 @@ export class BootScene extends Phaser.Scene {
       repeat: 0,
     });
 
-    // Car drive animations (20 sprite sheets, 59 usable frames each at 12fps)
+    // Car drive animations (all 20 cars, mobile uses half-res sheets)
     for (let c = 1; c <= TUNING.CAR_COUNT; c++) {
       const key = `car-${String(c).padStart(3, '0')}`;
       this.anims.create({

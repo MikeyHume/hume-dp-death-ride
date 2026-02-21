@@ -2,6 +2,7 @@ export const TUNING = {
   // Display
   GAME_WIDTH: 1920,
   GAME_HEIGHT: 1080,
+  MOBILE_SPRITE_SCALE: 0.5,         // mobile sprite sheets are pre-scaled to this factor (nearest-neighbor)
 
   // Road bounds (bottom half of screen)
   ROAD_TOP_Y: 480,
