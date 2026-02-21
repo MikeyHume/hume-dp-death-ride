@@ -65,6 +65,7 @@ export class PlayerSystem {
     this.setBaseDisplaySize(displayW, displayH);
 
     this.sprite.play('player-ride');
+    this.sprite.setDepth(this.sprite.y + 0.2);
   }
 
   /** Play the start animation once, then transition to ride loop */

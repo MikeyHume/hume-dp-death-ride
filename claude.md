@@ -184,10 +184,47 @@ User launches app
 
 ## Immediate Next Step After Restart
 
-1. Help finish setting up Supabase MCP access (user generating token).
-2. Verify Claude can list tables.
-3. Return to WMP context menu — verify it renders correctly in-game.
-4. Ask a context-sensitive question to resume where we paused.
+1. Fix hue-shift background bug (solid color block instead of transparent tinted layers).
+2. Implement "hume" third music source (see Planned Feature below).
+3. Ask a context-sensitive question to resume where we paused.
+
+---
+
+## Planned Feature: "hume" Third Music Source (TOS-Compliant Local Audio)
+
+**Status:** Plan approved, not yet implemented. Fix hue-shift bug first.
+
+### Why
+Spotify and YouTube TOS prohibit syncing streamed audio to gameplay visuals. Beat data, course data, and rhythm mode all sync to music. Need a third source ("hume") playing local audio files, auto-switching whenever any music sync occurs.
+
+### Key Requirements
+- Add `'hume'` to `MusicSource` type (`'youtube' | 'spotify' | 'hume'`)
+- **TOS rule**: any beat sync / rhythm mode → auto-switch to hume source
+- When hume active, Spotify + YouTube must be **fully stopped** (no background streaming)
+- Local audio files at `public/assets/audio/music/Rythem_Songs/{spotifyTrackId}.mp3`
+- Source masters at `D:\hume music\Music` — fuzzy-match to catalog, keep smallest per track (prefer MP3)
+- Flag tracks with >5s duration mismatch for reprocessing
+- Debug music source text: 18px → 72px, bold
+- `getPlaybackPosition()` works via `audio.currentTime` (most accurate of all three sources)
+
+### Implementation Phases
+1. **Offline scripts** — `scripts/match_local_audio.py` + `scripts/copy_local_audio.py` (fuzzy match, copy/convert)
+2. **HumePlayerSystem** — `src/systems/HumePlayerSystem.ts` (HTML5 Audio, mirrors SpotifyPlayerSystem API) + `src/config/humeManifest.ts` (static track ID set)
+3. **MusicPlayer integration** — Add hume source type, route 11 playback methods, switchToHume/switchFromHume
+4. **WMPPopup** — Source type + UI updates
+5. **GameScene** — Auto-switch to hume on rhythm mode entry/track change, switch back on exit
+6. **Debug text** — 72px bold
+7. **Tuning** — `MUSIC_VOL_HUME: 1.0`
+
+### Files to Create
+- `scripts/match_local_audio.py`, `scripts/copy_local_audio.py`
+- `src/systems/HumePlayerSystem.ts`, `src/config/humeManifest.ts`
+
+### Files to Modify
+- `src/systems/MusicPlayer.ts` (type + routing + switching)
+- `src/ui/WMPPopup.ts` (source type + UI)
+- `src/scenes/GameScene.ts` (rhythm auto-switch, debug text)
+- `src/config/tuning.ts` (MUSIC_VOL_HUME)
 
 ---
 

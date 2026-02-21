@@ -28,7 +28,7 @@ import { submitScore, fetchGlobalTop10, GlobalLeaderboardEntry } from '../system
 import { submitRhythmScore, fetchRhythmTop10 } from '../systems/RhythmLeaderboardService';
 import { ReflectionSystem } from '../systems/ReflectionSystem';
 import { SkyGlowSystem } from '../systems/SkyGlowSystem';
-import { fetchBeatData } from '../systems/MusicCatalogService';
+import { fetchBeatData, getDominantColor } from '../systems/MusicCatalogService';
 import { CourseRunner, loadCourseData, CourseData } from '../systems/CourseRunner';
 import { SongSelectScreen } from '../ui/SongSelectScreen';
 
@@ -198,6 +198,7 @@ export class GameScene extends Phaser.Scene {
 
   // Lane highlights (collision warning)
   private laneHighlights: Phaser.GameObjects.Rectangle[] = [];
+  private laneHighlightColor: number = 0xff0000;
 
   // Lane warning indicators (pooled, right-edge preview circles)
   private warningPool: { circle: Phaser.GameObjects.Arc; preview: Phaser.GameObjects.Sprite; currentKey: string }[] = [];
@@ -420,8 +421,10 @@ export class GameScene extends Phaser.Scene {
     this.parallaxSystem = new ParallaxSystem(this);
     this.skyGlowSystem = new SkyGlowSystem(this, this.parallaxSystem);
     this.roadSystem = new RoadSystem(this);
+    this.skyGlowSystem.setRoadTile(this.roadSystem.getRoadTile());
     this.obstacleSystem = new ObstacleSystem(this, this.weekSeed);
     this.reflectionSystem = new ReflectionSystem(this, this.parallaxSystem, this.obstacleSystem.getPool(), this.roadSystem.getRoadTile());
+    this.reflectionSystem.setLinesTile(this.roadSystem.getLinesTile());
     this.pickupSystem = new PickupSystem(this);
     this.rocketSystem = new RocketSystem(this, this.obstacleSystem);
 
@@ -1659,37 +1662,28 @@ export class GameScene extends Phaser.Scene {
 
     this.perfSystem.update(dt);
 
-    // Poll for track changes — extract dominant color from thumbnail, load beat data in Rhythm Mode
+    // Poll for track changes — hue-shift background + load beat/course data in Rhythm Mode
     const curTrackId = this.musicPlayer.getTrackId();
     if (curTrackId !== this.lastBeatTrackId) {
       this.lastBeatTrackId = curTrackId;
       if (curTrackId) {
-        // Death Pixie: no background change at all
+        // Hue-shift background from album art (skip Death Pixie tracks)
         const artist = this.musicPlayer.getTrackArtist().toLowerCase();
         const isDeathPixie = artist === TUNING.INTRO_TRACK_ARTIST.toLowerCase();
 
         if (!isDeathPixie) {
-          // Extract dominant color, push to full sat/bright, hue-shift sky + all layers
-          // Delay 150ms so the thumbnail <img> src has updated before we read pixels
-          const thumbImg = this.musicPlayer.getThumbnailImage();
-          const applySkyColor = () => {
+          getDominantColor(curTrackId).then((color) => {
             if (this.lastBeatTrackId !== curTrackId) return; // stale
-            const color = SkyGlowSystem.extractDominantColor(thumbImg);
-            this.skyGlowSystem.applyHueShift(color);
-            this.skyGlowSystem.setStaticColor(color);
-          };
-          setTimeout(() => {
-            if (this.lastBeatTrackId !== curTrackId) return; // stale
-            if (thumbImg.complete && thumbImg.naturalWidth > 0) {
-              applySkyColor();
-            } else {
-              thumbImg.addEventListener('load', applySkyColor, { once: true });
+            if (color !== null) {
+              console.log(`[SKY HUE] artist=${artist} color=#${color.toString(16).padStart(6,'0')} hue=${SkyGlowSystem.getHueDegrees(color).toFixed(1)}°`);
+              this.skyGlowSystem.applyHueFromColor(color);
+              this.laneHighlightColor = color;
+              for (const h of this.laneHighlights) h.setFillStyle(color, 0.1);
             }
-          }, 150);
+          });
         }
-        // Death Pixie: intentionally do nothing — keep whatever sky is showing
 
-        // Rhythm Mode: also fetch beat data for reactive visuals + course data for spawning
+        // Rhythm Mode: fetch beat data for reactive visuals + course data for spawning
         if (this.rhythmMode) {
           fetchBeatData(curTrackId).then((bd) => {
             if (bd && this.lastBeatTrackId === curTrackId) {
@@ -1705,8 +1699,9 @@ export class GameScene extends Phaser.Scene {
           });
         }
       } else {
-        this.skyGlowSystem.setStaticColor(null);
-        this.skyGlowSystem.clearHueShift();
+        this.skyGlowSystem.clearHue();
+        this.laneHighlightColor = 0xff0000;
+        for (const h of this.laneHighlights) h.setFillStyle(0xff0000, 0.1);
         if (this.rhythmMode) this.skyGlowSystem.clearBeatData();
       }
     }

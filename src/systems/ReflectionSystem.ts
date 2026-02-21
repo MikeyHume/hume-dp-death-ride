@@ -22,6 +22,7 @@ export class ReflectionSystem {
   private puddleRoadMask: Phaser.Display.Masks.BitmapMask;  // non-inverted (visible inside puddles)
   private obstaclePool: readonly Phaser.GameObjects.Sprite[];
   private roadTile: Phaser.GameObjects.TileSprite;
+  private linesTile: Phaser.GameObjects.TileSprite | null = null;
   private maskEnabled: boolean = true;
 
   // Layer grouping all reflected background objects for water distortion PostFX
@@ -127,6 +128,7 @@ export class ReflectionSystem {
 
     // Apply inverted mask to road — puddle holes reveal reflections underneath
     this.roadTile.setMask(this.puddleMask);
+    // Lines tile gets same mask (set later via setLinesTile)
 
     // --- Puddle road overlay (semi-transparent road visible inside puddle holes) ---
     // Non-inverted mask from the same RT = visible only WHERE puddles are
@@ -162,6 +164,14 @@ export class ReflectionSystem {
 
     // Start hidden (shown when entering PLAYING state)
     this.setVisible(false);
+  }
+
+  /** Apply the same puddle mask to the road lines overlay so lines clip inside puddle holes. */
+  setLinesTile(linesTile: Phaser.GameObjects.TileSprite): void {
+    this.linesTile = linesTile;
+    if (this.maskEnabled) {
+      this.linesTile.setMask(this.puddleMask);
+    }
   }
 
   update(_roadSpeed: number, _dt: number): void {
@@ -335,9 +345,11 @@ export class ReflectionSystem {
     // Toggle road mask — when reflections are hidden, road should be solid
     if (visible) {
       this.roadTile.setMask(this.puddleMask);
+      this.linesTile?.setMask(this.puddleMask);
       this.puddleRoadOverlay.setMask(this.puddleRoadMask);
     } else {
       this.roadTile.clearMask();
+      this.linesTile?.clearMask();
       this.puddleRoadOverlay.clearMask();
     }
   }
@@ -346,8 +358,10 @@ export class ReflectionSystem {
     this.maskEnabled = !this.maskEnabled;
     if (this.maskEnabled) {
       this.roadTile.setMask(this.puddleMask);
+      this.linesTile?.setMask(this.puddleMask);
     } else {
       this.roadTile.clearMask();
+      this.linesTile?.clearMask();
     }
   }
 
@@ -364,6 +378,7 @@ export class ReflectionSystem {
 
   destroy(): void {
     this.roadTile.clearMask();
+    this.linesTile?.clearMask();
     this.puddleRoadOverlay.clearMask();
     this.puddleRoadOverlay.destroy();
     this.reflectionBgLayer.destroy();

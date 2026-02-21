@@ -545,32 +545,10 @@ export const TUNING = {
   TDIL_VERTICAL_BLEND: 0.85,      // how much vertical movement stays real-time (0=fully dilated, 1=fully real)
   TDIL_MUSIC_MIN_RATE: 0.25,      // YouTube min playback rate (YT API floor)
 
-  // ── Sky glow + building bloom (music-reactive atmosphere) ──
-  SKY_GLOW_COLOR: 0xcc44aa,           // glow/tint color (purple-magenta)
-  SKY_GLOW_ALPHA_MAX: 0.45,           // peak ADD overlay alpha
-  // SKY_GLOW_TINT_STRENGTH removed — replaced by gradient background
-  SKY_GLOW_BASS_WEIGHT: 1.5,          // how much bass drives sky glow (multiplier on 0-1 bass)
-  SKY_GLOW_ENERGY_WEIGHT: 0.5,        // how much overall energy drives sky glow
-  SKY_GLOW_SMOOTHING: 0.15,           // per-frame smoothing (0=frozen, 1=instant, 0.1-0.2=smooth)
-  SKY_GLOW_BEAT_HZ: 1.5,              // fallback pulse Hz when no beat data loaded
-  SKY_GLOW_EASE: 2.5,                 // fallback easing power
-  SKY_BLOOM_COLOR: 0x8833cc,          // building tint color (deep purple)
-  SKY_BLOOM_TINT_STRENGTH: 0.35,      // building tint lerp toward bloom color
-  SKY_BLOOM_HARM_WEIGHT: 1.2,         // how much harmonic (synth/vocal) drives building bloom
-  SKY_BLOOM_PERC_WEIGHT: 0.4,         // how much percussive (drums) drives building bloom
-  SKY_GLOW_RAGE_MULT: 2.5,            // intensity multiplier during rage mode
-  SKY_GLOW_RAGE_COLOR: 0xff4400,      // glow color during rage (orange-red)
-  SKY_BLOOM_RAGE_COLOR: 0xff2200,     // building bloom color during rage (deep red)
-
-  // ── Normal mode: static color from album art ──
-  // SKY_GLOW_STATIC_TINT_STRENGTH removed — replaced by gradient background
-  SKY_GLOW_STATIC_OVERLAY_ALPHA: 0.12,    // ADD overlay alpha in normal mode (subtle warmth)
-  SKY_BLOOM_STATIC_TINT_STRENGTH: 0.2,    // how much dominant color shifts buildings (0=none, 1=full)
-
-  // ── Sky color from album art ──
-  SKY_GRADIENT_SAMPLE_SIZE: 32,           // thumbnail downsample size for k-means
-  SKY_GRADIENT_KMEANS_ITERS: 10,          // k-means clustering iterations
-  SKY_HUE_TRANSITION_MS: 1500,           // crossfade duration when hue changes between songs
+  // ── Sky hue rotation (album art → background color shift) ──
+  SKY_HUE_TRANSITION_MS: 1500,        // smooth transition duration between hue angles
+  SKY_HUE_SAMPLE_SIZE: 32,            // thumbnail downsample size for k-means color extraction
+  SKY_HUE_KMEANS_ITERS: 10,           // k-means clustering iterations
 
   // ── Rhythm mode ──
   RHYTHM_MODE_LABEL_X: -20,           // offset from right edge (negative = inward)

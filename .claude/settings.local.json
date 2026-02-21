@@ -50,7 +50,8 @@
       "Read(//d/hume music/Music/**)",
       "Bash(find:*)",
       "Bash(sort:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "WebFetch(domain:cdn.discordapp.com)"
     ],
     "additionalDirectories": [
       "c:\\Users\\mikey\\Claude_Playground\\dp_moto\\scripts\\beat_data"
