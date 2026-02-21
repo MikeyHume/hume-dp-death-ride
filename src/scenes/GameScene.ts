@@ -1099,17 +1099,21 @@ export class GameScene extends Phaser.Scene {
     document.body.appendChild(this.htmlCursor);
 
     // Global cursor tracking (works even when HTML overlays capture pointer events)
-    document.addEventListener('mousemove', (e) => {
+    const updateCursorFromEvent = (clientX: number, clientY: number) => {
       const rect = this.game.canvas.getBoundingClientRect();
-      const cx = e.clientX + TUNING.CURSOR_OFFSET_X;
-      const cy = e.clientY + TUNING.CURSOR_OFFSET_Y;
+      const cx = clientX + TUNING.CURSOR_OFFSET_X;
+      const cy = clientY + TUNING.CURSOR_OFFSET_Y;
       this.globalCursorX = ((cx - rect.left) / rect.width) * TUNING.GAME_WIDTH;
       this.globalCursorY = ((cy - rect.top) / rect.height) * TUNING.GAME_HEIGHT;
-      // Position HTML cursor at offset mouse
+      // Position HTML cursor at offset
       this.htmlCursor.style.display = '';
       this.htmlCursor.style.left = cx + 'px';
       this.htmlCursor.style.top = cy + 'px';
-    });
+    };
+    document.addEventListener('mousemove', (e) => updateCursorFromEvent(e.clientX, e.clientY));
+    // Touch/pointer events for mobile cursor tracking
+    document.addEventListener('pointerdown', (e) => updateCursorFromEvent(e.clientX, e.clientY));
+    document.addEventListener('pointermove', (e) => updateCursorFromEvent(e.clientX, e.clientY));
 
     // CRT debug overlay (DOM element — not affected by CRT shader)
     this.crtDebugEl = document.createElement('pre');
@@ -2720,6 +2724,15 @@ export class GameScene extends Phaser.Scene {
     this.titleLoopSprite.stop();
     this.titleLoopSprite.setVisible(false);
     this.musicPlayer.setVisible(false);
+
+    // Fade cursor away during countdown (returns on resetToTitle)
+    this.tweens.killTweensOf(this.cursorMain);
+    this.tweens.add({ targets: this.cursorMain, alpha: 0, duration: 400 });
+    if (this.cursorStroke) {
+      this.tweens.killTweensOf(this.cursorStroke);
+      this.tweens.add({ targets: this.cursorStroke, alpha: 0, duration: 400 });
+    }
+    this.htmlCursor.style.display = 'none';
 
     // Fade out profile HUD during countdown
     this.tweens.add({

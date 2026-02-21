@@ -412,7 +412,7 @@ export const TUNING = {
   COUNTDOWN_SPAWN_DELAY: 2.0,      // seconds after player gets control before obstacles spawn
 
   // Tutorial (pre-countdown screens)
-  TUTORIAL_FADE_DURATION: 1.0,     // seconds for each fade in/out (12 frames at 12fps)
+  TUTORIAL_FADE_DURATION: 0.35,    // seconds for each fade in/out between tutorial pages
   TUTORIAL_CONTROLS_FRAMES: 29,    // number of frames in controls image sequence
   TUTORIAL_RAGE_FRAMES: 4,         // number of frames in rage image sequence
 
