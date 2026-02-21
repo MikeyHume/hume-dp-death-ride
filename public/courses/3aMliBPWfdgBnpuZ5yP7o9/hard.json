@@ -1,0 +1,404 @@
+{
+  "spotify_track_id": "3aMliBPWfdgBnpuZ5yP7o9",
+  "difficulty": "hard",
+  "name": "Default",
+  "duration_s": 139.702,
+  "bpm": 89.1,
+  "version": 1,
+  "seed": 47,
+  "score": {
+    "total": 9.25,
+    "beat_sync": 10.0,
+    "flow": 9.26,
+    "difficulty_curve": 7.25,
+    "type_variety": 9.3,
+    "lane_coverage": 9.9,
+    "energy_match": 8.88,
+    "cull_rate": 10.0
+  },
+  "attempts": 47,
+  "events": [
+    {
+      "t": 6.884,
+      "lane": 3,
+      "type": "guardian"
+    },
+    {
+      "t": 7.221,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 36.246,
+      "lane": 3,
+      "type": "crash"
+    },
+    {
+      "t": 36.246,
+      "lane": 2,
+      "type": "car_crash_beat",
+      "lead": 1.19
+    },
+    {
+      "t": 36.897,
+      "lane": 1,
+      "type": "pickup_shield"
+    },
+    {
+      "t": 38.104,
+      "lane": 2,
+      "type": "car"
+    },
+    {
+      "t": 39.892,
+      "lane": 1,
+      "type": "slow"
+    },
+    {
+      "t": 39.892,
+      "lane": 0,
+      "type": "car"
+    },
+    {
+      "t": 43.477,
+      "lane": 2,
+      "type": "guardian"
+    },
+    {
+      "t": 43.862,
+      "lane": 2,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 45.256,
+      "lane": 0,
+      "type": "car"
+    },
+    {
+      "t": 45.256,
+      "lane": 1,
+      "type": "crash"
+    },
+    {
+      "t": 47.235,
+      "lane": 2,
+      "type": "guardian"
+    },
+    {
+      "t": 47.949,
+      "lane": 2,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 53.917,
+      "lane": 0,
+      "type": "enemy_car"
+    },
+    {
+      "t": 56.007,
+      "lane": 1,
+      "type": "slow"
+    },
+    {
+      "t": 58.027,
+      "lane": 1,
+      "type": "enemy_car"
+    },
+    {
+      "t": 58.7,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 64.087,
+      "lane": 2,
+      "type": "crash"
+    },
+    {
+      "t": 64.087,
+      "lane": 3,
+      "type": "crash"
+    },
+    {
+      "t": 68.104,
+      "lane": 0,
+      "type": "pickup_shield"
+    },
+    {
+      "t": 68.956,
+      "lane": 3,
+      "type": "guardian"
+    },
+    {
+      "t": 69.451,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 70.124,
+      "lane": 3,
+      "type": "car_crash_beat",
+      "lead": 1.141
+    },
+    {
+      "t": 71.448,
+      "lane": 2,
+      "type": "car_crash_beat",
+      "lead": 1.133
+    },
+    {
+      "t": 72.121,
+      "lane": 3,
+      "type": "car"
+    },
+    {
+      "t": 72.121,
+      "lane": 2,
+      "type": "crash"
+    },
+    {
+      "t": 73.468,
+      "lane": 3,
+      "type": "car"
+    },
+    {
+      "t": 73.468,
+      "lane": 2,
+      "type": "car"
+    },
+    {
+      "t": 73.468,
+      "lane": 1,
+      "type": "car"
+    },
+    {
+      "t": 74.815,
+      "lane": 0,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 75.488,
+      "lane": 2,
+      "type": "slow"
+    },
+    {
+      "t": 75.488,
+      "lane": 1,
+      "type": "car_crash_beat",
+      "lead": 1.133
+    },
+    {
+      "t": 76.161,
+      "lane": 0,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 77.508,
+      "lane": 1,
+      "type": "car"
+    },
+    {
+      "t": 77.508,
+      "lane": 0,
+      "type": "car"
+    },
+    {
+      "t": 93.106,
+      "lane": 1,
+      "type": "guardian"
+    },
+    {
+      "t": 93.623,
+      "lane": 1,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 94.296,
+      "lane": 0,
+      "type": "crash"
+    },
+    {
+      "t": 94.97,
+      "lane": 0,
+      "type": "crash"
+    },
+    {
+      "t": 94.97,
+      "lane": 1,
+      "type": "crash"
+    },
+    {
+      "t": 95.689,
+      "lane": 3,
+      "type": "guardian"
+    },
+    {
+      "t": 96.316,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 97.593,
+      "lane": 1,
+      "type": "crash"
+    },
+    {
+      "t": 97.593,
+      "lane": 2,
+      "type": "crash"
+    },
+    {
+      "t": 98.597,
+      "lane": 3,
+      "type": "guardian"
+    },
+    {
+      "t": 98.987,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 99.683,
+      "lane": 2,
+      "type": "crash"
+    },
+    {
+      "t": 101.169,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 102.563,
+      "lane": 3,
+      "type": "car"
+    },
+    {
+      "t": 103.863,
+      "lane": 2,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 105.256,
+      "lane": 3,
+      "type": "crash"
+    },
+    {
+      "t": 105.256,
+      "lane": 2,
+      "type": "crash"
+    },
+    {
+      "t": 105.256,
+      "lane": 1,
+      "type": "car"
+    },
+    {
+      "t": 108.553,
+      "lane": 2,
+      "type": "car_crash_beat",
+      "lead": 1.108
+    },
+    {
+      "t": 108.553,
+      "lane": 3,
+      "type": "car_crash_beat",
+      "lead": 1.108
+    },
+    {
+      "t": 109.25,
+      "lane": 0,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 110.643,
+      "lane": 2,
+      "type": "car"
+    },
+    {
+      "t": 110.643,
+      "lane": 1,
+      "type": "car"
+    },
+    {
+      "t": 110.643,
+      "lane": 3,
+      "type": "car"
+    },
+    {
+      "t": 110.643,
+      "lane": 0,
+      "type": "car_crash_beat",
+      "lead": 1.141
+    },
+    {
+      "t": 111.247,
+      "lane": 1,
+      "type": "slow"
+    },
+    {
+      "t": 111.247,
+      "lane": 0,
+      "type": "car"
+    },
+    {
+      "t": 111.558,
+      "lane": 0,
+      "type": "guardian"
+    },
+    {
+      "t": 111.92,
+      "lane": 0,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 112.64,
+      "lane": 0,
+      "type": "car"
+    },
+    {
+      "t": 113.313,
+      "lane": 2,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 113.917,
+      "lane": 0,
+      "type": "slow"
+    },
+    {
+      "t": 116.007,
+      "lane": 1,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 117.284,
+      "lane": 1,
+      "type": "car"
+    },
+    {
+      "t": 117.284,
+      "lane": 2,
+      "type": "crash"
+    },
+    {
+      "t": 117.912,
+      "lane": 3,
+      "type": "guardian"
+    },
+    {
+      "t": 118.7,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 119.978,
+      "lane": 2,
+      "type": "car"
+    },
+    {
+      "t": 119.978,
+      "lane": 3,
+      "type": "crash"
+    }
+  ]
+}

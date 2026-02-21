@@ -21,13 +21,13 @@ const PIP_GAP = 8;                        // vertical gap below rage bar to pips
 const PIP_AREA_W = 200;                   // width used for pip layout (keeps original spacing)
 
 // Slam animation (score HUD effect on point gain)
-const SLAM_RISE_MS = 300;               // rise phase: shake + scale up + tilt (ms)
-const SLAM_DOWN_MS = 150;               // slam down phase: scale/tilt back to normal (ms)
-const SLAM_SCALE = 1.25;                // max scale at peak of slam
-const SLAM_TILT_DEG = 5;                // max random tilt in degrees
-const SLAM_SHAKE_PX = 4;                // max shake offset in pixels during rise
-const SHOCKWAVE_SCALE = 2.0;            // shockwave end scale
-const SHOCKWAVE_MS = 400;               // shockwave duration (ms)
+const SLAM_RISE_MS = 400;               // rise phase: shake + scale up + tilt (ms)
+const SLAM_DOWN_MS = 120;               // slam down phase: scale/tilt back to normal (ms)
+const SLAM_SCALE = 1.5;                 // max scale at peak of slam (1.0 = normal)
+const SLAM_TILT_DEG = 8;                // max random tilt in degrees
+const SLAM_SHAKE_PX = 8;                // max shake offset in pixels during rise
+const SHOCKWAVE_SCALE = 2.5;            // shockwave end scale
+const SHOCKWAVE_MS = 500;               // shockwave duration (ms)
 const SHOCKWAVE_CYCLE_MS = 60;          // ms per color cycle step
 
 const SIGN_IN_SCALE = 0.4;               // sign-in image scale
@@ -259,9 +259,12 @@ export class ProfileHud {
   // --- Public API ---
 
   setScore(score: number): void {
+    this.latestScore = score;
+    if (this.slamPhase !== 'none') return; // don't update text during slam animation
     this.scoreText.setText(String(Math.floor(score)).padStart(7, '0'));
     // Recompute scale every frame to guard against late font loading changing metrics
-    this.scoreText.setScale(PIP_AREA_W / this.scoreText.width);
+    this.scoreScale = PIP_AREA_W / this.scoreText.width;
+    this.scoreText.setScale(this.scoreScale);
   }
 
   setRage01(v: number): void {
@@ -332,6 +335,171 @@ export class ProfileHud {
     this.clickCallback = callback;
   }
 
+  /** Trigger the score slam animation. Interrupts any active slam (streak). */
+  triggerScoreSlam(targetScore: number, colors: string[]): void {
+    // Kill any active shockwave
+    this.shockwavePhase = 'none';
+    this.shockwaveText.setVisible(false);
+
+    // Restore score text to default state before origin swap
+    this.scoreText.setOrigin(1, 0);
+    this.scoreText.setPosition(BAR_X + BAR_W, SCORE_Y);
+    this.scoreText.setRotation(0);
+    this.scoreText.setColor('#ffffff');
+    this.scoreText.setScale(this.scoreScale);
+
+    // Compute visual center for center-pivot animation
+    this.slamCenterX = BAR_X + BAR_W - PIP_AREA_W / 2;
+    this.slamCenterY = SCORE_Y + this.scoreText.displayHeight / 2;
+
+    // Swap to center origin for rotation/scale from center
+    this.scoreText.setOrigin(0.5, 0.5);
+    this.scoreText.setPosition(this.slamCenterX, this.slamCenterY);
+
+    // Set slam state
+    this.slamPhase = 'rise';
+    this.slamTimer = 0;
+    this.slamTilt = Phaser.Math.DegToRad((Math.random() > 0.5 ? 1 : -1) * (1 + Math.random() * (SLAM_TILT_DEG - 1)));
+    this.slamPendingScore = targetScore;
+    this.slamScoreUpdated = false;
+    this.slamColors = colors;
+  }
+
+  /** Call every frame during gameplay (dt in seconds). */
+  update(dt: number): void {
+    // --- Slam animation ---
+    if (this.slamPhase === 'rise') {
+      this.slamTimer += dt * 1000;
+      const t = Math.min(this.slamTimer / SLAM_RISE_MS, 1);
+
+      // Ease-in (quadratic — accelerates into max scale)
+      const eased = t * t;
+
+      // Scale: 1 → SLAM_SCALE
+      const scale = this.scoreScale * (1 + (SLAM_SCALE - 1) * eased);
+      this.scoreText.setScale(scale);
+
+      // Tilt eases in
+      this.scoreText.setRotation(this.slamTilt * eased);
+
+      // Shake decays from max to 0
+      const shakeDecay = 1 - t;
+      const shakeX = (Math.random() - 0.5) * 2 * SLAM_SHAKE_PX * shakeDecay;
+      const shakeY = (Math.random() - 0.5) * 2 * SLAM_SHAKE_PX * shakeDecay;
+      this.scoreText.setPosition(this.slamCenterX + shakeX, this.slamCenterY + shakeY);
+
+      // Color cycle through type palette
+      const colorIdx = Math.floor(Date.now() / SHOCKWAVE_CYCLE_MS) % this.slamColors.length;
+      this.scoreText.setColor(this.slamColors[colorIdx]);
+
+      // Midpoint: update score text (hidden in the motion)
+      if (!this.slamScoreUpdated && t >= 0.5) {
+        this.slamScoreUpdated = true;
+        this.scoreText.setText(String(Math.floor(this.slamPendingScore)).padStart(7, '0'));
+      }
+
+      // Phase complete → slam down
+      if (t >= 1) {
+        this.slamPhase = 'slam';
+        this.slamTimer = 0;
+      }
+    } else if (this.slamPhase === 'slam') {
+      this.slamTimer += dt * 1000;
+      const t = Math.min(this.slamTimer / SLAM_DOWN_MS, 1);
+
+      // Ease-out (starts fast, decelerates — "slams" to rest)
+      const eased = 1 - (1 - t) * (1 - t);
+
+      // Scale: SLAM_SCALE → 1
+      const scale = this.scoreScale * (SLAM_SCALE - (SLAM_SCALE - 1) * eased);
+      this.scoreText.setScale(scale);
+
+      // Tilt: slamTilt → 0
+      this.scoreText.setRotation(this.slamTilt * (1 - eased));
+
+      // Settle to center (no shake)
+      this.scoreText.setPosition(this.slamCenterX, this.slamCenterY);
+
+      // Continue color cycling
+      const colorIdx = Math.floor(Date.now() / SHOCKWAVE_CYCLE_MS) % this.slamColors.length;
+      this.scoreText.setColor(this.slamColors[colorIdx]);
+
+      // Phase complete: slam landed
+      if (t >= 1) {
+        this.slamPhase = 'none';
+
+        // Flash white on impact
+        this.scoreText.setColor('#ffffff');
+
+        // Restore origin and position
+        this.scoreText.setOrigin(1, 0);
+        this.scoreText.setPosition(BAR_X + BAR_W, SCORE_Y);
+        this.scoreText.setScale(this.scoreScale);
+        this.scoreText.setRotation(0);
+
+        // Apply latest score (may have changed during slam from distance scoring)
+        this.scoreText.setText(String(Math.floor(this.latestScore)).padStart(7, '0'));
+        this.scoreScale = PIP_AREA_W / this.scoreText.width;
+        this.scoreText.setScale(this.scoreScale);
+
+        // Start shockwave underneath
+        this.startShockwave();
+      }
+    }
+
+    // --- Shockwave animation ---
+    if (this.shockwavePhase === 'active') {
+      this.shockwaveTimer += dt * 1000;
+      const t = Math.min(this.shockwaveTimer / SHOCKWAVE_MS, 1);
+
+      // Scale up from normal to SHOCKWAVE_SCALE
+      const scale = this.scoreScale * (1 + (SHOCKWAVE_SCALE - 1) * t);
+      this.shockwaveText.setScale(scale);
+
+      // Fade out
+      this.shockwaveText.setAlpha(1 - t);
+
+      // Color cycle through type palette
+      const colorIdx = Math.floor(Date.now() / SHOCKWAVE_CYCLE_MS) % this.shockwaveColors.length;
+      this.shockwaveText.setColor(this.shockwaveColors[colorIdx]);
+
+      if (t >= 1) {
+        this.shockwavePhase = 'none';
+        this.shockwaveText.setVisible(false);
+      }
+    }
+  }
+
+  /** Spawn shockwave copy behind score text on slam impact. */
+  private startShockwave(): void {
+    this.shockwaveText.setText(this.scoreText.text);
+    this.shockwaveText.setOrigin(0.5, 0.5);
+    // Position at visual center of score text
+    const cx = BAR_X + BAR_W - PIP_AREA_W / 2;
+    const cy = SCORE_Y + this.scoreText.displayHeight / 2;
+    this.shockwaveText.setPosition(cx, cy);
+    this.shockwaveText.setScale(this.scoreScale);
+    this.shockwaveText.setAlpha(1);
+    this.shockwaveText.setRotation(0);
+    this.shockwaveText.setVisible(true);
+    this.shockwaveColors = this.slamColors;
+    this.shockwavePhase = 'active';
+    this.shockwaveTimer = 0;
+  }
+
+  /** Cancel any active slam/shockwave and restore score text to default state. */
+  private resetSlam(): void {
+    this.slamPhase = 'none';
+    this.slamTimer = 0;
+    this.scoreText.setOrigin(1, 0);
+    this.scoreText.setPosition(BAR_X + BAR_W, SCORE_Y);
+    this.scoreText.setRotation(0);
+    this.scoreText.setColor('#ffffff');
+    this.scoreText.setScale(this.scoreScale);
+    this.shockwavePhase = 'none';
+    this.shockwaveText.setVisible(false);
+  }
+
   showProfileMode(name: string, rankText: string): void {
     // Hide playing elements
     this.scoreText.setVisible(false);
@@ -358,6 +526,7 @@ export class ProfileHud {
   }
 
   showPlayingMode(name?: string): void {
+    this.resetSlam();
     this.scoreText.setVisible(true);
     this.rageBg.setVisible(true);
     this.rageFill.setVisible(true);

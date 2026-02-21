@@ -230,6 +230,34 @@ User launches app
 - NEVER start YouTube playlist with tracks `GZwNZU7AviA` or `EkPDn519DFs` (they match the countdown audio)
 - NEVER start Spotify with the same track as the last session
 - NEVER commit without explicit user request
+- NEVER implement music-reactive features in Normal Mode — see **Spotify Music Reactivity Rule** below
+
+---
+
+### Spotify Music Reactivity Rule (ALL HUME GAMES — PERMANENT)
+
+> **This rule applies to every hume game/app that uses Spotify. It exists to comply with Spotify's Terms of Service.**
+
+All hume games have two modes:
+
+**Normal Mode** — Spotify (Premium) or YouTube (fallback) playback.
+- Playback generates legitimate streams/views for artists.
+- **NO music-reactive elements.** Nothing may react to BPM, beat timing, energy levels, frequency bands, onset detection, or any audio analysis data.
+- **Allowed:** Static visual theming based on album art (e.g., sky tint matching dominant color of the current track's Spotify thumbnail). This is metadata-driven, not audio-reactive.
+- **Allowed:** UI updates on track change (thumbnail, title, artist name). This is event-driven, not audio-reactive.
+- **NOT allowed:** Sky pulsing to the beat, obstacles spawning on beat, speed changes synced to drops, building bloom driven by bass, anything that requires knowing the audio's temporal characteristics.
+
+**Rhythm Mode** — Self-hosted audio files only. No Spotify, no YouTube.
+- Full music reactivity: sky pulsing, beat-synced spawning, BPM-driven gameplay, frequency-band-driven visuals, dominant color phasing to the beat, etc.
+- Uses pre-computed beat data from `scripts/analyze_audio.py` (librosa multi-band spectral analysis).
+- Audio files are self-hosted (not streamed from any third-party service).
+- All beat data, energy maps, and audio analysis are derived from self-hosted audio, not from Spotify or YouTube.
+
+**Claude's responsibility:**
+- When Mikey requests a feature, evaluate whether it is music-reactive.
+- If it is, it belongs in Rhythm Mode only. Warn Mikey before implementing.
+- If it's ambiguous, ask: "Does this need to react to the audio in real-time, or is it driven by static metadata (album art, track title, etc.)?"
+- Examples of violations to flag: "pulse the background to the bass", "spawn obstacles on the beat", "speed up during drops", "match intensity to energy level" — these are all Rhythm Mode only.
 
 ### Vocabulary
 > **How this works:** Mikey only needs to change `[N]` to `[Y]` to approve.

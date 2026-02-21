@@ -1,0 +1,123 @@
+{
+  "spotify_track_id": "3eO1860inK4eYn1QahGTdT",
+  "difficulty": "easy",
+  "name": "Default",
+  "duration_s": 161.771,
+  "bpm": 92.3,
+  "version": 1,
+  "seed": 35,
+  "score": {
+    "total": 9.64,
+    "beat_sync": 10.0,
+    "flow": 9.8,
+    "difficulty_curve": 9.72,
+    "type_variety": 9.25,
+    "lane_coverage": 10.0,
+    "energy_match": 7.94,
+    "cull_rate": 10.0
+  },
+  "attempts": 35,
+  "events": [
+    {
+      "t": 41.796,
+      "lane": 2,
+      "type": "pickup_shield"
+    },
+    {
+      "t": 57.446,
+      "lane": 3,
+      "type": "crash"
+    },
+    {
+      "t": 67.895,
+      "lane": 3,
+      "type": "crash"
+    },
+    {
+      "t": 80.432,
+      "lane": 0,
+      "type": "guardian"
+    },
+    {
+      "t": 80.922,
+      "lane": 0,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 86.146,
+      "lane": 2,
+      "type": "slow"
+    },
+    {
+      "t": 91.371,
+      "lane": 1,
+      "type": "pickup_shield"
+    },
+    {
+      "t": 101.796,
+      "lane": 1,
+      "type": "car"
+    },
+    {
+      "t": 107.021,
+      "lane": 0,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 120.07,
+      "lane": 0,
+      "type": "slow"
+    },
+    {
+      "t": 120.721,
+      "lane": 0,
+      "type": "enemy_car"
+    },
+    {
+      "t": 127.477,
+      "lane": 3,
+      "type": "guardian"
+    },
+    {
+      "t": 127.896,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 131.146,
+      "lane": 1,
+      "type": "enemy_car"
+    },
+    {
+      "t": 138.321,
+      "lane": 2,
+      "type": "pickup_shield"
+    },
+    {
+      "t": 141.572,
+      "lane": 2,
+      "type": "car_crash_beat",
+      "lead": 1.149
+    },
+    {
+      "t": 143.546,
+      "lane": 2,
+      "type": "car"
+    },
+    {
+      "t": 148.318,
+      "lane": 1,
+      "type": "guardian"
+    },
+    {
+      "t": 148.77,
+      "lane": 1,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 151.371,
+      "lane": 3,
+      "type": "crash"
+    }
+  ]
+}

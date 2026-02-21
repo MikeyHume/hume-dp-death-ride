@@ -544,4 +544,97 @@ export const TUNING = {
   TDIL_RAMP_UP_EASE: 2.0,         // power curve exponent for ramp up
   TDIL_VERTICAL_BLEND: 0.85,      // how much vertical movement stays real-time (0=fully dilated, 1=fully real)
   TDIL_MUSIC_MIN_RATE: 0.25,      // YouTube min playback rate (YT API floor)
+
+  // ── Sky glow + building bloom (music-reactive atmosphere) ──
+  SKY_GLOW_COLOR: 0xcc44aa,           // glow/tint color (purple-magenta)
+  SKY_GLOW_ALPHA_MAX: 0.45,           // peak ADD overlay alpha
+  // SKY_GLOW_TINT_STRENGTH removed — replaced by gradient background
+  SKY_GLOW_BASS_WEIGHT: 1.5,          // how much bass drives sky glow (multiplier on 0-1 bass)
+  SKY_GLOW_ENERGY_WEIGHT: 0.5,        // how much overall energy drives sky glow
+  SKY_GLOW_SMOOTHING: 0.15,           // per-frame smoothing (0=frozen, 1=instant, 0.1-0.2=smooth)
+  SKY_GLOW_BEAT_HZ: 1.5,              // fallback pulse Hz when no beat data loaded
+  SKY_GLOW_EASE: 2.5,                 // fallback easing power
+  SKY_BLOOM_COLOR: 0x8833cc,          // building tint color (deep purple)
+  SKY_BLOOM_TINT_STRENGTH: 0.35,      // building tint lerp toward bloom color
+  SKY_BLOOM_HARM_WEIGHT: 1.2,         // how much harmonic (synth/vocal) drives building bloom
+  SKY_BLOOM_PERC_WEIGHT: 0.4,         // how much percussive (drums) drives building bloom
+  SKY_GLOW_RAGE_MULT: 2.5,            // intensity multiplier during rage mode
+  SKY_GLOW_RAGE_COLOR: 0xff4400,      // glow color during rage (orange-red)
+  SKY_BLOOM_RAGE_COLOR: 0xff2200,     // building bloom color during rage (deep red)
+
+  // ── Normal mode: static color from album art ──
+  // SKY_GLOW_STATIC_TINT_STRENGTH removed — replaced by gradient background
+  SKY_GLOW_STATIC_OVERLAY_ALPHA: 0.12,    // ADD overlay alpha in normal mode (subtle warmth)
+  SKY_BLOOM_STATIC_TINT_STRENGTH: 0.2,    // how much dominant color shifts buildings (0=none, 1=full)
+
+  // ── Sky color from album art ──
+  SKY_GRADIENT_SAMPLE_SIZE: 32,           // thumbnail downsample size for k-means
+  SKY_GRADIENT_KMEANS_ITERS: 10,          // k-means clustering iterations
+  SKY_HUE_TRANSITION_MS: 1500,           // crossfade duration when hue changes between songs
+
+  // ── Rhythm mode ──
+  RHYTHM_MODE_LABEL_X: -20,           // offset from right edge (negative = inward)
+  RHYTHM_MODE_LABEL_Y: 20,            // offset from top
+  RHYTHM_MODE_LABEL_SIZE: 28,         // font size
+  RHYTHM_MODE_LABEL_COLOR: '#ff00ff', // magenta
+  // RHYTHM_SPAWN_LEAD_TIME removed — now computed per-type in CourseRunner
+
+  // ── Rhythm mode zones ──
+  RHYTHM_KILL_ZONE_X: 200,              // right edge of kill zone (px from left)
+  RHYTHM_KILL_ZONE_COLOR: 0xff0000,     // kill zone glow color
+  RHYTHM_KILL_ZONE_ALPHA: 0.15,         // background fill alpha
+  RHYTHM_KILL_ZONE_LINE_ALPHA: 0.6,     // right-edge line alpha
+  RHYTHM_KILL_ZONE_LINE_WIDTH: 3,       // edge line width (px)
+  RHYTHM_KILL_ZONE_PULSE_MIN: 0.08,     // pulse alpha min
+  RHYTHM_KILL_ZONE_PULSE_MAX: 0.22,     // pulse alpha max
+  RHYTHM_KILL_ZONE_PULSE_DURATION: 500, // pulse cycle ms
+
+  RHYTHM_SWEET_SPOT_X: 960,             // center line X (GAME_WIDTH / 2)
+  RHYTHM_SWEET_SPOT_COLOR: 0xffffff,    // line color
+  RHYTHM_SWEET_SPOT_ALPHA: 0.25,        // line alpha
+  RHYTHM_SWEET_SPOT_LINE_WIDTH: 2,      // line width (px)
+  RHYTHM_SWEET_SPOT_DASH: 20,           // dash length px
+  RHYTHM_SWEET_SPOT_GAP: 15,            // gap length px
+
+  RHYTHM_BONUS_ZONE_WIDTH: 100,         // 2X window width centered on sweet spot
+  RHYTHM_BONUS_ZONE_COLOR: 0x00ff00,    // green tint
+  RHYTHM_BONUS_ZONE_ALPHA: 0.08,        // subtle background tint
+  RHYTHM_BONUS_AMMO_MULT: 2,            // ammo multiplier in bonus zone
+  RHYTHM_BONUS_SCORE_MULT: 2,           // score multiplier in bonus zone
+  RHYTHM_BONUS_POPUP_SIZE: 72,          // "2X" font size
+  RHYTHM_BONUS_POPUP_COLOR: '#00FF00',  // bright green
+  RHYTHM_BONUS_POPUP_DURATION: 1400,    // total popup lifespan ms
+  RHYTHM_BONUS_FLASH_COLOR: 0x00ff00,   // screen flash color
+  RHYTHM_BONUS_FLASH_ALPHA: 0.3,        // screen flash intensity
+  RHYTHM_BONUS_FLASH_DURATION: 200,     // screen flash duration ms
+
+  // ── Rhythm mode guardians ──
+  RHYTHM_GUARDIAN_TINT: 0xff88ff,       // purple/magenta tint for guardian obstacles
+  RHYTHM_GUARDIAN_BASE_SCORE: 100,      // score when slashed outside bonus zone
+  RHYTHM_GUARDIAN_MAX_SCORE: 500,       // max score when slashed at dead center
+  RHYTHM_GUARDIAN_ZONE_HALF: 150,       // half-width of proximity scoring zone (px from center)
+
+  // ── Enemy cars (rhythm mode) ──
+  RHYTHM_ENEMY_CAR_GLOW_COLOR: 0xff0000,   // red glow color
+  RHYTHM_ENEMY_CAR_GLOW_OUTER: 8,          // glow outer strength
+  RHYTHM_ENEMY_CAR_GLOW_INNER: 0,          // glow inner strength
+  RHYTHM_ENEMY_CAR_GLOW_KNOCKOUT: true,    // knockout mode (stroke only, not fill)
+  RHYTHM_ENEMY_CAR_BASE_SCORE: 200,        // score when killed outside timing window
+  RHYTHM_ENEMY_CAR_MAX_SCORE: 1000,        // max score at dead center
+  RHYTHM_ENEMY_CAR_ZONE_HALF: 150,         // half-width of proximity scoring zone (px from center)
+
+  // ── Game Mode Popup (Win95) ──
+  GAME_MODE_POPUP_W: 420,                   // popup width
+  GAME_MODE_POPUP_H: 260,                   // popup height
+  GAME_MODE_POPUP_DEPTH: 300,               // above title container (201)
+  GAME_MODE_TITLEBAR_H: 36,                 // purple title bar height
+  GAME_MODE_TITLEBAR_COLOR: 0x800080,       // Win95 purple
+  GAME_MODE_FACE_COLOR: 0xc0c0c0,          // Win95 gray
+  GAME_MODE_HIGHLIGHT_COLOR: 0xffffff,     // Win95 highlight (white)
+  GAME_MODE_SHADOW_COLOR: 0x808080,        // Win95 shadow (gray)
+  GAME_MODE_BTN_W: 160,                     // Normal/Rhythm button width
+  GAME_MODE_BTN_H: 50,                      // Normal/Rhythm button height
+  GAME_MODE_BTN_GAP: 30,                    // gap between buttons
+  GAME_MODE_CLOSE_SIZE: 24,                 // close button square size
+  GAME_MODE_BORDER_W: 2,                    // Win95 border width
 } as const;

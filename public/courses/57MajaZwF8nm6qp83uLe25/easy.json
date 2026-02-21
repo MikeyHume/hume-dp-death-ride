@@ -1,0 +1,124 @@
+{
+  "spotify_track_id": "57MajaZwF8nm6qp83uLe25",
+  "difficulty": "easy",
+  "name": "Default",
+  "duration_s": 117.516,
+  "bpm": 99.4,
+  "version": 1,
+  "seed": 48,
+  "score": {
+    "total": 9.43,
+    "beat_sync": 10.0,
+    "flow": 9.8,
+    "difficulty_curve": 9.63,
+    "type_variety": 8.94,
+    "lane_coverage": 9.43,
+    "energy_match": 6.84,
+    "cull_rate": 10.0
+  },
+  "attempts": 48,
+  "events": [
+    {
+      "t": 29.551,
+      "lane": 3,
+      "type": "guardian"
+    },
+    {
+      "t": 30.047,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 34.83,
+      "lane": 3,
+      "type": "slow"
+    },
+    {
+      "t": 52.245,
+      "lane": 2,
+      "type": "car_crash_beat",
+      "lead": 1.214
+    },
+    {
+      "t": 54.033,
+      "lane": 2,
+      "type": "car"
+    },
+    {
+      "t": 58.339,
+      "lane": 0,
+      "type": "guardian"
+    },
+    {
+      "t": 58.839,
+      "lane": 0,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 66.038,
+      "lane": 1,
+      "type": "crash"
+    },
+    {
+      "t": 72.929,
+      "lane": 1,
+      "type": "guardian"
+    },
+    {
+      "t": 73.236,
+      "lane": 1,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 73.839,
+      "lane": 0,
+      "type": "car_crash_beat",
+      "lead": 1.214
+    },
+    {
+      "t": 75.627,
+      "lane": 0,
+      "type": "car"
+    },
+    {
+      "t": 82.228,
+      "lane": 2,
+      "type": "guardian"
+    },
+    {
+      "t": 82.849,
+      "lane": 2,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 87.655,
+      "lane": 0,
+      "type": "enemy_car"
+    },
+    {
+      "t": 92.439,
+      "lane": 1,
+      "type": "slow"
+    },
+    {
+      "t": 106.835,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 109.227,
+      "lane": 2,
+      "type": "slow"
+    },
+    {
+      "t": 111.642,
+      "lane": 0,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 111.642,
+      "lane": 3,
+      "type": "enemy_car"
+    }
+  ]
+}

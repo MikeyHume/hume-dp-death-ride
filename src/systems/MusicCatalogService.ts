@@ -33,6 +33,7 @@ export interface CatalogTrack {
   youtubeChannelTitle: string | null;
   youtubeIsManual: boolean;
   popularity: number;
+  dominantColor: string | null;
 }
 
 // ─── Cache ──────────────────────────────────────────────────────
@@ -140,10 +141,47 @@ export async function fetchMappedTracks(): Promise<CatalogTrack[]> {
   return tracks.filter((t) => t.youtubeVideoId != null && t.spotifyTrackId != null);
 }
 
+/** Get the dominant color hex for a given Spotify track ID. */
+export async function getDominantColor(spotifyTrackId: string): Promise<number | null> {
+  const tracks = await fetchAllTracks();
+  const match = tracks.find((t) => t.spotifyTrackId === spotifyTrackId);
+  if (!match?.dominantColor) return null;
+  return parseInt(match.dominantColor.replace('#', ''), 16);
+}
+
 /** Get tracks missing a YouTube match (for manual matching UI). */
 export async function fetchUnmatchedTracks(): Promise<CatalogTrack[]> {
   const tracks = await fetchAllTracks();
   return tracks.filter((t) => t.youtubeVideoId == null);
+}
+
+// ─── Beat data ──────────────────────────────────────────────────
+
+import type { BeatData } from './SkyGlowSystem';
+
+const beatDataCache = new Map<string, BeatData | null>();
+
+/**
+ * Fetch pre-computed beat analysis data for a track.
+ * Served as static JSON from /beat_data/{spotifyTrackId}.json.
+ * Returns null if no analysis exists for this track.
+ */
+export async function fetchBeatData(spotifyTrackId: string): Promise<BeatData | null> {
+  if (beatDataCache.has(spotifyTrackId)) return beatDataCache.get(spotifyTrackId)!;
+
+  try {
+    const resp = await fetch(`/beat_data/${spotifyTrackId}.json`);
+    if (!resp.ok) {
+      beatDataCache.set(spotifyTrackId, null);
+      return null;
+    }
+    const data: BeatData = await resp.json();
+    beatDataCache.set(spotifyTrackId, data);
+    return data;
+  } catch {
+    beatDataCache.set(spotifyTrackId, null);
+    return null;
+  }
 }
 
 // ─── Row mapper ─────────────────────────────────────────────────
@@ -165,5 +203,6 @@ function mapTrackRow(r: any): CatalogTrack {
     youtubeChannelTitle: r.youtube_channel_title ?? null,
     youtubeIsManual: r.youtube_is_manual ?? false,
     popularity: r.popularity ?? 0,
+    dominantColor: r.dominant_color ?? null,
   };
 }

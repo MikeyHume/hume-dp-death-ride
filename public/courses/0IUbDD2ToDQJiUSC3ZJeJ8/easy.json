@@ -1,0 +1,72 @@
+{
+  "spotify_track_id": "0IUbDD2ToDQJiUSC3ZJeJ8",
+  "difficulty": "easy",
+  "name": "Default",
+  "duration_s": 76.651,
+  "bpm": 123.0,
+  "version": 1,
+  "seed": 49,
+  "score": {
+    "total": 9.52,
+    "beat_sync": 10.0,
+    "flow": 10.0,
+    "difficulty_curve": 9.23,
+    "type_variety": 9.66,
+    "lane_coverage": 9.33,
+    "energy_match": 7.38,
+    "cull_rate": 10.0
+  },
+  "attempts": 49,
+  "events": [
+    {
+      "t": 28.793,
+      "lane": 3,
+      "type": "car"
+    },
+    {
+      "t": 30.79,
+      "lane": 2,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 46.788,
+      "lane": 3,
+      "type": "car"
+    },
+    {
+      "t": 48.246,
+      "lane": 0,
+      "type": "guardian"
+    },
+    {
+      "t": 48.785,
+      "lane": 0,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 56.541,
+      "lane": 2,
+      "type": "crash"
+    },
+    {
+      "t": 58.538,
+      "lane": 1,
+      "type": "pickup_shield"
+    },
+    {
+      "t": 64.551,
+      "lane": 1,
+      "type": "crash"
+    },
+    {
+      "t": 66.548,
+      "lane": 0,
+      "type": "pickup_shield"
+    },
+    {
+      "t": 68.545,
+      "lane": 0,
+      "type": "enemy_car"
+    }
+  ]
+}

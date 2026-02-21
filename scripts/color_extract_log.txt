@@ -1,0 +1,164 @@
+-- Extracting dominant colors for 161 tracks
+[1/161] angelbaby - am i just high? -> #282d2f
+[2/161] angelbaby - coca cola -> #252626
+[3/161] angelbaby - die4you -> #564d59
+[4/161] angelbaby - endless summer -> #273439
+[5/161] angelbaby - feel good inc. -> #36393d
+[6/161] angelbaby - Grinch on Christmas -> #19191b
+[7/161] angelbaby - i broke time -> #395d54
+[8/161] angelbaby - new location -> #2e2f37
+[9/161] angelbaby - nothing really matters -> #303734
+[10/161] angelbaby - surrender -> #3e4347
+[11/161] angelbaby - unseen -> #132838
+[12/161] angelbaby - walking dead -> #587870
+[13/161] angelbaby - wayside -> #3e404f
+[14/161] angelbaby - what happens when we die -> #1d2135
+[15/161] angelbaby, Arrested Youth - facedown -> #20232e
+[16/161] angelbaby, Blvck Svm - live forever -> #dddddd
+[17/161] angelbaby, Brandyn Burnette - minted (feat. Brandyn Burnette) -> #d2a97e
+[18/161] angelbaby, Bryce Vine - god made me like this -> #2d3238
+[19/161] angelbaby, Gino The Ghost - the otherside -> #ebebea
+[20/161] angelbaby, GrimesAI - i'm fine :(: -> #d0ced3
+[21/161] angelbaby, Jagwar Twin - life is good -> #34362b
+[22/161] angelbaby, Jfarrari - wake up fucked up -> #ce9a99
+[23/161] angelbaby, Madalen Duke - cut the lights -> #263b4a
+[24/161] angelbaby, Porchlight - so dumb -> #edcb98
+[25/161] angelbaby, PRETTYMUCH - before you -> #945d54
+[26/161] angelbaby, PRETTYMUCH, Night Tales - before you - Night Tales Remix -> #3c413a
+[27/161] angelbaby, PRETTYMUCH, Oliver Nelson - before you - Oliver Nelson Remix -> #78c4b6
+[28/161] angelbaby, RudyWade - dark mode -> #3a3a4c
+[29/161] angelbaby, Stolar - view from the moon -> #e3dfdf
+[30/161] angelbaby, TK - black hole -> #e1d8de
+[31/161] angelbaby, twenty16 - choke -> #cacacc
+[32/161] angelbaby, VOILÀ - imposter -> #6a6151
+[33/161] CYPARISS, DEATHPIXIE - NIGHTMARECORE -> #1a1413
+[34/161] DEATHPIXIE - 44 -> #322025
+[35/161] DEATHPIXIE - ATE -> #f81414
+[36/161] DEATHPIXIE - ATE (SLOWED & REVERBED) -> #f7141a
+[37/161] DEATHPIXIE - ATE (SPED UP) -> #f7141a
+[38/161] DEATHPIXIE - BLOOD BEAT -> #e51313
+[39/161] DEATHPIXIE - BLOOD BEAT - SLOWED & REVERBED -> #e51313
+[40/161] DEATHPIXIE - BLOOD BEAT - SPED UP -> #e51313
+[41/161] DEATHPIXIE - DEATH MACHINE -> #d80506
+[42/161] DEATHPIXIE - DEATH MACHINE (SLOWED & REVERBED) -> #d80506
+[43/161] DEATHPIXIE - DEATH MACHINE (SPED UP) -> #d80506
+[44/161] DEATHPIXIE - DEATHPIXIE'S PROLOGUE -> #322025
+[45/161] DEATHPIXIE - DOMINATRIX -> #ed141c
+[46/161] DEATHPIXIE - DOMINATRIX - Slowed + Reverbed -> #371d1b
+[47/161] DEATHPIXIE - DOMINATRIX - Sped Up -> #371d1b
+[48/161] DEATHPIXIE - GAS ON FIRE -> #371414
+[49/161] DEATHPIXIE - GAS ON FIRE - Slowed -> #321a18
+[50/161] DEATHPIXIE - GAS ON FIRE - Sped Up -> #321a18
+[51/161] DEATHPIXIE - HELL GIRL -> #e03a39
+[52/161] DEATHPIXIE - HELL GIRL - Slowed + Reverbed -> #ed2229
+[53/161] DEATHPIXIE - HELL GIRL - Sped Up -> #ed2229
+[54/161] DEATHPIXIE - HENTAI -> #361919
+[55/161] DEATHPIXIE - KAWASAKI -> #2f1817
+[56/161] DEATHPIXIE - KILLAMONSTA -> #ed342b
+[57/161] DEATHPIXIE - LIL B*TCH -> #e13536
+[58/161] DEATHPIXIE - MAIN CHARACTER ENERGY -> #dd3434
+[59/161] DEATHPIXIE - MATAR #9 KTB -> #2c0607
+[60/161] DEATHPIXIE - MATAR #9 KTB (SLOWED & REVERBED) -> #2c0607
+[61/161] DEATHPIXIE - MATAR #9 KTB (SPED UP) -> #2c0607
+[62/161] DEATHPIXIE - MERRY DEATHMAS -> #d32810
+[63/161] DEATHPIXIE - MERRY DEATHMAS (SLOWED & REVERBED) -> #d32810
+[64/161] DEATHPIXIE - MERRY DEATHMAS (SPED UP) -> #d32810
+[65/161] DEATHPIXIE - MONSTER IN MY BED -> #322025
+[66/161] DEATHPIXIE - MORE COWBELL -> #ef3c23
+[67/161] DEATHPIXIE - MORE COWBELL (SLOWED & REVERBED) -> #e3191c
+[68/161] DEATHPIXIE - MORE COWBELL (SPED UP) -> #e3191c
+[69/161] DEATHPIXIE - NITRO -> #371415
+[70/161] DEATHPIXIE - NOSFERATU -> #ed0409
+[71/161] DEATHPIXIE - OKINAWA -> #1a1314
+[72/161] DEATHPIXIE - RED MALIBU -> #1f1819
+[73/161] DEATHPIXIE - SAFE WORD -> #221616
+[74/161] DEATHPIXIE - SAFE WORD (Slowed + Reverbed) -> #e92027
+[75/161] DEATHPIXIE - SAFE WORD (Sped Up) -> #ea2027
+[76/161] DEATHPIXIE - SLIP -> #db1e24
+[77/161] DEATHPIXIE - TOKYO BLOOD -> #df172e
+[78/161] DEATHPIXIE - TOKYO BLOOD (SLOWED & REVERBED) -> #e31821
+[79/161] DEATHPIXIE - TOKYO BLOOD (SPED UP) -> #e31821
+[80/161] DEATHPIXIE - WALKING NIGHTMARE -> #373333
+[81/161] DEATHPIXIE - WALKING NIGHTMARE (Slowed + Reverbed) -> #f22630
+[82/161] DEATHPIXIE - WALKING NIGHTMARE (Sped Up) -> #f22630
+[83/161] DEATHPIXIE, Ciszak - FEED MY APPETITE -> #3a2e35
+[84/161] DEATHPIXIE, CYPARISS - NIGHTMARECORE - SLOWED & REVERBED -> #1a1413
+[85/161] DEATHPIXIE, CYPARISS - NIGHTMARECORE - SPED UP -> #1a1413
+[86/161] DEATHPIXIE, CYPARISS - NIGHTMARECORE - ULTRA SLOWED -> #1a1413
+[87/161] DEATHPIXIE, deadmau5 - RAISE YOUR WEAPON - DEATHPIXIE'S REQUIEM -> #322025
+[88/161] DEATHPIXIE, deadmau5 - RAISE YOUR WEAPON - DEATHPIXIE'S REQUIEM -> #e74843
+[89/161] DEATHPIXIE, Lexy Panterra - SAFE WORD (Deathmix) -> #24191b
+[90/161] DEATHPIXIE, MERYLL - DIE & LIVE AGAIN -> #322025
+[91/161] DEATHPIXIE, MERYLL - DIE & LIVE AGAIN -> #474141
+[92/161] DEATHPIXIE, OddKidOut - HELL GIRL II -> #f21623
+[93/161] DEATHPIXIE, Pro6lema - GRIM REAPER -> #291719
+[94/161] DEATHPIXIE, Pro6lema - GRIM REAPER - Slowed + Reverbed -> #291719
+[95/161] DEATHPIXIE, Pro6lema - GRIM REAPER - Sped Up -> #291719
+[96/161] DEATHPIXIE, Pro6lema - GRIM REAPER - Ultra Slowed -> #291719
+[97/161] DEATHPIXIE, RezaDead - BRAIN ROT -> #231414
+[98/161] DEATHPIXIE, RezaDead - DIGITAL KILL SHIT -> #2d2022
+[99/161] DEATHPIXIE, RezaDead - DIGITAL KILL SHIT - SLOWED + REVERBED -> #2d2022
+[100/161] DEATHPIXIE, RezaDead - DIGITAL KILL SHIT - SPED UP -> #2d2022
+[101/161] DEATHPIXIE, RezaDead - DIGITAL KILL SHIT - ULTRA SLOWED -> #2d2022
+[102/161] DEATHPIXIE, Skylar Grey - LET YOU LIE -> #322025
+[103/161] DEATHPIXIE, Skylar Grey - LET YOU LIE (feat. Skylar Grey) -> #322025
+[104/161] DEATHPIXIE, T78 - WELCOME TO THE FREAKSHOW -> #291111
+[105/161] DEATHPIXIE, WHIPPED CREAM - PHONK TECHNO -> #e5a2a6
+[106/161] SKIP (no art): Isolate.exe, DEATHPIXIE - BLIND
+[107/161] SKIP (no art): Isolate.exe, DEATHPIXIE - BLIND - Slowed
+[108/161] SKIP (no art): Isolate.exe, DEATHPIXIE - BLIND - Sped Up
+[109/161] kai.wav - Better When It's You -> #1f222e
+[110/161] kai.wav - funKtion -> #4b5d85
+[111/161] kai.wav - Love in the Music -> #3a7ca6
+[112/161] kai.wav - set me free -> #305071
+[113/161] kai.wav - That's a Vibe -> #f4e175
+[114/161] kai.wav - Top Floor -> #2e6384
+[115/161] kai.wav - Uno, Dos, Tres -> #866e92
+[116/161] kai.wav, Aloe Blacc - I Need a Dollar - Sped Up Version -> #c3afc5
+[117/161] kai.wav, Aloe Blacc - I Need A Dollar (kai.wav x Aloe Blacc) -> #93c9dd
+[118/161] kai.wav, Aloe Blacc, Tiago Ribeiro - I Need a Dollar - Tiago Ribeiro Remix -> #c3afc5
+[119/161] lofi gma - bonsai -> #ce6f17
+[120/161] lofi gma - cherry tree -> #e7d5c3
+[121/161] lofi gma - garden dreams -> #302b0c
+[122/161] lofi gma - gentle night -> #8f2515
+[123/161] lofi gma - green tea -> #d2880b
+[124/161] lofi gma - quiet hour -> #da700e
+[125/161] lofi gma - rainy window -> #f2d196
+[126/161] lofi gma - ramen -> #ab6d3a
+[127/161] lofi gma - shumai -> #b77948
+[128/161] lofi gma - soup dumplings -> #cd7337
+[129/161] lofi gma - tea leaves -> #8b3918
+[130/161] Pro6lema - Bicuda Phonk -> #6128b0
+[131/161] Pro6lema - Bicuda Phonk (Slowed & Reverbed) -> #6128b0
+[132/161] Pro6lema - Bicuda Phonk (Sped Up) -> #6128b0
+[133/161] Pro6lema - Bicuda Phonk (Ultra Slowed) -> #6128b0
+[134/161] Pro6lema - Breja Breja -> #ec46fa
+[135/161] Pro6lema - Cortura -> #e1b5ef
+[136/161] Pro6lema - FEITIÇO_99 -> #762dec
+[137/161] Pro6lema - Hipnotica -> #c68fe1
+[138/161] Pro6lema - Hipnotica (Slowed & Reverbed) -> #c68fe1
+[139/161] Pro6lema - Hipnotica (Sped Up) -> #c68fe1
+[140/161] Pro6lema - Hipnotica (Ultra Slowed) -> #c68fe1
+[141/161] Pro6lema - Hoje em Dia é Difícil Encontrar -> #523b78
+[142/161] Pro6lema - Italy -> #1d1a38
+[143/161] Pro6lema - Minion Brain Rot -> #4a48b0
+[144/161] Pro6lema - Que Perigx -> #dc71d6
+[145/161] Pro6lema - Que Perigx - Slowed & Reverbed -> #dc71d6
+[146/161] Pro6lema - Que Perigx - Sped Up -> #dc71d6
+[147/161] Pro6lema - Que Perigx - Ultra Slowed -> #dc71d6
+[148/161] Pro6lema - Que Yona -> #7036d3
+[149/161] Pro6lema - Trancemelodia -> #54487a
+[150/161] Pro6lema - Vida -> #c232c3
+[151/161] Pro6lema - Vida - Slowed & Reverbed -> #c232c3
+[152/161] Pro6lema - Vida - Sped Up -> #c232c3
+[153/161] Pro6lema - Vida - Ultra Slowed -> #c232c3
+[154/161] Pro6lema, Chilx, Rubikdice - Genesis -> #271b6a
+[155/161] Pro6lema, DEATHPIXIE - Menina -> #6a3f95
+[156/161] Pro6lema, HXDES - All Eyes on Rani -> #f371f9
+[157/161] Pro6lema, nashi, ankxra - Vapo No Setor -> #d546e4
+[158/161] SKIP (no art): RAIZHELL, DEATHPIXIE - NEW BLOOD
+[159/161] SKIP (no art): RAIZHELL, DEATHPIXIE - NEW BLOOD (SLOWED)
+[160/161] SKIP (no art): RAIZHELL, DEATHPIXIE - NEW BLOOD (SPED UP)
+[161/161] twenty16 - stranger -> #d2d2d4
+
+-- Done: 155 colors extracted

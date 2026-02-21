@@ -13,7 +13,7 @@ export class RocketSystem {
   private glows: Phaser.GameObjects.Image[] = [];
 
   // Callbacks
-  public onHit: ((x: number, y: number, type?: ObstacleType) => void) | null = null;
+  public onHit: ((x: number, y: number, type?: ObstacleType, isEnemy?: boolean) => void) | null = null;
 
   constructor(scene: Phaser.Scene, obstacleSystem: ObstacleSystem) {
     this.scene = scene;
@@ -134,7 +134,7 @@ export class RocketSystem {
         rocket.stop();
         rocket.setActive(false).setVisible(false);
         this.glows[i].setActive(false).setVisible(false);
-        if (this.onHit) this.onHit(hitResult.x, hitResult.y, hitResult.type);
+        if (this.onHit) this.onHit(hitResult.x, hitResult.y, hitResult.type, hitResult.isEnemy);
       }
     }
   }

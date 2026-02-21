@@ -34,7 +34,26 @@
       "Bash(wc:*)",
       "WebFetch(domain:open.spotify.com)",
       "Bash(done)",
-      "Read(//c/Users/mikey/.claude/projects/c--Users-mikey-Claude-Playground-dp-moto/**)"
+      "Read(//c/Users/mikey/.claude/projects/c--Users-mikey-Claude-Playground-dp-moto/**)",
+      "Bash(where:*)",
+      "Bash(python -c \":*)",
+      "Bash(python -c:*)",
+      "Bash(python scripts/analyze_audio.py:*)",
+      "Bash(pip show:*)",
+      "Bash(tasklist:*)",
+      "Bash(python -m pip:*)",
+      "Bash(python scripts/extract_dominant_colors.py:*)",
+      "Read(//tmp/**)",
+      "Bash(python scripts/generate_courses.py:*)",
+      "Bash(python scripts/generate_all_courses.py:*)",
+      "Bash(echo:*)",
+      "Read(//d/hume music/Music/**)",
+      "Bash(find:*)",
+      "Bash(sort:*)",
+      "Bash(python:*)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\mikey\\Claude_Playground\\dp_moto\\scripts\\beat_data"
     ]
   }
 }

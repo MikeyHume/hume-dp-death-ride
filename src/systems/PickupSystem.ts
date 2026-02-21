@@ -7,6 +7,7 @@ export class PickupSystem {
   private glowPool: Phaser.GameObjects.Image[] = [];
   private ammo: number = 0;
   private justCollected: boolean = false;
+  private collectedX: number = 0;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -110,6 +111,7 @@ export class PickupSystem {
           pickup.setActive(false).setVisible(false);
           glow.setVisible(false);
           if (this.ammo < TUNING.PICKUP_MAX_AMMO) this.ammo++;
+          this.collectedX = pickup.x;
           this.justCollected = true;
         }
       }
@@ -131,6 +133,16 @@ export class PickupSystem {
   /** Returns true once per frame if a pickup was collected */
   wasCollected(): boolean {
     return this.justCollected;
+  }
+
+  /** X position of the pickup at the moment it was collected (for bonus zone check) */
+  getCollectedX(): number {
+    return this.collectedX;
+  }
+
+  /** Add ammo from external source (e.g. 2X bonus zone gives extra) */
+  addAmmoExternal(): void {
+    if (this.ammo < TUNING.PICKUP_MAX_AMMO) this.ammo++;
   }
 
   consumeAmmo(): boolean {

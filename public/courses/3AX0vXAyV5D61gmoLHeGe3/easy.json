@@ -1,0 +1,129 @@
+{
+  "spotify_track_id": "3AX0vXAyV5D61gmoLHeGe3",
+  "difficulty": "easy",
+  "name": "Default",
+  "duration_s": 156.0,
+  "bpm": 76.0,
+  "version": 1,
+  "seed": 37,
+  "score": {
+    "total": 9.34,
+    "beat_sync": 10.0,
+    "flow": 9.66,
+    "difficulty_curve": 8.86,
+    "type_variety": 9.66,
+    "lane_coverage": 9.43,
+    "energy_match": 6.72,
+    "cull_rate": 10.0
+  },
+  "attempts": 37,
+  "events": [
+    {
+      "t": 24.304,
+      "lane": 3,
+      "type": "guardian"
+    },
+    {
+      "t": 24.729,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 40.519,
+      "lane": 3,
+      "type": "car_crash_beat",
+      "lead": 1.068
+    },
+    {
+      "t": 42.725,
+      "lane": 3,
+      "type": "car"
+    },
+    {
+      "t": 72.725,
+      "lane": 3,
+      "type": "car"
+    },
+    {
+      "t": 78.739,
+      "lane": 2,
+      "type": "pickup_shield"
+    },
+    {
+      "t": 90.72,
+      "lane": 2,
+      "type": "car"
+    },
+    {
+      "t": 96.137,
+      "lane": 0,
+      "type": "guardian"
+    },
+    {
+      "t": 96.734,
+      "lane": 0,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 100.519,
+      "lane": 1,
+      "type": "car_crash_beat",
+      "lead": 1.068
+    },
+    {
+      "t": 102.725,
+      "lane": 1,
+      "type": "car"
+    },
+    {
+      "t": 108.716,
+      "lane": 0,
+      "type": "crash"
+    },
+    {
+      "t": 120.345,
+      "lane": 1,
+      "type": "guardian"
+    },
+    {
+      "t": 120.721,
+      "lane": 1,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 126.735,
+      "lane": 0,
+      "type": "car"
+    },
+    {
+      "t": 129.163,
+      "lane": 1,
+      "type": "guardian"
+    },
+    {
+      "t": 129.73,
+      "lane": 1,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 135.721,
+      "lane": 1,
+      "type": "crash"
+    },
+    {
+      "t": 138.001,
+      "lane": 2,
+      "type": "guardian"
+    },
+    {
+      "t": 138.739,
+      "lane": 2,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 141.711,
+      "lane": 2,
+      "type": "crash"
+    }
+  ]
+}

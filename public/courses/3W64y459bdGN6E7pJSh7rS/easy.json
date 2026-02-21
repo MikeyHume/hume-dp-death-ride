@@ -1,0 +1,123 @@
+{
+  "spotify_track_id": "3W64y459bdGN6E7pJSh7rS",
+  "difficulty": "easy",
+  "name": "Default",
+  "duration_s": 124.373,
+  "bpm": 112.3,
+  "version": 1,
+  "seed": 23,
+  "score": {
+    "total": 9.53,
+    "beat_sync": 10.0,
+    "flow": 9.66,
+    "difficulty_curve": 8.86,
+    "type_variety": 9.5,
+    "lane_coverage": 9.6,
+    "energy_match": 8.62,
+    "cull_rate": 10.0
+  },
+  "attempts": 23,
+  "events": [
+    {
+      "t": 21.595,
+      "lane": 2,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 39.033,
+      "lane": 0,
+      "type": "car"
+    },
+    {
+      "t": 56.308,
+      "lane": 0,
+      "type": "enemy_car"
+    },
+    {
+      "t": 62.07,
+      "lane": 3,
+      "type": "guardian"
+    },
+    {
+      "t": 62.764,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 64.946,
+      "lane": 1,
+      "type": "slow"
+    },
+    {
+      "t": 70.987,
+      "lane": 3,
+      "type": "guardian"
+    },
+    {
+      "t": 71.494,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 80.202,
+      "lane": 2,
+      "type": "car"
+    },
+    {
+      "t": 81.609,
+      "lane": 1,
+      "type": "guardian"
+    },
+    {
+      "t": 82.408,
+      "lane": 1,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 84.59,
+      "lane": 3,
+      "type": "slow"
+    },
+    {
+      "t": 94.703,
+      "lane": 1,
+      "type": "guardian"
+    },
+    {
+      "t": 95.48,
+      "lane": 1,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 97.663,
+      "lane": 3,
+      "type": "enemy_car"
+    },
+    {
+      "t": 102.028,
+      "lane": 0,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 108.577,
+      "lane": 2,
+      "type": "slow"
+    },
+    {
+      "t": 110.759,
+      "lane": 0,
+      "type": "pickup_shield"
+    },
+    {
+      "t": 110.759,
+      "lane": 1,
+      "type": "car_crash_beat",
+      "lead": 1.092
+    },
+    {
+      "t": 112.895,
+      "lane": 1,
+      "type": "car"
+    }
+  ]
+}

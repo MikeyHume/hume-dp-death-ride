@@ -1,0 +1,129 @@
+{
+  "spotify_track_id": "0RsCWe6h0IbwUaDRo0MwX7",
+  "difficulty": "easy",
+  "name": "Default",
+  "duration_s": 117.184,
+  "bpm": 123.0,
+  "version": 1,
+  "seed": 19,
+  "score": {
+    "total": 9.27,
+    "beat_sync": 10.0,
+    "flow": 9.8,
+    "difficulty_curve": 9.24,
+    "type_variety": 9.15,
+    "lane_coverage": 9.6,
+    "energy_match": 5.5,
+    "cull_rate": 10.0
+  },
+  "attempts": 19,
+  "events": [
+    {
+      "t": 26.398,
+      "lane": 1,
+      "type": "guardian"
+    },
+    {
+      "t": 27.191,
+      "lane": 1,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 32.903,
+      "lane": 0,
+      "type": "crash"
+    },
+    {
+      "t": 48.135,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 50.039,
+      "lane": 1,
+      "type": "car_crash_beat",
+      "lead": 1.174
+    },
+    {
+      "t": 51.943,
+      "lane": 1,
+      "type": "car"
+    },
+    {
+      "t": 71.471,
+      "lane": 2,
+      "type": "slow"
+    },
+    {
+      "t": 73.375,
+      "lane": 0,
+      "type": "pickup_shield"
+    },
+    {
+      "t": 73.375,
+      "lane": 3,
+      "type": "car_crash_beat",
+      "lead": 1.174
+    },
+    {
+      "t": 75.279,
+      "lane": 3,
+      "type": "car"
+    },
+    {
+      "t": 80.922,
+      "lane": 2,
+      "type": "pickup_shield"
+    },
+    {
+      "t": 86.703,
+      "lane": 3,
+      "type": "slow"
+    },
+    {
+      "t": 87.911,
+      "lane": 0,
+      "type": "guardian"
+    },
+    {
+      "t": 88.607,
+      "lane": 0,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 90.511,
+      "lane": 2,
+      "type": "slow"
+    },
+    {
+      "t": 93.831,
+      "lane": 1,
+      "type": "guardian"
+    },
+    {
+      "t": 94.319,
+      "lane": 1,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 104.095,
+      "lane": 1,
+      "type": "car"
+    },
+    {
+      "t": 105.883,
+      "lane": 0,
+      "type": "crash"
+    },
+    {
+      "t": 111.461,
+      "lane": 2,
+      "type": "guardian"
+    },
+    {
+      "t": 111.874,
+      "lane": 2,
+      "type": "pickup_ammo"
+    }
+  ]
+}

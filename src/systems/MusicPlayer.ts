@@ -32,6 +32,7 @@ export class MusicPlayer {
   private ytReady: boolean = false;
   private pendingPlay: boolean = false;
   private playlistStarted: boolean = false;
+  private lastSkipTime: number = 0;
   private container!: HTMLDivElement;
   private muteBtn!: HTMLButtonElement;
   private muteBtnImg!: HTMLImageElement;
@@ -250,6 +251,10 @@ export class MusicPlayer {
   }
 
   getSource(): MusicSource { return this.source; }
+  getTrackId(): string | null { return this.currentTrackId; }
+  getPlaybackPosition(): { current: number; duration: number } { return this.getTrackPosition(); }
+  getThumbnailImage(): HTMLImageElement { return this.thumbnailImg; }
+  getTrackArtist(): string { return this.currentArtist; }
 
   private createUI(): void {
     // Create an overlay div that exactly tracks the game canvas position/size
@@ -1059,6 +1064,11 @@ export class MusicPlayer {
       }
       return;
     }
+    // Cooldown: ignore rapid-fire skips (Spotify API can't keep up)
+    const now = performance.now();
+    if (now - this.lastSkipTime < 800) return;
+    this.lastSkipTime = now;
+
     if (this.source === 'spotify' && this.spotifyPlayer) {
       this.spotifyPlayer.next();
     } else if (this.ytPlayer && (this.playlistStarted || this.titlePlaylistLoaded)) {

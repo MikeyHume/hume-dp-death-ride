@@ -15,6 +15,7 @@ export interface CollisionResult {
   hitX: number;
   hitY: number;
   hitType: ObstacleType | null;
+  isEnemy: boolean;
 }
 
 export interface DestroyAllResult {
@@ -23,6 +24,12 @@ export interface DestroyAllResult {
 }
 
 export interface RageHit {
+  x: number;
+  y: number;
+  type: ObstacleType;
+}
+
+export interface KillZoneHit {
   x: number;
   y: number;
   type: ObstacleType;
@@ -50,7 +57,7 @@ export class ObstacleSystem {
   private barrierDisplayH: number = 0;
 
   // Reused collision result to avoid per-frame allocation
-  private collisionResult: CollisionResult = { crashed: false, slowOverlapping: false, hitX: 0, hitY: 0, hitType: null };
+  private collisionResult: CollisionResult = { crashed: false, slowOverlapping: false, hitX: 0, hitY: 0, hitType: null, isEnemy: false };
   private laneWarningResult: LaneWarning[][] = [];
 
   // Seeded RNG for deterministic obstacle patterns
@@ -80,6 +87,9 @@ export class ObstacleSystem {
 
   // Debug: suppress explosion visuals (G key clean-screen mode)
   private suppressExplosions: boolean = false;
+
+  // Course-driven mode: pause timer-based spawning when CourseRunner is active
+  private timerPaused: boolean = false;
 
   constructor(scene: Phaser.Scene, seed: number) {
     this.scene = scene;
@@ -269,29 +279,36 @@ export class ObstacleSystem {
     }
 
     // Spawn timer (rage mode speeds up spawning, ramped smoothly)
-    const spawnMultiplier = 1 + (TUNING.RAGE_SPAWN_RATE_MULTIPLIER - 1) * rageFactor;
-    const spawnDt = dt * spawnMultiplier;
-    this.spawnTimer += spawnDt;
-    if (this.spawnTimer >= this.nextSpawnInterval) {
-      this.spawnTimer = 0;
-      this.spawnWave(difficultyFactor, rageFactor > 0, roadSpeed);
-      let interval = Phaser.Math.Linear(
-        TUNING.SPAWN_INTERVAL_MAX,
-        TUNING.SPAWN_INTERVAL_MIN,
-        difficultyFactor
-      );
-      // Wider spacing on lower quality tiers for more reaction time
-      if (GAME_MODE.quality !== 'high') {
-        interval *= 1.15;
+    // Skipped when timerPaused (course-driven rhythm mode uses CourseRunner instead)
+    if (!this.timerPaused) {
+      const spawnMultiplier = 1 + (TUNING.RAGE_SPAWN_RATE_MULTIPLIER - 1) * rageFactor;
+      const spawnDt = dt * spawnMultiplier;
+      this.spawnTimer += spawnDt;
+      if (this.spawnTimer >= this.nextSpawnInterval) {
+        this.spawnTimer = 0;
+        this.spawnWave(difficultyFactor, rageFactor > 0, roadSpeed);
+        let interval = Phaser.Math.Linear(
+          TUNING.SPAWN_INTERVAL_MAX,
+          TUNING.SPAWN_INTERVAL_MIN,
+          difficultyFactor
+        );
+        // Wider spacing on lower quality tiers for more reaction time
+        if (GAME_MODE.quality !== 'high') {
+          interval *= 1.15;
+        }
+        this.nextSpawnInterval = interval;
       }
-      this.nextSpawnInterval = interval;
     }
   }
 
   private checkCarCrashCollisions(): void {
+    const windowLeft = TUNING.RHYTHM_SWEET_SPOT_X - TUNING.RHYTHM_BONUS_ZONE_WIDTH / 2;
     for (let c = 0; c < this.pool.length; c++) {
       const car = this.pool[c];
       if (!car.active || car.getData('type') !== ObstacleType.CAR || car.getData('dying')) continue;
+
+      // Enemy cars are protected from barriers until they've passed through the center timing window
+      if (car.getData('enemy') && car.x >= windowLeft) continue;
 
       const carW = car.getData('w') as number;
       const carH = car.getData('h') as number;
@@ -410,7 +427,7 @@ export class ObstacleSystem {
     }
   }
 
-  private spawn(x: number, y: number, type: ObstacleType, laneIndex: number = 0): void {
+  private spawn(x: number, y: number, type: ObstacleType, laneIndex: number = 0): Phaser.GameObjects.Sprite | null {
     let obs: Phaser.GameObjects.Sprite | null = null;
     for (let i = 0; i < this.pool.length; i++) {
       if (!this.pool[i].active) {
@@ -496,6 +513,10 @@ export class ObstacleSystem {
     obs.setData('h', h);
     obs.setData('lane', laneIndex);
     obs.setData('dying', false);
+    obs.setData('guardian', false);
+    obs.setData('enemy', false);
+    // Clear any leftover FX from previous pooled use (e.g. enemy car glow)
+    if (obs.preFX) obs.preFX.clear();
 
     // Start animation for cars
     if (type === ObstacleType.CAR) {
@@ -517,6 +538,73 @@ export class ObstacleSystem {
         this.onShieldSpawn(shieldX, y);
       }
     }
+    return obs;
+  }
+
+  /** Pause/resume timer-based spawning (used by rhythm mode CourseRunner). */
+  public setTimerPaused(paused: boolean): void {
+    this.timerPaused = paused;
+  }
+
+  /**
+   * Spawn a single obstacle or pickup from course data.
+   * Maps course type strings to ObstacleType / pickup callbacks.
+   * Called by CourseRunner for each event.
+   */
+  public spawnFromCourse(type: string, laneIndex: number, roadSpeed: number): void {
+    const y = this.laneCenters[laneIndex];
+    // Compute spawn X far enough off-screen for travel time
+    const defaultWarningDist = roadSpeed * TUNING.LANE_WARNING_DURATION;
+    const spawnX = TUNING.GAME_WIDTH + Math.max(TUNING.OBSTACLE_SPAWN_MARGIN, defaultWarningDist);
+
+    switch (type) {
+      case 'crash':
+        this.spawn(spawnX, y, ObstacleType.CRASH, laneIndex);
+        break;
+      case 'car':
+        this.spawn(spawnX, y, ObstacleType.CAR, laneIndex);
+        break;
+      case 'slow':
+        this.spawn(spawnX, y, ObstacleType.SLOW, laneIndex);
+        break;
+      case 'pickup_ammo':
+        if (this.onPickupSpawn) this.onPickupSpawn(spawnX, y);
+        break;
+      case 'pickup_shield':
+        if (this.onShieldSpawn) this.onShieldSpawn(spawnX, y);
+        break;
+      case 'car_crash_beat':
+        // Spawn a CRASH that will catch up to a car in the same lane
+        this.spawn(spawnX, y, ObstacleType.CRASH, laneIndex);
+        break;
+      case 'guardian': {
+        // Guardian: tinted CRASH that protects a pickup — proximity scoring on slash
+        const g = this.spawn(spawnX, y, ObstacleType.CRASH, laneIndex);
+        if (g) {
+          g.setData('guardian', true);
+          g.setTint(TUNING.RHYTHM_GUARDIAN_TINT);
+        }
+        break;
+      }
+      case 'enemy_car': {
+        // Enemy car: timed to reach center on-beat, player should rocket/shield it
+        const ec = this.spawn(spawnX, y, ObstacleType.CAR, laneIndex);
+        if (ec) {
+          ec.setData('enemy', true);
+          if (ec.preFX) {
+            ec.preFX.addGlow(
+              TUNING.RHYTHM_ENEMY_CAR_GLOW_COLOR,
+              TUNING.RHYTHM_ENEMY_CAR_GLOW_OUTER,
+              TUNING.RHYTHM_ENEMY_CAR_GLOW_INNER,
+              false,
+              0.5,
+              16
+            );
+          }
+        }
+        break;
+      }
+    }
   }
 
   /** Check collisions against player. Circle-vs-AABB for crash/slow, circle-vs-ellipse for cars. */
@@ -526,6 +614,7 @@ export class ObstacleSystem {
     this.collisionResult.hitX = 0;
     this.collisionResult.hitY = 0;
     this.collisionResult.hitType = null;
+    this.collisionResult.isEnemy = false;
 
     for (let i = 0; i < this.pool.length; i++) {
       const obs = this.pool[i];
@@ -549,6 +638,7 @@ export class ObstacleSystem {
           this.collisionResult.hitX = obs.x;
           this.collisionResult.hitY = obs.y;
           this.collisionResult.hitType = ObstacleType.CAR;
+          this.collisionResult.isEnemy = !!obs.getData('enemy');
           this.startCarDeath(obs);
           this.spawnExplosion(obs.x, obs.y, TUNING.CAR_EXPLOSION_SCALE);
           if (this.onExplosion) this.onExplosion();
@@ -583,7 +673,9 @@ export class ObstacleSystem {
   /** Check if a slash hitbox overlaps any CRASH obstacle. Despawns + explodes on hit.
    *  Y overlap uses the player's collision circle so you can only slash obstacles in your lane.
    *  Returns the obstacle's X position on hit, or -1 if no hit. */
+  private lastSlashWasGuardian = false;
   checkSlashCollision(slashX: number, slashW: number, playerCollY: number, playerHalfH: number): number {
+    this.lastSlashWasGuardian = false;
     for (let i = 0; i < this.pool.length; i++) {
       const obs = this.pool[i];
       if (!obs.active) continue;
@@ -598,6 +690,7 @@ export class ObstacleSystem {
       if (overlapX && overlapY) {
         const ex = obs.x;
         const ey = obs.y;
+        this.lastSlashWasGuardian = !!obs.getData('guardian');
         obs.setActive(false).setVisible(false);
         this.spawnExplosion(ex, ey);
         if (this.onExplosion) this.onExplosion();
@@ -605,6 +698,11 @@ export class ObstacleSystem {
       }
     }
     return -1;
+  }
+
+  /** True if the last obstacle destroyed by checkSlashCollision was a guardian */
+  wasLastSlashGuardian(): boolean {
+    return this.lastSlashWasGuardian;
   }
 
   /** Check if a projectile circle overlaps any obstacle. Destroys the obstacle on hit.
@@ -703,6 +801,38 @@ export class ObstacleSystem {
       }
     }
     return this.rageHits;
+  }
+
+  /** Kill zone: destroy obstacles whose left edge crosses the kill zone X.
+   *  Skips SLOW (puddles) and dying obstacles. Returns hits for FX. */
+  private killZoneHits: KillZoneHit[] = [];
+  checkKillZone(killZoneX: number): KillZoneHit[] {
+    this.killZoneHits.length = 0;
+    for (let i = 0; i < this.pool.length; i++) {
+      const obs = this.pool[i];
+      if (!obs.active) continue;
+
+      const type = obs.getData('type') as ObstacleType;
+      if (type === ObstacleType.SLOW) continue; // puddles scroll off normally
+      if (obs.getData('dying')) continue;
+
+      const w = obs.getData('w') as number;
+      // Check if obstacle's left edge has crossed the kill zone line
+      if (obs.x - w / 2 <= killZoneX) {
+        const ex = obs.x;
+        const ey = obs.y;
+        if (type === ObstacleType.CAR) {
+          this.startCarDeath(obs);
+          this.spawnExplosion(ex, ey, TUNING.CAR_EXPLOSION_SCALE);
+        } else {
+          obs.setActive(false).setVisible(false);
+          this.spawnExplosion(ex, ey);
+        }
+        if (this.onExplosion) this.onExplosion();
+        this.killZoneHits.push({ x: ex, y: ey, type });
+      }
+    }
+    return this.killZoneHits;
   }
 
   /** Destroy all active obstacles on screen, spawning explosions for each. Returns hit count. */
@@ -829,7 +959,7 @@ export class ObstacleSystem {
 
   /** Lane-based projectile collision: hits the nearest obstacle in the given lane
    *  whose center X the rocket has reached. Destroys the obstacle on hit. */
-  checkLaneProjectileCollision(rocketX: number, laneIndex: number): { x: number; y: number; type: ObstacleType } | null {
+  checkLaneProjectileCollision(rocketX: number, laneIndex: number): { x: number; y: number; type: ObstacleType; isEnemy: boolean } | null {
     let bestObs: Phaser.GameObjects.Sprite | null = null;
     let bestDist = Infinity;
 
@@ -857,6 +987,7 @@ export class ObstacleSystem {
       const ex = bestObs.x;
       const ey = bestObs.y;
       const type = bestObs.getData('type') as ObstacleType;
+      const isEnemy = !!bestObs.getData('enemy');
       if (type === ObstacleType.CAR) {
         this.startCarDeath(bestObs);
       } else {
@@ -864,7 +995,7 @@ export class ObstacleSystem {
       }
       this.spawnExplosion(ex, ey, TUNING.ROCKET_EXPLOSION_SCALE);
       if (this.onExplosion) this.onExplosion();
-      return { x: ex, y: ey, type };
+      return { x: ex, y: ey, type, isEnemy };
     }
     return null;
   }

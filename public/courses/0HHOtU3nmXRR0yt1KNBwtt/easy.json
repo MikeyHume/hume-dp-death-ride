@@ -1,0 +1,57 @@
+{
+  "spotify_track_id": "0HHOtU3nmXRR0yt1KNBwtt",
+  "difficulty": "easy",
+  "name": "Default",
+  "duration_s": 61.141,
+  "bpm": 112.3,
+  "version": 1,
+  "seed": 16,
+  "score": {
+    "total": 9.41,
+    "beat_sync": 10.0,
+    "flow": 10.0,
+    "difficulty_curve": 9.36,
+    "type_variety": 9.59,
+    "lane_coverage": 8.67,
+    "energy_match": 6.75,
+    "cull_rate": 10.0
+  },
+  "attempts": 16,
+  "events": [
+    {
+      "t": 24.544,
+      "lane": 0,
+      "type": "guardian"
+    },
+    {
+      "t": 25.124,
+      "lane": 0,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 37.941,
+      "lane": 3,
+      "type": "slow"
+    },
+    {
+      "t": 42.307,
+      "lane": 2,
+      "type": "car"
+    },
+    {
+      "t": 46.672,
+      "lane": 1,
+      "type": "car"
+    },
+    {
+      "t": 52.941,
+      "lane": 2,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 55.124,
+      "lane": 0,
+      "type": "crash"
+    }
+  ]
+}

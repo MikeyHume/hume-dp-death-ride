@@ -1,0 +1,127 @@
+{
+  "spotify_track_id": "4DJs9goolvxf29ra7pDfen",
+  "difficulty": "easy",
+  "name": "Default",
+  "duration_s": 170.752,
+  "bpm": 112.3,
+  "version": 1,
+  "seed": 5,
+  "score": {
+    "total": 9.38,
+    "beat_sync": 10.0,
+    "flow": 9.57,
+    "difficulty_curve": 8.27,
+    "type_variety": 9.77,
+    "lane_coverage": 9.56,
+    "energy_match": 7.89,
+    "cull_rate": 10.0
+  },
+  "attempts": 5,
+  "events": [
+    {
+      "t": 26.749,
+      "lane": 0,
+      "type": "car"
+    },
+    {
+      "t": 52.547,
+      "lane": 2,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 61.277,
+      "lane": 1,
+      "type": "crash"
+    },
+    {
+      "t": 69.354,
+      "lane": 3,
+      "type": "guardian"
+    },
+    {
+      "t": 69.985,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 82.942,
+      "lane": 2,
+      "type": "car"
+    },
+    {
+      "t": 89.49,
+      "lane": 3,
+      "type": "car"
+    },
+    {
+      "t": 93.855,
+      "lane": 3,
+      "type": "enemy_car"
+    },
+    {
+      "t": 98.22,
+      "lane": 1,
+      "type": "pickup_shield"
+    },
+    {
+      "t": 108.994,
+      "lane": 2,
+      "type": "crash"
+    },
+    {
+      "t": 119.02,
+      "lane": 0,
+      "type": "guardian"
+    },
+    {
+      "t": 119.606,
+      "lane": 0,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 121.812,
+      "lane": 1,
+      "type": "crash"
+    },
+    {
+      "t": 123.971,
+      "lane": 0,
+      "type": "crash"
+    },
+    {
+      "t": 137.067,
+      "lane": 0,
+      "type": "slow"
+    },
+    {
+      "t": 138.569,
+      "lane": 3,
+      "type": "guardian"
+    },
+    {
+      "t": 139.273,
+      "lane": 3,
+      "type": "pickup_ammo"
+    },
+    {
+      "t": 141.456,
+      "lane": 1,
+      "type": "slow"
+    },
+    {
+      "t": 143.639,
+      "lane": 2,
+      "type": "slow"
+    },
+    {
+      "t": 147.981,
+      "lane": 1,
+      "type": "pickup_shield"
+    },
+    {
+      "t": 150.163,
+      "lane": 3,
+      "type": "car"
+    }
+  ]
+}

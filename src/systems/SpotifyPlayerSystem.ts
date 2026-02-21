@@ -258,20 +258,20 @@ export class SpotifyPlayerSystem {
   }
 
   async next(): Promise<void> {
-    if (!this.ready) return;
+    if (!this.ready || !this.deviceId) return;
     const token = getAccessToken();
     if (!token) return;
-    await fetch('https://api.spotify.com/v1/me/player/next', {
+    await fetch(`https://api.spotify.com/v1/me/player/next?device_id=${this.deviceId}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     }).catch(() => {});
   }
 
   async prev(): Promise<void> {
-    if (!this.ready) return;
+    if (!this.ready || !this.deviceId) return;
     const token = getAccessToken();
     if (!token) return;
-    await fetch('https://api.spotify.com/v1/me/player/previous', {
+    await fetch(`https://api.spotify.com/v1/me/player/previous?device_id=${this.deviceId}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     }).catch(() => {});

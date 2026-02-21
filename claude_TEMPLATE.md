@@ -38,6 +38,25 @@
 **NEVER:**
 - *e.g. NEVER break a working feature to implement a new one*
 - *e.g. NEVER commit changes without explicit user request*
+- NEVER implement music-reactive features in Normal Mode — see **Spotify Music Reactivity Rule** below
+
+---
+
+### Spotify Music Reactivity Rule (ALL HUME GAMES — PERMANENT)
+
+> **This rule applies to every hume game/app that uses Spotify. It exists to comply with Spotify's Terms of Service.**
+
+All hume games have two modes:
+
+**Normal Mode** — Spotify (Premium) or YouTube (fallback) playback.
+- **NO music-reactive elements.** Nothing may react to BPM, beat timing, energy levels, frequency bands, onset detection, or any audio analysis data.
+- **Allowed:** Static visual theming from metadata (album art dominant color, track title, etc.).
+
+**Rhythm Mode** — Self-hosted audio files only. No Spotify, no YouTube.
+- Full music reactivity allowed: beat-synced spawning, sky pulsing, frequency-driven visuals, etc.
+- Uses pre-computed beat data + self-hosted audio.
+
+**Claude's responsibility:** Flag any music-reactive feature requested for Normal Mode. It belongs in Rhythm Mode only.
 
 ### Vocabulary
 > **How this works:** Mikey only needs to change `[N]` to `[Y]` to approve.

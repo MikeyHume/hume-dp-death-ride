@@ -25,10 +25,16 @@ import { PerfSystem } from '../systems/PerfSystem';
 import { OrientationOverlay } from '../systems/OrientationOverlay';
 import { GAME_MODE } from '../config/gameMode';
 import { submitScore, fetchGlobalTop10, GlobalLeaderboardEntry } from '../systems/LeaderboardService';
+import { submitRhythmScore, fetchRhythmTop10 } from '../systems/RhythmLeaderboardService';
 import { ReflectionSystem } from '../systems/ReflectionSystem';
+import { SkyGlowSystem } from '../systems/SkyGlowSystem';
+import { fetchBeatData } from '../systems/MusicCatalogService';
+import { CourseRunner, loadCourseData, CourseData } from '../systems/CourseRunner';
+import { SongSelectScreen } from '../ui/SongSelectScreen';
 
 enum GameState {
   TITLE,
+  SONG_SELECT,
   TUTORIAL,
   STARTING,
   PLAYING,
@@ -73,6 +79,7 @@ const DEBUG_HOTKEYS = {
   freezeFrame:    { key: 'T',       active: true },  // freeze all movement for frame analysis
   textInspect:    { key: 'N',       active: true },  // cycle through all text elements to identify mystery text
   clickInspect:   { key: 'B',       active: true },  // click any element to identify it
+  rhythmMode:     { key: 'Y',       active: true  },  // toggle Normal ↔ Rhythm mode
 
 };
 
@@ -107,6 +114,31 @@ export class GameScene extends Phaser.Scene {
   private roadSystem!: RoadSystem;
   private obstacleSystem!: ObstacleSystem;
   private reflectionSystem!: ReflectionSystem;
+  private skyGlowSystem!: SkyGlowSystem;
+  private lastBeatTrackId: string | null = null;
+  private rhythmMode = false;
+  private rhythmModeLabel!: Phaser.GameObjects.Text;
+  private courseRunner: CourseRunner | null = null;
+  private courseData: CourseData | null = null;
+  private rhythmTrackId: string | null = null;
+  private rhythmDifficulty: string = 'normal';
+  private songSelectScreen!: SongSelectScreen;
+  // Rhythm zone visuals
+  private killZoneRect!: Phaser.GameObjects.Rectangle;
+  private killZoneEdge!: Phaser.GameObjects.Rectangle;
+  private sweetSpotLine!: Phaser.GameObjects.Graphics;
+  private bonusZoneRect!: Phaser.GameObjects.Rectangle;
+  private bonus2xPopup!: Phaser.GameObjects.Text;
+  private bonusFlashOverlay!: Phaser.GameObjects.Rectangle;
+  private titleGameModesBtn!: Phaser.GameObjects.Text;
+  private gameModeBackdrop!: Phaser.GameObjects.Rectangle;
+  private gameModeContainer!: Phaser.GameObjects.Container;
+  private gameModeOpen = false;
+  private gameModeNormalBtn!: Phaser.GameObjects.Zone;
+  private gameModeRhythmBtn!: Phaser.GameObjects.Zone;
+  private gameModeCloseBtn!: Phaser.GameObjects.Zone;
+  private gameModeNormalText!: Phaser.GameObjects.Text;
+  private gameModeRhythmText!: Phaser.GameObjects.Text;
   private difficultySystem!: DifficultySystem;
   private scoreSystem!: ScoreSystem;
   private fxSystem!: FXSystem;
@@ -159,6 +191,10 @@ export class GameScene extends Phaser.Scene {
 
   // Score popups
   private scorePopups: Phaser.GameObjects.Text[] = [];
+
+  // Streak system (rapid scoring bonuses)
+  private streakCount: number = 0;
+  private streakTimer: number = 0;
 
   // Lane highlights (collision warning)
   private laneHighlights: Phaser.GameObjects.Rectangle[] = [];
@@ -310,6 +346,10 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       if (k === 'escape') {
+        if (this.state === GameState.SONG_SELECT) {
+          // SongSelectScreen handles its own ESC — don't also returnToTitle
+          return;
+        }
         if (this.state === GameState.NAME_ENTRY) {
           if (this.nameSkipConfirmPending) {
             // Second Escape — confirmed skip
@@ -319,6 +359,10 @@ export class GameScene extends Phaser.Scene {
             this.nameSkipConfirmPending = true;
             this.nameSkipWarning.setVisible(true);
           }
+        } else if (this.state === GameState.DEAD && this.rhythmMode) {
+          // Rhythm mode death → back to song select
+          this.returnToTitle();
+          this.enterSongSelect();
         } else if (this.state !== GameState.TITLE) {
           this.returnToTitle();
         }
@@ -374,6 +418,7 @@ export class GameScene extends Phaser.Scene {
 
     // --- Game world ---
     this.parallaxSystem = new ParallaxSystem(this);
+    this.skyGlowSystem = new SkyGlowSystem(this, this.parallaxSystem);
     this.roadSystem = new RoadSystem(this);
     this.obstacleSystem = new ObstacleSystem(this, this.weekSeed);
     this.reflectionSystem = new ReflectionSystem(this, this.parallaxSystem, this.obstacleSystem.getPool(), this.roadSystem.getRoadTile());
@@ -396,10 +441,26 @@ export class GameScene extends Phaser.Scene {
     };
 
     // Wire rocket hit: explosion sound + score bonus + popup + camera shake
-    this.rocketSystem.onHit = (_x: number, _y: number, hitType?: ObstacleType) => {
-      const pts = hitType === ObstacleType.CAR ? TUNING.SCORE_CAR_ROCKET : TUNING.SCORE_OBSTACLE_ROCKET;
-      this.scoreSystem.addBonus(pts);
-      this.spawnScorePopup(pts, 'rocket');
+    this.rocketSystem.onHit = (hitX: number, _y: number, hitType?: ObstacleType, isEnemy?: boolean) => {
+      if (this.rhythmMode && isEnemy) {
+        // Enemy car proximity scoring — closer to center = more points
+        const centerDist = Math.abs(hitX - TUNING.RHYTHM_SWEET_SPOT_X);
+        const zoneHalf = TUNING.RHYTHM_ENEMY_CAR_ZONE_HALF;
+        if (centerDist <= zoneHalf) {
+          const proximity = 1 - centerDist / zoneHalf;
+          const enemyBonus = Math.round(
+            TUNING.RHYTHM_ENEMY_CAR_BASE_SCORE +
+            proximity * (TUNING.RHYTHM_ENEMY_CAR_MAX_SCORE - TUNING.RHYTHM_ENEMY_CAR_BASE_SCORE)
+          );
+          this.awardBonus(enemyBonus, 'rocket');
+          if (proximity > 0.7) this.trigger2XFlash();
+        } else {
+          this.awardBonus(TUNING.RHYTHM_ENEMY_CAR_BASE_SCORE, 'rocket');
+        }
+      } else {
+        const pts = hitType === ObstacleType.CAR ? TUNING.SCORE_CAR_ROCKET : TUNING.SCORE_OBSTACLE_ROCKET;
+        this.awardBonus(pts, 'rocket');
+      }
       this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 0.25, TUNING.SHAKE_DEATH_INTENSITY * 0.25);
     };
 
@@ -582,7 +643,47 @@ export class GameScene extends Phaser.Scene {
         fontFamily: 'monospace',
       }
     ).setOrigin(0.5);
-    this.titleContainer.add([titleText, startText, weekText]);
+    // Title screen — single "GAME MODES" button, bottom-left (mirrors music player padding)
+    const titleBtnStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontSize: '26px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
+      backgroundColor: '#333333', padding: { x: 28, y: 14 },
+    };
+    this.titleGameModesBtn = this.add.text(
+      TUNING.MUSIC_UI_PAD_RIGHT, TUNING.GAME_HEIGHT - TUNING.MUSIC_UI_PAD_TOP,
+      'GAME MODES', titleBtnStyle
+    ).setOrigin(0, 1).setDepth(201);
+
+    this.titleContainer.add([titleText, startText, weekText, this.titleGameModesBtn]);
+
+    // --- Win95 Game Mode Popup ---
+    this.createGameModePopup();
+
+    // --- Song Select Screen ---
+    this.songSelectScreen = new SongSelectScreen(this, {
+      onPlay: (track, difficulty) => {
+        this.rhythmMode = true;
+        this.rhythmDifficulty = difficulty;
+        this.rhythmModeLabel.setVisible(true);
+        this.setRhythmZonesVisible(true);
+        // Load course then start
+        loadCourseData(track.spotifyTrackId, difficulty).then((cd) => {
+          if (cd) {
+            this.courseData = cd;
+            this.rhythmTrackId = track.spotifyTrackId;
+            console.log('[RHYTHM] Course loaded for play:', track.title, difficulty, cd.events.length, 'events');
+          }
+          this.songSelectScreen.hide();
+          // Set black overlay visible for enterStarting
+          this.blackOverlay.setVisible(true).setAlpha(1);
+          this.enterStarting();
+        });
+      },
+      onBack: () => {
+        this.songSelectScreen.hide();
+        this.state = GameState.TITLE;
+        this.titleContainer.setVisible(true);
+      },
+    });
 
     // --- Death screen ---
     this.deathContainer = this.add.container(0, 0).setDepth(200);
@@ -1272,6 +1373,9 @@ export class GameScene extends Phaser.Scene {
         { label: 'freezeFrame',    key: DEBUG_HOTKEYS.freezeFrame.key,     desc: 'Freeze frame' },
         { label: 'showCollisions',  key: '-',                               desc: 'Collision hitboxes' },
         { label: 'startHold',       key: '`',                               desc: 'Skip start hold' },
+        { label: 'textInspect',     key: DEBUG_HOTKEYS.textInspect.key,     desc: 'Text inspector ←→' },
+        { label: 'clickInspect',    key: DEBUG_HOTKEYS.clickInspect.key,    desc: 'Click inspector' },
+        { label: 'rhythmMode',      key: DEBUG_HOTKEYS.rhythmMode.key,      desc: 'Rhythm mode toggle' },
       ];
 
       this.debugHelpContainer = this.add.container(0, 0).setDepth(9999).setScrollFactor(0).setVisible(false);
@@ -1406,6 +1510,103 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
+    // Rhythm mode indicator label
+    this.rhythmModeLabel = this.add.text(
+      TUNING.GAME_WIDTH + TUNING.RHYTHM_MODE_LABEL_X, TUNING.RHYTHM_MODE_LABEL_Y,
+      'RHYTHM', {
+        fontFamily: 'monospace',
+        fontSize: `${TUNING.RHYTHM_MODE_LABEL_SIZE}px`,
+        color: TUNING.RHYTHM_MODE_LABEL_COLOR,
+      }
+    ).setOrigin(1, 0).setDepth(200).setScrollFactor(0).setVisible(false);
+
+    // ── Rhythm zone visuals (kill zone, sweet spot, bonus zone) ──
+    // Kill zone — red tinted rectangle on left side
+    this.killZoneRect = this.add.rectangle(
+      TUNING.RHYTHM_KILL_ZONE_X / 2, TUNING.GAME_HEIGHT / 2,
+      TUNING.RHYTHM_KILL_ZONE_X, TUNING.GAME_HEIGHT,
+      TUNING.RHYTHM_KILL_ZONE_COLOR,
+    ).setAlpha(TUNING.RHYTHM_KILL_ZONE_ALPHA).setDepth(50).setScrollFactor(0).setVisible(false);
+
+    // Kill zone edge line — bright thin line at kill zone boundary
+    this.killZoneEdge = this.add.rectangle(
+      TUNING.RHYTHM_KILL_ZONE_X, TUNING.GAME_HEIGHT / 2,
+      TUNING.RHYTHM_KILL_ZONE_LINE_WIDTH, TUNING.GAME_HEIGHT,
+      TUNING.RHYTHM_KILL_ZONE_COLOR,
+    ).setAlpha(TUNING.RHYTHM_KILL_ZONE_LINE_ALPHA).setDepth(50).setScrollFactor(0).setVisible(false);
+
+    // Kill zone pulse tween
+    this.tweens.add({
+      targets: this.killZoneRect,
+      alpha: { from: TUNING.RHYTHM_KILL_ZONE_PULSE_MIN, to: TUNING.RHYTHM_KILL_ZONE_PULSE_MAX },
+      duration: TUNING.RHYTHM_KILL_ZONE_PULSE_DURATION,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+      paused: true,
+    });
+
+    // Sweet spot — dashed vertical line at screen center
+    this.sweetSpotLine = this.add.graphics().setDepth(50).setScrollFactor(0).setVisible(false);
+    {
+      const x = TUNING.RHYTHM_SWEET_SPOT_X;
+      const dash = TUNING.RHYTHM_SWEET_SPOT_DASH;
+      const gap = TUNING.RHYTHM_SWEET_SPOT_GAP;
+      this.sweetSpotLine.lineStyle(TUNING.RHYTHM_SWEET_SPOT_LINE_WIDTH, TUNING.RHYTHM_SWEET_SPOT_COLOR, TUNING.RHYTHM_SWEET_SPOT_ALPHA);
+      let y = 0;
+      while (y < TUNING.GAME_HEIGHT) {
+        this.sweetSpotLine.moveTo(x, y);
+        this.sweetSpotLine.lineTo(x, Math.min(y + dash, TUNING.GAME_HEIGHT));
+        y += dash + gap;
+      }
+      this.sweetSpotLine.strokePath();
+    }
+
+    // Bonus zone — subtle green rectangle centered on sweet spot
+    this.bonusZoneRect = this.add.rectangle(
+      TUNING.RHYTHM_SWEET_SPOT_X, TUNING.GAME_HEIGHT / 2,
+      TUNING.RHYTHM_BONUS_ZONE_WIDTH, TUNING.GAME_HEIGHT,
+      TUNING.RHYTHM_BONUS_ZONE_COLOR,
+    ).setAlpha(TUNING.RHYTHM_BONUS_ZONE_ALPHA).setDepth(49).setScrollFactor(0).setVisible(false);
+
+    // 2X popup text — reusable, starts invisible
+    this.bonus2xPopup = this.add.text(0, 0, '2X', {
+      fontFamily: 'Early GameBoy',
+      fontSize: `${TUNING.RHYTHM_BONUS_POPUP_SIZE}px`,
+      color: TUNING.RHYTHM_BONUS_POPUP_COLOR,
+      stroke: '#003300',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(201).setScrollFactor(0).setVisible(false);
+
+    // Green flash overlay for 2X bonus
+    this.bonusFlashOverlay = this.add.rectangle(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
+      TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
+      TUNING.RHYTHM_BONUS_FLASH_COLOR,
+    ).setAlpha(0).setDepth(150).setScrollFactor(0);
+
+    // Rhythm mode toggle hotkey
+    this.input.keyboard?.addKey(DEBUG_HOTKEYS.rhythmMode.key).on('down', () => {
+      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.rhythmMode.active || this.debugPanelOpen) return;
+      this.rhythmMode = !this.rhythmMode;
+      this.rhythmModeLabel.setVisible(this.rhythmMode);
+      this.setRhythmZonesVisible(this.rhythmMode);
+
+      if (this.rhythmMode) {
+        // Entering Rhythm Mode: clear static color, force beat data re-fetch
+        this.skyGlowSystem.setStaticColor(null);
+        this.lastBeatTrackId = null; // triggers re-fetch on next frame
+      } else {
+        // Returning to Normal Mode: clear beat data, force dominant color re-fetch
+        this.skyGlowSystem.clearBeatData();
+        this.lastBeatTrackId = null; // triggers dominant color fetch on next frame
+      }
+
+      if (this.state === GameState.PLAYING) {
+        this.startGame();
+      }
+    });
+
     // Collision debug overlay
     this.collisionGfx = this.add.graphics().setDepth(9000);
     this.input.keyboard?.addKey(DEBUG_HOTKEYS.showCollisions.key).on('down', () => {
@@ -1457,6 +1658,59 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.perfSystem.update(dt);
+
+    // Poll for track changes — extract dominant color from thumbnail, load beat data in Rhythm Mode
+    const curTrackId = this.musicPlayer.getTrackId();
+    if (curTrackId !== this.lastBeatTrackId) {
+      this.lastBeatTrackId = curTrackId;
+      if (curTrackId) {
+        // Death Pixie: no background change at all
+        const artist = this.musicPlayer.getTrackArtist().toLowerCase();
+        const isDeathPixie = artist === TUNING.INTRO_TRACK_ARTIST.toLowerCase();
+
+        if (!isDeathPixie) {
+          // Extract dominant color, push to full sat/bright, hue-shift sky + all layers
+          // Delay 150ms so the thumbnail <img> src has updated before we read pixels
+          const thumbImg = this.musicPlayer.getThumbnailImage();
+          const applySkyColor = () => {
+            if (this.lastBeatTrackId !== curTrackId) return; // stale
+            const color = SkyGlowSystem.extractDominantColor(thumbImg);
+            this.skyGlowSystem.applyHueShift(color);
+            this.skyGlowSystem.setStaticColor(color);
+          };
+          setTimeout(() => {
+            if (this.lastBeatTrackId !== curTrackId) return; // stale
+            if (thumbImg.complete && thumbImg.naturalWidth > 0) {
+              applySkyColor();
+            } else {
+              thumbImg.addEventListener('load', applySkyColor, { once: true });
+            }
+          }, 150);
+        }
+        // Death Pixie: intentionally do nothing — keep whatever sky is showing
+
+        // Rhythm Mode: also fetch beat data for reactive visuals + course data for spawning
+        if (this.rhythmMode) {
+          fetchBeatData(curTrackId).then((bd) => {
+            if (bd && this.lastBeatTrackId === curTrackId) {
+              this.skyGlowSystem.setBeatData(curTrackId, bd);
+            }
+          });
+          loadCourseData(curTrackId, this.rhythmDifficulty).then((cd) => {
+            if (cd && this.lastBeatTrackId === curTrackId) {
+              this.courseData = cd;
+              this.rhythmTrackId = curTrackId;
+              console.log('[RHYTHM] Course loaded:', curTrackId, this.rhythmDifficulty, cd.events.length, 'events');
+            }
+          });
+        }
+      } else {
+        this.skyGlowSystem.setStaticColor(null);
+        this.skyGlowSystem.clearHueShift();
+        if (this.rhythmMode) this.skyGlowSystem.clearBeatData();
+      }
+    }
+
     this.inputSystem.update(dt);
     if (this.orientationOverlay) {
       this.orientationOverlay.update();
@@ -1696,6 +1950,7 @@ export class GameScene extends Phaser.Scene {
       this.fxSystem.reset();
       this.roadSystem.setVisible(false);
       this.parallaxSystem.setVisible(false);
+      this.skyGlowSystem.setVisible(false);
       for (let i = 0; i < this.laneHighlights.length; i++) this.laneHighlights[i].setVisible(false);
       this.hideWarningPool();
       for (let i = 0; i < this.scorePopups.length; i++) {
@@ -1712,6 +1967,9 @@ export class GameScene extends Phaser.Scene {
     switch (this.state) {
       case GameState.TITLE:
         this.updateTitle(dt);
+        break;
+      case GameState.SONG_SELECT:
+        this.updateSongSelect(dt);
         break;
       case GameState.TUTORIAL:
         this.updateTutorial(dt);
@@ -1742,7 +2000,17 @@ export class GameScene extends Phaser.Scene {
   private updateTitle(dt: number): void {
     const titleSpeed = TUNING.ROAD_BASE_SPEED * 0.5;
     this.parallaxSystem.update(titleSpeed, dt);
+    this.skyGlowSystem.update(dt, this.musicPlayer.getPlaybackPosition().current);
     this.roadSystem.update(titleSpeed, dt);
+
+    // If game mode popup is open, skip title input (popup handles its own clicks)
+    if (this.gameModeOpen) return;
+
+    // Button hover highlighting
+    const pointer = this.input.activePointer;
+    const gmBounds = this.titleGameModesBtn.getBounds();
+    const overGM = gmBounds.contains(pointer.x, pointer.y);
+    this.titleGameModesBtn.setColor(overGM ? '#ffcc00' : '#ffffff');
 
     if (this.anyInputPressed) {
       this.anyInputPressed = false;
@@ -1752,14 +2020,241 @@ export class GameScene extends Phaser.Scene {
       this.inputSystem.getRocketPressed();
       // Start audio on first user gesture
       this.audioSystem.start();
-      this.enterTutorial();
+
+      if (overGM) {
+        this.showGameModePopup();
+      } else if (!this.isTitleUIZone(pointer.x, pointer.y)) {
+        // Click anywhere outside UI zones → Normal mode
+        this.rhythmMode = false;
+        this.rhythmModeLabel.setVisible(false);
+        this.courseRunner = null;
+        this.enterTutorial();
+      }
     }
+  }
+
+  /** Check if a point is over a title-screen UI element (music player, profile HUD, game modes btn). */
+  private isTitleUIZone(px: number, py: number): boolean {
+    // Profile HUD — upper left (origin 40,40, avatar 128px + score/bar ~600px wide, ~180px tall)
+    if (px < 680 && py < 220) return true;
+    // Music player — upper right (pad 40 from right, pad 40 from top, width 740)
+    if (px > TUNING.GAME_WIDTH - TUNING.MUSIC_UI_PAD_RIGHT - TUNING.MUSIC_UI_WIDTH - 40 && py < 200) return true;
+    // Game modes button — lower left (checked via getBounds above, but also guard here)
+    if (this.titleGameModesBtn.getBounds().contains(px, py)) return true;
+    return false;
+  }
+
+  // ── Win95 Game Mode Popup ─────────────────────────────────────
+
+  private createGameModePopup(): void {
+    const cx = TUNING.GAME_WIDTH / 2;
+    const cy = TUNING.GAME_HEIGHT / 2;
+    const pw = TUNING.GAME_MODE_POPUP_W;
+    const ph = TUNING.GAME_MODE_POPUP_H;
+    const bw = TUNING.GAME_MODE_BORDER_W;
+    const tbH = TUNING.GAME_MODE_TITLEBAR_H;
+    const depth = TUNING.GAME_MODE_POPUP_DEPTH;
+
+    // Dimmed backdrop — blocks clicks, click to close
+    this.gameModeBackdrop = this.add.rectangle(cx, cy, TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT, 0x000000, 0.5)
+      .setDepth(depth - 1).setScrollFactor(0).setInteractive().setVisible(false);
+    this.gameModeBackdrop.on('pointerdown', () => this.hideGameModePopup());
+
+    // Container for popup content
+    this.gameModeContainer = this.add.container(cx, cy).setDepth(depth).setScrollFactor(0).setVisible(false);
+
+    const g = this.add.graphics();
+    const left = -pw / 2;
+    const top = -ph / 2;
+
+    // Win95 raised outer border
+    g.fillStyle(TUNING.GAME_MODE_HIGHLIGHT_COLOR);
+    g.fillRect(left, top, pw, ph);
+    g.fillStyle(TUNING.GAME_MODE_SHADOW_COLOR);
+    g.fillRect(left + bw, top + bw, pw - bw, ph - bw);
+    // Gray face fill
+    g.fillStyle(TUNING.GAME_MODE_FACE_COLOR);
+    g.fillRect(left + bw, top + bw, pw - bw * 2, ph - bw * 2);
+
+    // Purple title bar
+    const tbLeft = left + bw;
+    const tbTop = top + bw;
+    const tbWidth = pw - bw * 2;
+    g.fillStyle(TUNING.GAME_MODE_TITLEBAR_COLOR);
+    g.fillRect(tbLeft, tbTop, tbWidth, tbH);
+
+    this.gameModeContainer.add(g);
+
+    // Title bar text
+    const titleText = this.add.text(tbLeft + 8, tbTop + tbH / 2, 'Game Modes', {
+      fontSize: '18px', fontFamily: 'monospace', fontStyle: 'bold', color: '#ffffff',
+    }).setOrigin(0, 0.5);
+    this.gameModeContainer.add(titleText);
+
+    // Close button [X] — small raised square in top-right
+    const closeSize = TUNING.GAME_MODE_CLOSE_SIZE;
+    const closeRight = left + pw - bw - 4;
+    const closeTop = tbTop + (tbH - closeSize) / 2;
+    const closeCx = closeRight - closeSize / 2;
+    const closeCy = closeTop + closeSize / 2;
+
+    const closeGfx = this.add.graphics();
+    // Raised border for close button
+    closeGfx.fillStyle(TUNING.GAME_MODE_FACE_COLOR);
+    closeGfx.fillRect(closeRight - closeSize, closeTop, closeSize, closeSize);
+    closeGfx.fillStyle(TUNING.GAME_MODE_HIGHLIGHT_COLOR);
+    closeGfx.fillRect(closeRight - closeSize, closeTop, closeSize - 1, closeSize - 1);
+    closeGfx.fillStyle(TUNING.GAME_MODE_SHADOW_COLOR);
+    closeGfx.fillRect(closeRight - closeSize + 1, closeTop + 1, closeSize - 1, closeSize - 1);
+    closeGfx.fillStyle(TUNING.GAME_MODE_FACE_COLOR);
+    closeGfx.fillRect(closeRight - closeSize + 1, closeTop + 1, closeSize - 2, closeSize - 2);
+    this.gameModeContainer.add(closeGfx);
+
+    const closeText = this.add.text(closeCx, closeCy, 'x', {
+      fontSize: '16px', fontFamily: 'monospace', fontStyle: 'bold', color: '#000000',
+    }).setOrigin(0.5);
+    this.gameModeContainer.add(closeText);
+
+    this.gameModeCloseBtn = this.add.zone(closeCx, closeCy, closeSize, closeSize).setInteractive();
+    this.gameModeCloseBtn.on('pointerdown', () => this.hideGameModePopup());
+    this.gameModeContainer.add(this.gameModeCloseBtn);
+
+    // "Pick a game mode" centered label
+    const labelY = tbTop + tbH + 40;
+    const pickLabel = this.add.text(0, labelY, 'Pick a game mode', {
+      fontSize: '22px', fontFamily: 'monospace', color: '#000000',
+    }).setOrigin(0.5);
+    this.gameModeContainer.add(pickLabel);
+
+    // Normal + Rhythm buttons
+    const btnW = TUNING.GAME_MODE_BTN_W;
+    const btnH = TUNING.GAME_MODE_BTN_H;
+    const btnGap = TUNING.GAME_MODE_BTN_GAP;
+    const btnY = labelY + 60;
+    const normalX = -btnW / 2 - btnGap / 2;
+    const rhythmX = btnW / 2 + btnGap / 2;
+
+    // Draw raised button backgrounds
+    const btnGfx = this.add.graphics();
+    for (const bx of [normalX, rhythmX]) {
+      const bl = bx - btnW / 2;
+      const bt = btnY - btnH / 2;
+      // Raised border
+      btnGfx.fillStyle(TUNING.GAME_MODE_HIGHLIGHT_COLOR);
+      btnGfx.fillRect(bl, bt, btnW, btnH);
+      btnGfx.fillStyle(TUNING.GAME_MODE_SHADOW_COLOR);
+      btnGfx.fillRect(bl + bw, bt + bw, btnW - bw, btnH - bw);
+      btnGfx.fillStyle(TUNING.GAME_MODE_FACE_COLOR);
+      btnGfx.fillRect(bl + bw, bt + bw, btnW - bw * 2, btnH - bw * 2);
+    }
+    this.gameModeContainer.add(btnGfx);
+
+    // Button labels
+    this.gameModeNormalText = this.add.text(normalX, btnY, 'Normal', {
+      fontSize: '22px', fontFamily: 'monospace', fontStyle: 'bold', color: '#000000',
+    }).setOrigin(0.5);
+    this.gameModeRhythmText = this.add.text(rhythmX, btnY, 'Rhythm', {
+      fontSize: '22px', fontFamily: 'monospace', fontStyle: 'bold', color: '#000000',
+    }).setOrigin(0.5);
+    this.gameModeContainer.add([this.gameModeNormalText, this.gameModeRhythmText]);
+
+    // Hit zones for buttons
+    this.gameModeNormalBtn = this.add.zone(normalX, btnY, btnW, btnH).setInteractive();
+    this.gameModeRhythmBtn = this.add.zone(rhythmX, btnY, btnW, btnH).setInteractive();
+
+    this.gameModeNormalBtn.on('pointerover', () => this.gameModeNormalText.setColor('#ffcc00'));
+    this.gameModeNormalBtn.on('pointerout', () => this.gameModeNormalText.setColor('#000000'));
+    this.gameModeRhythmBtn.on('pointerover', () => this.gameModeRhythmText.setColor('#ffcc00'));
+    this.gameModeRhythmBtn.on('pointerout', () => this.gameModeRhythmText.setColor('#000000'));
+
+    this.gameModeNormalBtn.on('pointerdown', () => {
+      this.hideGameModePopup();
+      this.rhythmMode = false;
+      this.rhythmModeLabel.setVisible(false);
+      this.courseRunner = null;
+      this.enterTutorial();
+    });
+    this.gameModeRhythmBtn.on('pointerdown', () => {
+      this.hideGameModePopup();
+      this.enterSongSelect();
+    });
+
+    this.gameModeContainer.add([this.gameModeNormalBtn, this.gameModeRhythmBtn]);
+  }
+
+  private showGameModePopup(): void {
+    this.gameModeBackdrop.setVisible(true);
+    this.gameModeContainer.setVisible(true);
+    this.gameModeOpen = true;
+  }
+
+  private hideGameModePopup(): void {
+    this.gameModeBackdrop.setVisible(false);
+    this.gameModeContainer.setVisible(false);
+    this.gameModeOpen = false;
+  }
+
+  /** Show/hide kill zone, sweet spot line, and bonus zone visuals */
+  private setRhythmZonesVisible(visible: boolean): void {
+    this.killZoneRect.setVisible(visible);
+    this.killZoneEdge.setVisible(visible);
+    this.sweetSpotLine.setVisible(visible);
+    this.bonusZoneRect.setVisible(visible);
+    // Start/stop the kill zone pulse tween
+    const pulseTween = this.tweens.getTweensOf(this.killZoneRect)[0];
+    if (pulseTween) {
+      if (visible) pulseTween.resume();
+      else pulseTween.pause();
+    }
+  }
+
+  /** Spawn the big green "2X" popup at screen center */
+  private spawn2XPopup(): void {
+    this.bonus2xPopup.setPosition(TUNING.RHYTHM_SWEET_SPOT_X, TUNING.GAME_HEIGHT / 2);
+    this.bonus2xPopup.setAlpha(1).setScale(0.5).setVisible(true);
+    this.tweens.killTweensOf(this.bonus2xPopup);
+    this.tweens.add({
+      targets: this.bonus2xPopup,
+      scaleX: 2.0,
+      scaleY: 2.0,
+      alpha: 0,
+      duration: TUNING.RHYTHM_BONUS_POPUP_DURATION,
+      ease: 'Cubic.easeOut',
+      onComplete: () => this.bonus2xPopup.setVisible(false),
+    });
+  }
+
+  /** Green screen flash on 2X bonus collection */
+  private trigger2XFlash(): void {
+    this.bonusFlashOverlay.setAlpha(TUNING.RHYTHM_BONUS_FLASH_ALPHA);
+    this.tweens.killTweensOf(this.bonusFlashOverlay);
+    this.tweens.add({
+      targets: this.bonusFlashOverlay,
+      alpha: 0,
+      duration: TUNING.RHYTHM_BONUS_FLASH_DURATION,
+      ease: 'Power2',
+    });
+  }
+
+  private enterSongSelect(): void {
+    this.state = GameState.SONG_SELECT;
+    this.titleContainer.setVisible(false);
+    this.songSelectScreen.show();
+  }
+
+  private updateSongSelect(dt: number): void {
+    const titleSpeed = TUNING.ROAD_BASE_SPEED * 0.3;
+    this.parallaxSystem.update(titleSpeed, dt);
+    this.skyGlowSystem.update(dt, this.musicPlayer.getPlaybackPosition().current);
+    this.roadSystem.update(titleSpeed, dt);
+    this.songSelectScreen.update(dt);
   }
 
   private updateStarting(dt: number): void {
     // Keep background scrolling during countdown
     const titleSpeed = TUNING.ROAD_BASE_SPEED * 0.5;
     this.parallaxSystem.update(titleSpeed, dt);
+    this.skyGlowSystem.update(dt, this.musicPlayer.getPlaybackPosition().current);
     this.roadSystem.update(titleSpeed, dt);
 
     // Drain inputs so nothing queues up during countdown
@@ -1957,9 +2452,16 @@ export class GameScene extends Phaser.Scene {
     this.lastSubmittedRunId = null;
     this.deathBestText.setVisible(false);
 
+    // Clean up rhythm mode / song select
+    this.courseRunner = null;
+    this.obstacleSystem.setTimerPaused(false);
+    this.songSelectScreen.hide();
+    this.setRhythmZonesVisible(false);
+
     // Restore road/parallax and show title screen
     this.roadSystem.setVisible(true);
     this.parallaxSystem.setVisible(true);
+    this.skyGlowSystem.setVisible(true);
     this.titleLoopSprite.setVisible(true);
     this.titleLoopSprite.play('title-loop');
     this.titleContainer.setVisible(true);
@@ -2036,6 +2538,7 @@ export class GameScene extends Phaser.Scene {
     // Keep background scrolling during tutorial
     const titleSpeed = TUNING.ROAD_BASE_SPEED * 0.5;
     this.parallaxSystem.update(titleSpeed, dt);
+    this.skyGlowSystem.update(dt, this.musicPlayer.getPlaybackPosition().current);
     this.roadSystem.update(titleSpeed, dt);
 
     // Drain game inputs so nothing queues up
@@ -2457,6 +2960,7 @@ export class GameScene extends Phaser.Scene {
     this.roadSystem.setVisible(true);
     this.roadSystem.resetScroll(TUNING.SPRITE_OFFSET_ROAD);
     this.parallaxSystem.setVisible(true);
+    this.skyGlowSystem.setVisible(true);
     this.parallaxSystem.resetScroll([
       TUNING.SPRITE_OFFSET_RAILING,
       TUNING.SPRITE_OFFSET_PARALLAX_2,
@@ -2472,6 +2976,27 @@ export class GameScene extends Phaser.Scene {
     if (this.spectatorMode) this.playerSystem.setSpectator(true);
     this.playerSystem.setVisible(true);
     this.obstacleSystem.reset(this.weekSeed);
+
+    // Rhythm mode: use CourseRunner for obstacle spawning instead of timer
+    if (this.rhythmMode && this.courseData) {
+      const rhythmRoadSpeed = TUNING.ROAD_BASE_SPEED;
+      this.courseRunner = new CourseRunner(
+        this.courseData,
+        (event) => {
+          this.obstacleSystem.spawnFromCourse(event.type, event.lane, rhythmRoadSpeed);
+        },
+        rhythmRoadSpeed,
+        TUNING.RHYTHM_KILL_ZONE_X,
+        TUNING.OBSTACLE_SPAWN_MARGIN,
+      );
+      this.courseRunner.start();
+      this.obstacleSystem.setTimerPaused(true);
+      console.log('[RHYTHM] CourseRunner started —', this.courseData.events.length, 'events');
+    } else {
+      this.courseRunner = null;
+      this.obstacleSystem.setTimerPaused(false);
+    }
+
     this.difficultySystem.reset();
     this.scoreSystem.reset();
     this.fxSystem.reset();
@@ -2701,6 +3226,7 @@ export class GameScene extends Phaser.Scene {
       // Nothing moves — pass 0 speed, skip all updates
       this.roadSystem.update(0, dt);
       this.parallaxSystem.update(0, dt);
+      this.skyGlowSystem.update(dt, this.musicPlayer.getPlaybackPosition().current);
       this.reflectionSystem.update(0, dt);
       return;
     }
@@ -2733,7 +3259,12 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.elapsed += hDt;
-    let baseRoadSpeed = TUNING.ROAD_BASE_SPEED + this.elapsed * TUNING.ROAD_SPEED_RAMP + this.roadSpeedBonus;
+    let baseRoadSpeed: number;
+    if (this.rhythmMode) {
+      baseRoadSpeed = TUNING.ROAD_BASE_SPEED; // fixed speed for beat-sync timing
+    } else {
+      baseRoadSpeed = TUNING.ROAD_BASE_SPEED + this.elapsed * TUNING.ROAD_SPEED_RAMP + this.roadSpeedBonus;
+    }
     if (this.startHoldRampT < 1) {
       const eased = rampEased;
       baseRoadSpeed *= eased;
@@ -2746,7 +3277,8 @@ export class GameScene extends Phaser.Scene {
       rageFactor = Math.min(rampUp, rampDown); // whichever is lower
     }
     CRT_TUNING.rageDistortion = CRT_TUNING.rageDistortionMax * rageFactor;
-    const rageSpeedFactor = 1 + (TUNING.RAGE_SPEED_MULTIPLIER - 1) * rageFactor;
+    // In rhythm mode, skip rage speed boost to keep beat-sync timing deterministic
+    const rageSpeedFactor = this.rhythmMode ? 1 : 1 + (TUNING.RAGE_SPEED_MULTIPLIER - 1) * rageFactor;
     const roadSpeed = baseRoadSpeed * rageSpeedFactor;
 
     // Spawn grace — no obstacles until timer expires (countdown intro period)
@@ -2760,7 +3292,21 @@ export class GameScene extends Phaser.Scene {
     this.scoreSystem.update(hDt, this.playerSystem.getPlayerSpeed());
     if (this.spawnGraceTimer <= 0) {
       this.obstacleSystem.update(hDt, roadSpeed, this.difficultySystem.getFactor(), rageFactor);
+      // Rhythm mode: feed playback position to CourseRunner for beat-synced spawning
+      if (this.courseRunner) {
+        const playbackSec = this.musicPlayer.getPlaybackPosition().current;
+        this.courseRunner.update(playbackSec);
+      }
     }
+
+    // Rhythm mode: destroy obstacles at kill zone (left edge) for beat-synced explosions
+    if (this.rhythmMode) {
+      const kzHits = this.obstacleSystem.checkKillZone(TUNING.RHYTHM_KILL_ZONE_X);
+      for (let i = 0; i < kzHits.length; i++) {
+        this.cameras.main.shake(80, 0.003); // subtle beat-sync shake
+      }
+    }
+
     this.updateLaneWarnings(roadSpeed);
 
     // Katana slash (checked BEFORE player collision so destroyed obstacles can't kill)
@@ -2796,8 +3342,25 @@ export class GameScene extends Phaser.Scene {
         const dist = Math.max(0, hitX - slashLeft);
         const t = Math.min(dist / slashWidth, 1); // 0 = left edge, 1 = right edge
         const bonus = Math.round(TUNING.KATANA_KILL_POINTS_MAX - t * t * (TUNING.KATANA_KILL_POINTS_MAX - TUNING.KATANA_KILL_POINTS_MIN));
-        this.scoreSystem.addBonus(bonus);
-        this.spawnScorePopup(bonus, 'katana');
+        this.awardBonus(bonus, 'katana');
+
+        // Rhythm mode guardian: extra proximity-to-center scoring
+        if (this.rhythmMode && this.obstacleSystem.wasLastSlashGuardian()) {
+          const centerDist = Math.abs(hitX - TUNING.RHYTHM_SWEET_SPOT_X);
+          const zoneHalf = TUNING.RHYTHM_GUARDIAN_ZONE_HALF;
+          if (centerDist <= zoneHalf) {
+            // Scale from base (at edge) to max (at center)
+            const proximity = 1 - centerDist / zoneHalf; // 0 = edge, 1 = dead center
+            const guardianBonus = Math.round(
+              TUNING.RHYTHM_GUARDIAN_BASE_SCORE +
+              proximity * (TUNING.RHYTHM_GUARDIAN_MAX_SCORE - TUNING.RHYTHM_GUARDIAN_BASE_SCORE)
+            );
+            this.awardBonus(guardianBonus, 'katana');
+          } else {
+            // Outside the zone — still get base points
+            this.awardBonus(TUNING.RHYTHM_GUARDIAN_BASE_SCORE, 'default');
+          }
+        }
 
         // Only add permanent road speed outside rage (rage plows through too many)
         if (this.rageTimer <= 0) {
@@ -2879,8 +3442,23 @@ export class GameScene extends Phaser.Scene {
     if (this.pickupSystem.wasCollected()) {
       this.playerSystem.playCollectRocket();
       this.audioSystem.playAmmoPickup();
-      this.scoreSystem.addBonus(TUNING.SCORE_PICKUP_ROCKET);
-      this.spawnScorePopup(TUNING.SCORE_PICKUP_ROCKET, 'rocket');
+      // Check 2X bonus zone in rhythm mode
+      let ammoScoreMult = 1;
+      if (this.rhythmMode) {
+        const colX = this.pickupSystem.getCollectedX();
+        const bonusLeft = TUNING.RHYTHM_SWEET_SPOT_X - TUNING.RHYTHM_BONUS_ZONE_WIDTH / 2;
+        const bonusRight = TUNING.RHYTHM_SWEET_SPOT_X + TUNING.RHYTHM_BONUS_ZONE_WIDTH / 2;
+        if (colX >= bonusLeft && colX <= bonusRight) {
+          ammoScoreMult = TUNING.RHYTHM_BONUS_SCORE_MULT;
+          // Extra ammo (PickupSystem already gave 1)
+          for (let i = 1; i < TUNING.RHYTHM_BONUS_AMMO_MULT; i++) {
+            this.pickupSystem.addAmmoExternal();
+          }
+          this.spawn2XPopup();
+          this.trigger2XFlash();
+        }
+      }
+      this.awardBonus(TUNING.SCORE_PICKUP_ROCKET * ammoScoreMult, 'rocket');
     }
 
     // Update shield pickups (scrolling + collection)
@@ -2888,8 +3466,7 @@ export class GameScene extends Phaser.Scene {
     if (this.shieldSystem.wasCollected()) {
       this.playerSystem.playCollectShield();
       this.audioSystem.playPotionPickup();
-      this.scoreSystem.addBonus(TUNING.SCORE_PICKUP_SHIELD);
-      this.spawnScorePopup(TUNING.SCORE_PICKUP_SHIELD, 'shield');
+      this.awardBonus(TUNING.SCORE_PICKUP_SHIELD, 'shield');
     }
 
     const pHalfW = TUNING.PLAYER_COLLISION_W / 2;
@@ -2908,8 +3485,7 @@ export class GameScene extends Phaser.Scene {
           const pts = hits[i].type === ObstacleType.CAR
             ? TUNING.SCORE_CAR_INVINCIBLE
             : TUNING.SCORE_OBSTACLE_INVINCIBLE;
-          this.scoreSystem.addBonus(pts);
-          this.spawnScorePopup(pts, 'invincible');
+          this.awardBonus(pts, 'invincible');
         }
       }
       // Still check slow zones
@@ -2932,11 +3508,27 @@ export class GameScene extends Phaser.Scene {
           this.audioSystem.playPotionUsed();
           this.playerSystem.playCollectHit();
           this.fxSystem.triggerDamage();
-          const shieldPts = result.hitType === ObstacleType.CAR
-            ? TUNING.SCORE_CAR_SHIELD
-            : TUNING.SCORE_OBSTACLE_SHIELD;
-          this.scoreSystem.addBonus(shieldPts);
-          this.spawnScorePopup(shieldPts, 'damage');
+          if (this.rhythmMode && result.isEnemy) {
+            // Enemy car shield ram — proximity scoring (reward, not penalty)
+            const centerDist = Math.abs(result.hitX - TUNING.RHYTHM_SWEET_SPOT_X);
+            const zoneHalf = TUNING.RHYTHM_ENEMY_CAR_ZONE_HALF;
+            if (centerDist <= zoneHalf) {
+              const proximity = 1 - centerDist / zoneHalf;
+              const enemyBonus = Math.round(
+                TUNING.RHYTHM_ENEMY_CAR_BASE_SCORE +
+                proximity * (TUNING.RHYTHM_ENEMY_CAR_MAX_SCORE - TUNING.RHYTHM_ENEMY_CAR_BASE_SCORE)
+              );
+              this.awardBonus(enemyBonus, 'shield');
+              if (proximity > 0.7) this.trigger2XFlash();
+            } else {
+              this.awardBonus(TUNING.RHYTHM_ENEMY_CAR_BASE_SCORE, 'shield');
+            }
+          } else {
+            const shieldPts = result.hitType === ObstacleType.CAR
+              ? TUNING.SCORE_CAR_SHIELD
+              : TUNING.SCORE_OBSTACLE_SHIELD;
+            this.awardBonus(shieldPts, 'damage');
+          }
         } else {
           this.playerSystem.kill();
         }
@@ -2963,8 +3555,7 @@ export class GameScene extends Phaser.Scene {
         const rageEndPts = rageEndResult.obstacles * TUNING.SCORE_RAGE_END_OBSTACLE
           + rageEndResult.cars * TUNING.SCORE_RAGE_END_CAR;
         if (rageEndPts > 0) {
-          this.scoreSystem.addBonus(rageEndPts);
-          this.spawnScorePopup(rageEndPts, 'invincible');
+          this.awardBonus(rageEndPts, 'invincible');
         }
         this.obstacleSystem.spawnExplosion(this.playerSystem.getX(), this.playerSystem.getY(), TUNING.RAGE_END_EXPLOSION_SCALE);
         this.audioSystem.playExplosion();
@@ -2999,6 +3590,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.parallaxSystem.update(roadSpeed, hDt);
+    this.skyGlowSystem.update(hDt, this.musicPlayer.getPlaybackPosition().current);
+    this.skyGlowSystem.setRage(this.rageTimer > 0);
     this.roadSystem.update(roadSpeed, hDt);
     this.reflectionSystem.update(roadSpeed, hDt);
 
@@ -3024,6 +3617,10 @@ export class GameScene extends Phaser.Scene {
     this.profileHud.setRage01(ragePct);
     this.profileHud.setRageColor(this.rageTimer > 0 ? TUNING.RAGE_ACTIVE_COLOR : TUNING.RAGE_COLOR);
     this.profileHud.setRockets(this.pickupSystem.getAmmo(), TUNING.PICKUP_MAX_AMMO);
+    this.profileHud.update(hDt);
+
+    // Streak timer tick-down
+    this.streakTimer = Math.max(0, this.streakTimer - hDt);
 
     // Debug
     const diff = this.difficultySystem.getFactor();
@@ -3472,6 +4069,30 @@ export class GameScene extends Phaser.Scene {
     default:    ['#FFFFFF', '#EEEEEE', '#DDDDDD'],   // white monochrome
   };
 
+  /** Award bonus points with streak tracking + HUD slam animation. */
+  private awardBonus(basePoints: number, popupType: string): void {
+    let finalPoints = basePoints;
+
+    if (basePoints > 0) {
+      // Positive points: apply streak bonus
+      if (this.streakTimer > 0) {
+        this.streakCount++;
+      } else {
+        this.streakCount = 0;
+      }
+      this.streakTimer = TUNING.SCORE_STREAK_WINDOW;
+      const multiplier = 1 + this.streakCount * TUNING.SCORE_STREAK_BONUS;
+      finalPoints = Math.round(basePoints * multiplier);
+    }
+
+    this.scoreSystem.addBonus(finalPoints);
+    this.spawnScorePopup(finalPoints, popupType);
+
+    // Trigger HUD slam with type-matched colors
+    const colors = GameScene.POPUP_COLORS[popupType] || GameScene.POPUP_COLORS.default;
+    this.profileHud.triggerScoreSlam(this.scoreSystem.getScore(), colors);
+  }
+
   private spawnScorePopup(points: number, popupType: string = 'default'): void {
     // Reuse an inactive popup or create a new one
     let popup: Phaser.GameObjects.Text | null = null;
@@ -3595,6 +4216,7 @@ export class GameScene extends Phaser.Scene {
           this.fxSystem.reset();
           this.roadSystem.setVisible(false);
           this.parallaxSystem.setVisible(false);
+          this.skyGlowSystem.setVisible(false);
           for (let i = 0; i < this.laneHighlights.length; i++) this.laneHighlights[i].setVisible(false);
           this.hideWarningPool();
           for (let i = 0; i < this.scorePopups.length; i++) {
@@ -3623,7 +4245,24 @@ export class GameScene extends Phaser.Scene {
           const profileName = this.profilePopup.getName();
           const hasProfileName = profileName !== 'ANON' && profileName.trim() !== '';
 
-          if (hasProfileName) {
+          if (this.rhythmMode && this.rhythmTrackId) {
+            // ── Rhythm mode death: permanent per-track leaderboard ──
+            const gen = this.deathGen;
+            this.autoSubmitted = true;
+            const trackId = this.rhythmTrackId;
+            const diff = this.rhythmDifficulty;
+            submitRhythmScore(trackId, diff, this.pendingScore, Math.round(this.elapsed), hasProfileName ? profileName : undefined).then(id => {
+              if (gen !== this.deathGen) return;
+              this.lastSubmittedRunId = id;
+              return fetchRhythmTop10(trackId, diff);
+            }).then(data => {
+              if (gen !== this.deathGen) return;
+              if (data) this.globalLeaderboardData = data;
+            }).catch(() => {}).finally(() => {
+              if (gen !== this.deathGen) return;
+              this.prepareDeathScreenVisuals(0);
+            });
+          } else if (hasProfileName) {
             // Auto-submit with profile name — skip name entry entirely
             const rank = this.leaderboardSystem.submit(profileName, this.pendingScore, this.elapsed);
             const gen = this.deathGen;
@@ -3862,7 +4501,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Rank text
-    if (isGlobal && highlightIdx >= 0) {
+    if (this.rhythmMode && isGlobal && highlightIdx >= 0) {
+      this.deathRankText.setText(`#${highlightIdx + 1} ON THIS TRACK`);
+    } else if (isGlobal && highlightIdx >= 0) {
       this.deathRankText.setText(`#${highlightIdx + 1} GLOBAL THIS WEEK`);
     } else if (!isGlobal && rank > 0 && rank <= 10) {
       this.deathRankText.setText(`#${rank} THIS WEEK`);
@@ -3873,9 +4514,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Top 10 leaderboard display — top 3 get podium styling
-    this.deathLeaderboardText.setText(isGlobal
-      ? `── ${this.weekKey} GLOBAL TOP 10 ──`
-      : `── ${this.weekKey} TOP 10 ──`);
+    if (this.rhythmMode) {
+      const diff = this.rhythmDifficulty.toUpperCase();
+      this.deathLeaderboardText.setText(`── RHYTHM ${diff} TOP 10 ──`);
+    } else {
+      this.deathLeaderboardText.setText(isGlobal
+        ? `── ${this.weekKey} GLOBAL TOP 10 ──`
+        : `── ${this.weekKey} TOP 10 ──`);
+    }
 
     // Clear previous entry rows
     this.deathLbEntriesContainer.removeAll(true);
@@ -4011,6 +4657,13 @@ export class GameScene extends Phaser.Scene {
 
     this.highlightRank = highlightIdx >= 0 ? rank : 0;
 
+    // Update restart prompt for rhythm vs normal mode
+    this.deathRestartText.setText(
+      this.rhythmMode
+        ? 'SPACE = Play Again  |  ESC = Song Select'
+        : 'Press SPACEBAR to try again'
+    );
+
     this.deathContainer.setVisible(true);
     this.deathRestartText.setVisible(true);
   }
@@ -4090,17 +4743,33 @@ export class GameScene extends Phaser.Scene {
 
       // Async submit + fetch — render ONLY in .finally() to avoid local→global flash
       const gen3 = this.deathGen;
-      submitScore(this.pendingScore, this.elapsed, name).then(id => {
-        if (gen3 !== this.deathGen) return;
-        this.lastSubmittedRunId = id;
-        return fetchGlobalTop10(this.weekKey);
-      }).then(data => {
-        if (gen3 !== this.deathGen) return;
-        if (data) this.globalLeaderboardData = data;
-      }).catch(() => {}).finally(() => {
-        if (gen3 !== this.deathGen) return;
-        this.prepareDeathScreenVisuals(rank);
-      });
+      if (this.rhythmMode && this.rhythmTrackId) {
+        const trackId = this.rhythmTrackId;
+        const diff = this.rhythmDifficulty;
+        submitRhythmScore(trackId, diff, this.pendingScore, Math.round(this.elapsed), name).then(id => {
+          if (gen3 !== this.deathGen) return;
+          this.lastSubmittedRunId = id;
+          return fetchRhythmTop10(trackId, diff);
+        }).then(data => {
+          if (gen3 !== this.deathGen) return;
+          if (data) this.globalLeaderboardData = data;
+        }).catch(() => {}).finally(() => {
+          if (gen3 !== this.deathGen) return;
+          this.prepareDeathScreenVisuals(rank);
+        });
+      } else {
+        submitScore(this.pendingScore, this.elapsed, name).then(id => {
+          if (gen3 !== this.deathGen) return;
+          this.lastSubmittedRunId = id;
+          return fetchGlobalTop10(this.weekKey);
+        }).then(data => {
+          if (gen3 !== this.deathGen) return;
+          if (data) this.globalLeaderboardData = data;
+        }).catch(() => {}).finally(() => {
+          if (gen3 !== this.deathGen) return;
+          this.prepareDeathScreenVisuals(rank);
+        });
+      }
     }
   }
 
