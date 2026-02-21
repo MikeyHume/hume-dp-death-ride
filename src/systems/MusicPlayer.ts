@@ -5,6 +5,7 @@ import { SpotifyPlayerSystem } from './SpotifyPlayerSystem';
 import { WMPPopup } from '../ui/WMPPopup';
 import { PlaybackController } from './PlaybackController';
 import { fetchAllTracks, type CatalogTrack } from './MusicCatalogService';
+import { GAME_MODE } from '../config/gameMode';
 
 const MUSIC_UI_SCALE = 1;             // uniform scale from upper-right corner
 const MUSIC_BTN_SCALE = 1.5;           // scale multiplier for control buttons group (anchor: bottom-right)
@@ -317,12 +318,14 @@ export class MusicPlayer {
     this.container.addEventListener('mousedown', (e) => e.stopPropagation());
     this.container.addEventListener('mouseenter', () => {
       this.cursorOver = true;
+      if (GAME_MODE.mobileMode) return;  // mobile uses thumbnail tap instead
       if (!this.compact) return;
       this.hovered = true;
       this.expandUI();
     });
     this.container.addEventListener('mouseleave', () => {
       this.cursorOver = false;
+      if (GAME_MODE.mobileMode) return;  // mobile uses thumbnail tap instead
       if (!this.compact) return;
       this.hovered = false;
       this.collapseUI();
@@ -350,6 +353,20 @@ export class MusicPlayer {
     });
     this.thumbnailImg.crossOrigin = 'anonymous';
     thumbLink.appendChild(this.thumbnailImg);
+
+    // Mobile: tap thumbnail to expand/collapse instead of opening Spotify link
+    if (GAME_MODE.mobileMode) {
+      thumbLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (this.compact) {
+          this.hovered = true;
+          this.expandUI();
+        } else {
+          this.hovered = false;
+          this.collapseUI();
+        }
+      });
+    }
 
     // Thumbnail hover brightness
     thumbLink.addEventListener('mouseenter', () => { this.thumbHovered = true; });
