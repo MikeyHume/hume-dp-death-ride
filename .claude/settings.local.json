@@ -33,7 +33,8 @@
       "Read(//c/Users/mikey/Claude_Playground/dp_moto/**)",
       "Bash(wc:*)",
       "WebFetch(domain:open.spotify.com)",
-      "Bash(done)"
+      "Bash(done)",
+      "Read(//c/Users/mikey/.claude/projects/c--Users-mikey-Claude-Playground-dp-moto/**)"
     ]
   }
 }

@@ -3,6 +3,8 @@ import { TUNING } from './config/tuning';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { CRTPipeline } from './fx/CRTPipeline';
+import { WaterDistortionPipeline } from './fx/WaterDistortionPipeline';
+import { DamageFlashPipeline } from './fx/DamageFlashPipeline';
 import { handleCallback } from './systems/SpotifyAuthSystem';
 import { GAME_MODE } from './config/gameMode';
 
@@ -33,6 +35,8 @@ handleCallback().then((wasCallback) => {
   // Register CRT as a post-processing pipeline
   const renderer = game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
   renderer.pipelines.addPostPipeline('CRTPipeline', CRTPipeline);
+  renderer.pipelines.addPostPipeline('WaterDistortionPipeline', WaterDistortionPipeline);
+  renderer.pipelines.addPostPipeline('DamageFlashPipeline', DamageFlashPipeline);
 
   // Handle WebGL context loss gracefully (common on iOS Safari)
   game.canvas.addEventListener('webglcontextlost', (e) => {

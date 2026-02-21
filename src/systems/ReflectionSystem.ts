@@ -18,9 +18,14 @@ export class ReflectionSystem {
   // Puddle mask applied to the ROAD (inverted — cuts holes where puddles are)
   private maskRT: Phaser.GameObjects.RenderTexture;
   private puddleMask: Phaser.Display.Masks.BitmapMask;
+  private puddleRoadOverlay: Phaser.GameObjects.TileSprite; // semi-transparent road inside puddles
+  private puddleRoadMask: Phaser.Display.Masks.BitmapMask;  // non-inverted (visible inside puddles)
   private obstaclePool: readonly Phaser.GameObjects.Sprite[];
   private roadTile: Phaser.GameObjects.TileSprite;
   private maskEnabled: boolean = true;
+
+  // Layer grouping all reflected background objects for water distortion PostFX
+  private reflectionBgLayer: Phaser.GameObjects.Layer;
 
   // Game object reflections (drawn onto a RenderTexture above bg reflections, below road)
   private objectRT: Phaser.GameObjects.RenderTexture;
@@ -103,6 +108,15 @@ export class ReflectionSystem {
     // Reverse so reflectedLayers[i] corresponds to sourceLayers[i]
     this.reflectedLayers.reverse();
 
+    // --- Group reflected bg into a Layer for water distortion PostFX ---
+    this.reflectionBgLayer = scene.add.layer();
+    this.reflectionBgLayer.setDepth(-0.5);
+    this.reflectionBgLayer.add(this.reflectedSky);
+    for (const ref of this.reflectedLayers) {
+      this.reflectionBgLayer.add(ref);
+    }
+    this.reflectionBgLayer.setPostPipeline('WaterDistortionPipeline');
+
     // --- Create puddle mask (BitmapMask with RenderTexture, applied to ROAD) ---
     // RT must be visible (willRender check), placed behind sky so player never sees it
     this.maskRT = scene.add.renderTexture(0, 0, TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT);
@@ -114,11 +128,32 @@ export class ReflectionSystem {
     // Apply inverted mask to road — puddle holes reveal reflections underneath
     this.roadTile.setMask(this.puddleMask);
 
+    // --- Puddle road overlay (semi-transparent road visible inside puddle holes) ---
+    // Non-inverted mask from the same RT = visible only WHERE puddles are
+    this.puddleRoadMask = this.maskRT.createBitmapMask();
+    this.puddleRoadMask.invertAlpha = false;
+
+    // Clone of the road tile — syncs tilePositionX each frame
+    const roadH = TUNING.ROAD_BOTTOM_Y - TUNING.ROAD_TOP_Y;
+    const roadCY = (TUNING.ROAD_TOP_Y + TUNING.ROAD_BOTTOM_Y) / 2;
+    const tex = scene.textures.get('road-img').getSourceImage();
+    const tileScale = roadH / tex.height;
+    this.puddleRoadOverlay = scene.add.tileSprite(
+      TUNING.GAME_WIDTH / 2, roadCY, TUNING.GAME_WIDTH, roadH, 'road-img'
+    );
+    this.puddleRoadOverlay.setTileScale(tileScale, tileScale);
+    this.puddleRoadOverlay.setDepth(0.01); // just above road (depth 0)
+    this.puddleRoadOverlay.setAlpha(TUNING.PUDDLE_ROAD_OPACITY);
+    this.puddleRoadOverlay.setMask(this.puddleRoadMask);
+
     // --- Game object reflection RT (above bg reflections, below road) ---
     this.objectRT = scene.add.renderTexture(0, 0, TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT);
     this.objectRT.setOrigin(0, 0);
     this.objectRT.setDepth(-0.49);
     this.objectRT.setAlpha(alpha);
+
+    // Add objectRT to the same layer so it gets the water distortion PostFX
+    this.reflectionBgLayer.add(this.objectRT);
 
     // Stamp sprite: drawing proxy for flipping game objects onto the RT
     this.stamp = scene.add.sprite(0, 0, 'obstacle-crash');
@@ -137,6 +172,10 @@ export class ReflectionSystem {
 
     // Sync sky X position
     this.reflectedSky.x = this.sourceSky.x;
+
+    // Sync puddle road overlay scroll with main road
+    this.puddleRoadOverlay.tilePositionX = this.roadTile.tilePositionX;
+    this.puddleRoadOverlay.setAlpha(TUNING.PUDDLE_ROAD_OPACITY);
 
     // Redraw puddle mask: draw each active puddle sprite onto the RT
     // Puddle sprites have alpha=0 (hidden in scene), so temporarily set alpha=1 to draw
@@ -290,16 +329,16 @@ export class ReflectionSystem {
   }
 
   setVisible(visible: boolean): void {
-    for (const ref of this.reflectedLayers) {
-      ref.setVisible(visible);
-    }
-    this.reflectedSky.setVisible(visible);
+    this.reflectionBgLayer.setVisible(visible);
     this.objectRT.setVisible(visible);
+    this.puddleRoadOverlay.setVisible(visible);
     // Toggle road mask — when reflections are hidden, road should be solid
     if (visible) {
       this.roadTile.setMask(this.puddleMask);
+      this.puddleRoadOverlay.setMask(this.puddleRoadMask);
     } else {
       this.roadTile.clearMask();
+      this.puddleRoadOverlay.clearMask();
     }
   }
 
@@ -325,6 +364,9 @@ export class ReflectionSystem {
 
   destroy(): void {
     this.roadTile.clearMask();
+    this.puddleRoadOverlay.clearMask();
+    this.puddleRoadOverlay.destroy();
+    this.reflectionBgLayer.destroy();
     for (const ref of this.reflectedLayers) {
       ref.destroy();
     }

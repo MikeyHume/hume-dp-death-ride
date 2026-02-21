@@ -34,6 +34,11 @@ export class PlayerSystem {
   private cursorBlend: number = 1;
   private blendStartY: number = 0;  // Y position when blend started
 
+  // Score flash state (multiply tint directly on sprite)
+  private flashColors: number[] = [];
+  private flashTimer: number = 0;
+  private flashElapsed: number = 0;
+
   // Attack cooldown (blocks all attacks while > 0)
   private attackCooldown: number = 0;
 
@@ -197,6 +202,25 @@ export class PlayerSystem {
       // At multiplier 1.0: stays put. Below 1.0: drifts left. Above 1.0: moves right.
       const speedDiff = this.playerSpeed - controlSpeed;
       this.sprite.x += speedDiff * dt;
+    }
+
+    // Score flash — multiply tint directly on sprite, fading toward white over duration
+    if (this.flashTimer > 0) {
+      this.flashElapsed += dt;
+      this.flashTimer -= dt;
+      if (this.flashTimer <= 0) {
+        this.sprite.clearTint();
+        this.flashColors = [];
+      } else {
+        const idx = Math.floor(this.flashElapsed * 1000 / TUNING.PLAYER_FLASH_CYCLE_MS) % this.flashColors.length;
+        const color = this.flashColors[idx];
+        // Fade: lerp each channel from tint color toward 0xFF (no tint) over the flash duration
+        const t = this.flashElapsed / (this.flashElapsed + this.flashTimer); // 0→1
+        const r = ((color >> 16) & 0xFF) + ((0xFF - ((color >> 16) & 0xFF)) * t) | 0;
+        const g = ((color >> 8) & 0xFF) + ((0xFF - ((color >> 8) & 0xFF)) * t) | 0;
+        const b = (color & 0xFF) + ((0xFF - (color & 0xFF)) * t) | 0;
+        this.sprite.setTint((r << 16) | (g << 8) | b);
+      }
     }
 
     // Y-based depth: lower on screen = closer to camera = renders in front
@@ -538,6 +562,9 @@ export class PlayerSystem {
     this.poweredUp = false;
     this.speedupState = 'idle';
     this.noTapTimer = 0;
+    this.flashTimer = 0;
+    this.flashColors = [];
+    this.sprite.clearTint();
     console.log(`DEATH at X=${Math.round(this.sprite.x)}`);
   }
 
@@ -561,6 +588,10 @@ export class PlayerSystem {
     this.cursorBlend = 0;
     this.blendStartY = this.sprite.y;
     this.startAnimPlaying = false;
+    this.flashTimer = 0;
+    this.flashColors = [];
+    this.flashElapsed = 0;
+    this.sprite.clearTint();
     // Show frame 0 of start animation, paused
     // Set the frame FIRST so applyStartDisplaySize computes scale from correct frame dimensions
     this.sprite.play({ key: 'player-start', startFrame: 0 });
@@ -610,6 +641,13 @@ export class PlayerSystem {
       0, 1
     );
     return TUNING.PLAYER_SCALE_TOP + t * (TUNING.PLAYER_SCALE_BOTTOM - TUNING.PLAYER_SCALE_TOP);
+  }
+
+  /** Flash the player sprite through a color palette using additive overlay (called on score events). */
+  flashScore(hexColors: string[], durationSec: number): void {
+    this.flashColors = hexColors.map(c => parseInt(c.replace('#', ''), 16));
+    this.flashTimer = durationSec;
+    this.flashElapsed = 0;
   }
 
   setVisible(visible: boolean): void {

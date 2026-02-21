@@ -15,6 +15,7 @@ import { PickupSystem } from '../systems/PickupSystem';
 import { RocketSystem } from '../systems/RocketSystem';
 import { getCurrentWeekKey, weekKeyToSeed } from '../util/time';
 import { CRTPipeline } from '../fx/CRTPipeline';
+import { DamageFlashPipeline } from '../fx/DamageFlashPipeline';
 import { CRT_TUNING } from '../config/crtTuning';
 import { ProfileHud } from '../ui/ProfileHud';
 import { ProfilePopup, AVATAR_TEXTURE_KEY } from '../ui/ProfilePopup';
@@ -916,6 +917,7 @@ export class GameScene extends Phaser.Scene {
 
     // --- CRT post-processing ---
     this.cameras.main.setPostPipeline(CRTPipeline);
+    this.cameras.main.setPostPipeline(DamageFlashPipeline);
 
     // --- Custom cursor (under CRT shader) ---
     this.game.canvas.style.cursor = 'none';
@@ -2929,12 +2931,12 @@ export class GameScene extends Phaser.Scene {
           this.audioSystem.playExplosion();
           this.audioSystem.playPotionUsed();
           this.playerSystem.playCollectHit();
-          if (!this.hudHidden) this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 0.5, TUNING.SHAKE_DEATH_INTENSITY * 0.5);
+          this.fxSystem.triggerDamage();
           const shieldPts = result.hitType === ObstacleType.CAR
             ? TUNING.SCORE_CAR_SHIELD
             : TUNING.SCORE_OBSTACLE_SHIELD;
           this.scoreSystem.addBonus(shieldPts);
-          this.spawnScorePopup(shieldPts, 'shield');
+          this.spawnScorePopup(shieldPts, 'damage');
         } else {
           this.playerSystem.kill();
         }
@@ -3462,6 +3464,7 @@ export class GameScene extends Phaser.Scene {
 
   // Color palettes for score popups by interaction type
   private static readonly POPUP_COLORS: Record<string, string[]> = {
+    damage:     ['#FF0000', '#CC0000', '#FF2222'],   // intense red for shield-absorb damage
     shield:     ['#FF4444', '#FF7777', '#CC2222'],   // red monochrome (main, pale, dark)
     rocket:     ['#FFDD00', '#FFEE55', '#CCB000'],   // yellow monochrome (main, pale, dark)
     katana:     ['#88FF00', '#AAFF44', '#66CC00'],   // lime green monochrome (main, pale, dark)
@@ -3488,9 +3491,14 @@ export class GameScene extends Phaser.Scene {
       this.scorePopups.push(popup);
     }
 
-    popup.setText(`+${points}`);
+    popup.setText(points < 0 ? `${points}` : `+${points}`);
     popup.setFontSize(TUNING.SCORE_POPUP_FONT_SIZE);
     popup.setData('popupType', popupType);
+
+    // Flash the player sprite with the score type's color palette
+    const flashColors = GameScene.POPUP_COLORS[popupType] || GameScene.POPUP_COLORS.default;
+    this.playerSystem.flashScore(flashColors, TUNING.PLAYER_FLASH_DURATION);
+
     const startX = this.playerSystem.getX() + TUNING.SCORE_POPUP_OFFSET_X;
     const startY = this.playerSystem.getY() + TUNING.SCORE_POPUP_OFFSET_Y;
     popup.setPosition(startX, startY);

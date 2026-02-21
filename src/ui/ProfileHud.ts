@@ -20,6 +20,16 @@ const BAR_GAP_Y = 4;                      // vertical gap between score bottom a
 const PIP_GAP = 8;                        // vertical gap below rage bar to pips
 const PIP_AREA_W = 200;                   // width used for pip layout (keeps original spacing)
 
+// Slam animation (score HUD effect on point gain)
+const SLAM_RISE_MS = 300;               // rise phase: shake + scale up + tilt (ms)
+const SLAM_DOWN_MS = 150;               // slam down phase: scale/tilt back to normal (ms)
+const SLAM_SCALE = 1.25;                // max scale at peak of slam
+const SLAM_TILT_DEG = 5;                // max random tilt in degrees
+const SLAM_SHAKE_PX = 4;                // max shake offset in pixels during rise
+const SHOCKWAVE_SCALE = 2.0;            // shockwave end scale
+const SHOCKWAVE_MS = 400;               // shockwave duration (ms)
+const SHOCKWAVE_CYCLE_MS = 60;          // ms per color cycle step
+
 const SIGN_IN_SCALE = 0.4;               // sign-in image scale
 const SIGN_IN_OFFSET_X = 96;             // sign-in X offset from avatar center
 const SIGN_IN_OFFSET_Y = 50;             // sign-in Y offset below avatar bottom
@@ -66,6 +76,25 @@ export class ProfileHud {
   private signInImage!: Phaser.GameObjects.Image;
   private signInTween: Phaser.Tweens.Tween | null = null;
 
+  // Slam animation state
+  private slamPhase: 'none' | 'rise' | 'slam' = 'none';
+  private slamTimer = 0;
+  private slamTilt = 0;
+  private slamPendingScore = 0;
+  private slamScoreUpdated = false;
+  private slamColors: string[] = [];
+  private slamCenterX = 0;
+  private slamCenterY = 0;
+
+  // Shockwave (behind score text, scales up + fades on slam impact)
+  private shockwaveText!: Phaser.GameObjects.Text;
+  private shockwavePhase: 'none' | 'active' = 'none';
+  private shockwaveTimer = 0;
+  private shockwaveColors: string[] = [];
+
+  // Score gating during slam
+  private latestScore = 0;
+
   constructor(scene: Phaser.Scene) {
     this.container = scene.add.container(HUD_ORIGIN_X, HUD_ORIGIN_Y).setDepth(1300).setScrollFactor(0).setScale(HUD_SCALE);
 
@@ -110,6 +139,14 @@ export class ProfileHud {
     this.scoreText.setScale(this.scoreScale);
     this.barY = SCORE_Y + this.scoreText.height * this.scoreScale + BAR_GAP_Y;
     const barY = this.barY;
+    // --- Shockwave text (behind score, hidden until slam impact) ---
+    this.shockwaveText = scene.add.text(BAR_X + BAR_W, SCORE_Y, '0000000', {
+      fontSize: `${SCORE_FONT_SIZE}px`,
+      fontFamily: 'monospace',
+      color: '#ffffff',
+    }).setOrigin(0.5, 0.5).setScale(this.scoreScale).setVisible(false);
+    this.container.add(this.shockwaveText);
+
     this.container.add(this.scoreText);
 
     // --- Player name (left-justified above rage bar, same row as score) ---

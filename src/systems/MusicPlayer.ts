@@ -51,6 +51,14 @@ export class MusicPlayer {
   private btnElements: HTMLButtonElement[] = [];
   private muteBtnSprite!: Phaser.GameObjects.Image;
 
+  // Heart (favorite) button — separate from icon button pool (uses Text, not Image)
+  private heartBtn!: HTMLButtonElement;
+  private heartTextP!: Phaser.GameObjects.Text;
+  private heartBounceT = 1;  // bounce progress (1 = idle)
+
+  // Phaser background panel behind all music player elements
+  private bgPanel!: Phaser.GameObjects.Rectangle;
+
   // Phaser objects mirroring thumbnail and title (rendered through CRT shader)
   private thumbSprite!: Phaser.GameObjects.Image;
   private thumbHoverOverlay!: Phaser.GameObjects.Rectangle;
@@ -70,6 +78,7 @@ export class MusicPlayer {
   private currentTrackName: string = '';                // current track name only (no artist)
   private currentArtist: string = '';                  // current track artist name
   private currentSpotifyUrl: string | null = null;     // current track Spotify URL
+  private currentTrackId: string | null = null;        // Spotify track ID of currently playing track
   private lastPlayedCatalog: CatalogTrack | null = null; // catalog track from library click (prevents YT clobbering)
   private userVolume = 0.69;                           // user's intended volume 0-1 (before master multiplier)
   private countdownMusic: Phaser.Sound.BaseSound | null = null;
@@ -124,6 +133,8 @@ export class MusicPlayer {
     this.currentTrackName = TUNING.INTRO_TRACK_TITLE;
     this.currentArtist = TUNING.INTRO_TRACK_ARTIST;
     this.currentSpotifyUrl = TUNING.INTRO_TRACK_SPOTIFY_URL;
+    this.currentTrackId = TITLE_SPOTIFY_TRACK_ID;
+    this.wmpPopup?.setPlayingTrack(TITLE_SPOTIFY_TRACK_ID);
     this.titleClip.style.display = 'block';
     this.startTitleScroll();
 
@@ -279,11 +290,12 @@ export class MusicPlayer {
     const topPct = (TUNING.MUSIC_UI_PAD_TOP / TUNING.GAME_HEIGHT) * 100;
     const rightPct = (TUNING.MUSIC_UI_PAD_RIGHT / TUNING.GAME_WIDTH) * 100;
     const widthPct = (TUNING.MUSIC_UI_WIDTH / TUNING.GAME_WIDTH) * 100;
+    const MUSIC_BG_PAD = 20;  // px padding inside background
     Object.assign(this.container.style, {
       position: 'absolute',
       top: `${topPct}%`,
       right: `${rightPct}%`,
-      width: `${widthPct}%`,
+      width: `calc(${widthPct}% + ${MUSIC_BG_PAD * 2}px)`,
       display: 'none',
       alignItems: 'flex-start',
       gap: '14px',
@@ -292,6 +304,8 @@ export class MusicPlayer {
       transformOrigin: 'top right',
       overflow: 'hidden',
       transition: 'width 0.4s ease, gap 0.4s ease',
+      padding: `${MUSIC_BG_PAD}px`,
+      boxSizing: 'border-box',
     });
     // Prevent clicks from reaching the Phaser canvas
     this.container.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -389,7 +403,24 @@ export class MusicPlayer {
     this.muteBtn = this.createIconButton('ui/unmuted.png', () => this.toggleMute());
     this.muteBtnImg = this.muteBtn.querySelector('img') as HTMLImageElement;
 
-    btnContainer.append(prevBtn, nextBtn, this.muteBtn, menuBtn);
+    // Heart (favorite) button — same size as icon buttons but renders via Phaser Text
+    this.heartBtn = document.createElement('button');
+    this.heartBtn.tabIndex = -1;
+    Object.assign(this.heartBtn.style, {
+      background: 'none', border: 'none', padding: '0',
+      width: '44px', height: '44px', cursor: 'none',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    });
+    this.heartBtn.addEventListener('click', () => {
+      if (this.scene.cache.audio.exists('sfx-click')) this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
+      const trackId = this.getCurrentTrackId();
+      if (trackId && this.wmpPopup) {
+        this.heartBounceT = 0;
+        this.wmpPopup.toggleFavoriteById(trackId);
+      }
+    });
+
+    btnContainer.append(this.heartBtn, prevBtn, nextBtn, this.muteBtn, menuBtn);
 
     rightColumn.append(this.titleClip, btnContainer);
     this.container.append(thumbLink, rightColumn);
@@ -408,6 +439,10 @@ export class MusicPlayer {
       this.btnElements[i].addEventListener('mouseleave', () => { sprite.setAlpha(this.compact && !this.hovered ? 0 : 1); });
     }
 
+    // Semi-transparent background panel (Phaser, rendered through CRT behind all content)
+    this.bgPanel = this.scene.add.rectangle(0, 0, 1, 1, 0x000000, 0.55)
+      .setDepth(999).setScrollFactor(0).setOrigin(0, 0).setVisible(false);
+
     // Thumbnail CRT sprite (mirrors HTML thumbnail through CRT shader)
     this.thumbSprite = this.scene.add.image(0, 0, '__DEFAULT')
       .setDepth(1000).setScrollFactor(0).setVisible(false);
@@ -424,6 +459,24 @@ export class MusicPlayer {
       color: '#ffffff',
     }).setDepth(1000).setScrollFactor(0).setOrigin(0, 0.5).setVisible(false).setAlpha(0);
     this.titleText.setMask(this.titleMaskGfx.createGeometryMask());
+
+    // Heart (favorite) CRT text — white outline, purple fill when favorited
+    this.heartTextP = this.scene.add.text(0, 0, '\u2665', {
+      fontFamily: 'Arial',
+      fontSize: '24px',
+      color: 'rgba(0,0,0,0)',
+      stroke: '#ffffff',
+      strokeThickness: 2,
+    }).setDepth(1000).setScrollFactor(0).setOrigin(0.5, 0.5).setVisible(false).setAlpha(0);
+
+    // Heart hover events (match btn sprite hover pattern)
+    this.heartBtn.addEventListener('mouseenter', () => {
+      if (this.scene.cache.audio.exists('sfx-hover')) this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME });
+      this.heartTextP.setAlpha(0.7);
+    });
+    this.heartBtn.addEventListener('mouseleave', () => {
+      this.heartTextP.setAlpha(this.compact && !this.hovered ? 0 : 1);
+    });
 
     // Hidden YouTube player container (1x1 pixel, bottom-right corner)
     const ytDiv = document.createElement('div');
@@ -628,11 +681,15 @@ export class MusicPlayer {
       // Wire track change updates
       sp.onTrackChanged((track) => {
         if (this.source !== 'spotify') return;
+        // Ignore stale track events during title screen — Spotify SDK may resume the
+        // last session's track before we tell it to play the title track
+        if (this.titleTrackPlaying && track.trackId !== TITLE_SPOTIFY_TRACK_ID) return;
         // Store album art for fallback display
         this.currentAlbumImageUrl = track.albumImageUrl ?? null;
         this.currentTrackName = track.name || '';
         this.currentArtist = track.artist || '';
         this.currentSpotifyUrl = track.trackId ? `https://open.spotify.com/track/${track.trackId}` : null;
+        this.currentTrackId = track.trackId ?? null;
         this.wmpPopup?.setPlayingTrack(track.trackId);
         // Square album art
         const s = TUNING.MUSIC_UI_THUMB_SCALE;
@@ -888,6 +945,8 @@ export class MusicPlayer {
           this.currentTrackName = cat.title;
           this.currentArtist = cat.artistName;
           this.currentSpotifyUrl = cat.spotifyUrl ?? null;
+          this.currentTrackId = cat.spotifyTrackId;
+          this.wmpPopup?.setPlayingTrack(cat.spotifyTrackId);
         } else {
           this.lastPlayedCatalog = null;
           // Try matching YouTube video to catalog for artist/URL metadata
@@ -900,6 +959,7 @@ export class MusicPlayer {
               this.currentTrackName = match.title;
               this.currentArtist = match.artistName;
               this.currentSpotifyUrl = match.spotifyUrl ?? null;
+              this.currentTrackId = match.spotifyTrackId;
               this.wmpPopup?.setPlayingTrack(match.spotifyTrackId);
             }
           });
@@ -1153,6 +1213,7 @@ export class MusicPlayer {
     this.currentTrackName = track.title;
     this.currentArtist = track.artistName;
     this.currentSpotifyUrl = track.spotifyUrl ?? null;
+    this.currentTrackId = track.spotifyTrackId;
     this.wmpPopup?.setPlayingTrack(track.spotifyTrackId);
 
     if (this.source === 'spotify' && this.spotifyPlayer) {
@@ -1185,6 +1246,7 @@ export class MusicPlayer {
     this.currentTrackName = track.title;
     this.currentArtist = track.artistName;
     this.currentSpotifyUrl = track.spotifyUrl ?? null;
+    this.currentTrackId = track.spotifyTrackId;
     const display = `${track.title} - ${track.artistName}`;
     this.trackTitle.textContent = display;
     this.titleClip.style.display = 'block';
@@ -1261,15 +1323,13 @@ export class MusicPlayer {
     }
 
     const thumbW = parseFloat(this.thumbnailImg.style.width) || (YT_THUMB_HEIGHT * TUNING.MUSIC_UI_THUMB_SCALE);
-    const overlayW = this.canvasOverlay.offsetWidth || 1;
-    const collapsedPct = (thumbW / overlayW) * 100;
 
-    this.container.style.width = `${collapsedPct}%`;
+    this.container.style.width = `${thumbW + 2 * 20}px`; // thumb + padding (box-sizing: border-box)
     this.container.style.gap = '0px';
     this.rightColumnEl.style.opacity = '0';
 
-    // Fade Phaser button sprites and title text to match
-    for (const s of [...this.btnSprites, this.titleText]) {
+    // Fade Phaser button sprites, title text, and heart to match
+    for (const s of [...this.btnSprites, this.titleText, this.heartTextP]) {
       if (animate) {
         this.scene.tweens.killTweensOf(s);
         this.scene.tweens.add({ targets: s, alpha: 0, duration: 400, ease: 'Sine.easeInOut' });
@@ -1287,12 +1347,12 @@ export class MusicPlayer {
 
   private expandUI(): void {
     const widthPct = (TUNING.MUSIC_UI_WIDTH / TUNING.GAME_WIDTH) * 100;
-    this.container.style.width = `${widthPct}%`;
+    this.container.style.width = `calc(${widthPct}% + ${2 * 20}px)`;
     this.container.style.gap = '14px';
     this.rightColumnEl.style.opacity = '1';
 
-    // Fade Phaser button sprites and title text in
-    for (const s of [...this.btnSprites, this.titleText]) {
+    // Fade Phaser button sprites, title text, and heart in
+    for (const s of [...this.btnSprites, this.titleText, this.heartTextP]) {
       this.scene.tweens.killTweensOf(s);
       this.scene.tweens.add({ targets: s, alpha: 1, duration: 400, ease: 'Sine.easeInOut' });
     }
@@ -1335,9 +1395,15 @@ export class MusicPlayer {
         this.revealTimer = null;
       }
       for (const s of this.btnSprites) s.setVisible(false);
+      this.bgPanel.setVisible(false);
       this.thumbSprite.setVisible(false);
       this.titleText.setVisible(false);
+      this.heartTextP.setVisible(false);
     }
+  }
+
+  private getCurrentTrackId(): string | null {
+    return this.currentTrackId;
   }
 
   /** Load thumbnail image into a Phaser canvas texture for CRT rendering */
@@ -1372,6 +1438,21 @@ export class MusicPlayer {
     const containerVisible = this.container.style.display !== 'none';
     const ow = overlayRect.width || 1;
     const oh = overlayRect.height || 1;
+
+    // --- Background panel ---
+    if (containerVisible) {
+      const cRect = this.container.getBoundingClientRect();
+      const bgX = (cRect.left - overlayRect.left) / ow * TUNING.GAME_WIDTH;
+      const bgY = (cRect.top - overlayRect.top) / oh * TUNING.GAME_HEIGHT;
+      const bgW = (cRect.width / ow) * TUNING.GAME_WIDTH;
+      const bgH = (cRect.height / oh) * TUNING.GAME_HEIGHT;
+      this.bgPanel.setPosition(bgX, bgY).setDisplaySize(bgW, bgH).setVisible(true);
+
+      // Rounded corners via postFX — Phaser rectangles don't natively support borderRadius,
+      // but the CRT shader makes it look good enough with the slight warp
+    } else {
+      this.bgPanel.setVisible(false);
+    }
 
     // --- Button sprites ---
     for (let i = 0; i < this.btnSprites.length; i++) {
@@ -1444,16 +1525,49 @@ export class MusicPlayer {
     } else {
       this.titleText.setVisible(false);
     }
+
+    // --- Heart (favorite) text ---
+    const heartVisible = containerVisible && !!this.currentTrackId;
+    if (heartVisible) {
+      const hRect = this.heartBtn.getBoundingClientRect();
+      const hcx = hRect.left + hRect.width / 2 - overlayRect.left;
+      const hcy = hRect.top + hRect.height / 2 - overlayRect.top;
+      const gameHX = (hcx / ow) * TUNING.GAME_WIDTH;
+      const gameHY = (hcy / oh) * TUNING.GAME_HEIGHT;
+      const gameHSize = (hRect.width / ow) * TUNING.GAME_WIDTH;
+      const heartFontSize = Math.round(gameHSize * 0.7);
+      this.heartTextP.setPosition(gameHX, gameHY);
+      this.heartTextP.setFontSize(heartFontSize);
+      this.heartTextP.setStroke('#ffffff', Math.max(1, heartFontSize * 0.08));
+      this.heartTextP.setVisible(true);
+
+      // Favorite state coloring
+      const isFav = this.wmpPopup?.isFavorited(this.currentTrackId!) ?? false;
+      this.heartTextP.setColor(isFav ? '#4a0080' : 'rgba(0,0,0,0)');
+
+      // Bounce animation (tick at ~60fps via rAF)
+      if (this.heartBounceT < 1) {
+        this.heartBounceT = Math.min(1, this.heartBounceT + 0.055); // ~300ms at 60fps
+        const bounceScale = 1 + 0.4 * Math.sin(this.heartBounceT * Math.PI);
+        this.heartTextP.setScale(bounceScale);
+      } else {
+        this.heartTextP.setScale(1);
+      }
+    } else {
+      this.heartTextP.setVisible(false);
+    }
   }
 
   destroy(): void {
     if (this.wmpPopup) { this.wmpPopup.destroy(); this.wmpPopup = null; }
     for (const s of this.btnSprites) s.destroy();
     this.btnSprites.length = 0;
+    this.bgPanel.destroy();
     this.thumbSprite.destroy();
     this.thumbHoverOverlay.destroy();
     this.titleText.destroy();
     this.titleMaskGfx.destroy();
+    this.heartTextP.destroy();
     if (this.crossfadeTimer) window.clearTimeout(this.crossfadeTimer);
     if (this.crossfadeAnim) cancelAnimationFrame(this.crossfadeAnim);
     if (this.scrollAnim) cancelAnimationFrame(this.scrollAnim);

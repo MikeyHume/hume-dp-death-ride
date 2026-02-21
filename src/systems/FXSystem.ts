@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
 import { GAME_MODE } from '../config/gameMode';
+import { DamageFlashPipeline } from '../fx/DamageFlashPipeline';
 
 export class FXSystem {
   private scene: Phaser.Scene;
@@ -14,6 +15,9 @@ export class FXSystem {
 
   // Screen flash overlay
   private flashOverlay: Phaser.GameObjects.Rectangle;
+
+  // Damage PostFX pipeline (desaturate + red grade + glow)
+  private damagePipeline: DamageFlashPipeline | null = null;
 
   // Track slow overlap to fire shake only on first contact
   private wasSlowOverlapping: boolean = false;
@@ -55,6 +59,7 @@ export class FXSystem {
       TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
       TUNING.FLASH_DEATH_COLOR
     ).setAlpha(0).setDepth(150);
+
   }
 
   update(dt: number, playerSpeed: number, roadSpeed: number, playerX: number): void {
@@ -134,6 +139,29 @@ export class FXSystem {
     });
   }
 
+  /** Violent shake + desaturated red-grade glow flash on shield-absorb damage */
+  triggerDamage(): void {
+    if (!this.suppressShake) this.scene.cameras.main.shake(TUNING.SHAKE_DAMAGE_DURATION, TUNING.SHAKE_DAMAGE_INTENSITY);
+    // Lazy-grab pipeline (camera pipeline is added after FXSystem construction)
+    if (!this.damagePipeline) {
+      const pipes = this.scene.cameras.main.getPostPipeline(DamageFlashPipeline);
+      if (Array.isArray(pipes)) {
+        this.damagePipeline = pipes[0] as DamageFlashPipeline ?? null;
+      } else if (pipes) {
+        this.damagePipeline = pipes as DamageFlashPipeline;
+      }
+    }
+    if (this.damagePipeline) {
+      this.damagePipeline.intensity = 1;
+      this.scene.tweens.add({
+        targets: this.damagePipeline,
+        intensity: 0,
+        duration: TUNING.FLASH_DAMAGE_DURATION,
+        ease: 'Power2',
+      });
+    }
+  }
+
   /** Brief shake when first entering a slow zone */
   onSlowOverlap(isOverlapping: boolean): void {
     if (isOverlapping && !this.wasSlowOverlapping && !this.suppressShake) {
@@ -146,6 +174,7 @@ export class FXSystem {
   reset(): void {
     this.wasSlowOverlapping = false;
     this.flashOverlay.setAlpha(0);
+    if (this.damagePipeline) this.damagePipeline.intensity = 0;
     this.leftWarn.setAlpha(0);
     this.rightWarn.setAlpha(0);
     for (let i = 0; i < this.speedLines.length; i++) {

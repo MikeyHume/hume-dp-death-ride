@@ -19,7 +19,7 @@ import { supabase } from '../supabaseClient';
 
 // Text size multipliers (Phaser CRT layer) — tweak these to scale text groups
 const WMP_TEXT_TITLE_MULT = 2;       // title bar text ("Windows Media Player")
-const WMP_TEXT_WINBTN_MULT = 3.5;    // window button labels (_, □, ×)
+const WMP_TEXT_WINBTN_MULT = 4.5;    // window button labels (□, ✕)
 const WMP_TEXT_STATUS_MULT = 2;      // track title / status text
 const WMP_TEXT_TIME_MULT = 2;        // time labels (0:00 / 3:45)
 const WMP_TEXT_TRANSPORT_MULT = 2;   // transport button labels (|<, <<, >, etc)
@@ -111,7 +111,11 @@ const WMP_SCROLL_ACCEL_AFTER = 4;    // rapid ticks needed before acceleration k
 const WMP_SCROLL_DECEL = 0.7;        // velocity decay per frame when not scrolling (toward 1)
 const WMP_SCROLLBAR_W = 56;         // scrollbar width in game px
 const WMP_SCROLLBAR_MIN_THUMB = 30; // minimum scrollbar thumb height in game px
+const WMP_HEART_FRAC = 0.4;        // heart size as fraction of thumbnail width
+const WMP_HEART_PAD = 2;           // padding from thumbnail edges (CSS px)
+const WMP_HEART_STROKE = 1.5;      // heart outline stroke thickness
 const WMP_HEADER_PAD = 10;          // header row padding above+below text (total extra px)
+const WMP_HEADER_H_CSS = 11 * WMP_TEXT_LIB_ROW_MULT + WMP_HEADER_PAD + 4; // header row total CSS px (font + pad + border)
 
 // Playlist sidebar (Playlists tab only)
 const WMP_SIDEBAR_FRAC = 0.2;           // sidebar width as fraction of library area (1/5)
@@ -171,6 +175,28 @@ const WMP_CTX_FONT = 11;               // menu item font size px
 const WMP_TEXT_CTX_MULT = 2;           // context menu text scale multiplier
 const WMP_CTX_FLASH_MS = 80;           // click flash duration before dismiss (ms)
 const WMP_CTX_STROKE_W = 1;            // hover stroke width (px, pre-scale)
+
+/** Open a Spotify URL — tries the native app first (spotify: URI), falls back to web player. */
+function openSpotify(webUrl: string): void {
+  // Extract track/album/artist/playlist ID from https://open.spotify.com/{type}/{id}
+  const m = webUrl.match(/open\.spotify\.com\/(track|album|artist|playlist)\/([A-Za-z0-9]+)/);
+  if (m) {
+    const appUri = `spotify:${m[1]}:${m[2]}`;
+    const w = window.open(appUri);
+    // If the app URI didn't open (popup blocked or no handler), fall back to web
+    if (!w || w.closed) {
+      window.open(webUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      // Some browsers open a blank tab for unhandled URIs — close it and try web
+      setTimeout(() => {
+        try { if (w.location.href === 'about:blank') { w.close(); window.open(webUrl, '_blank', 'noopener,noreferrer'); } }
+        catch { /* cross-origin — app handled it, do nothing */ }
+      }, 500);
+    }
+  } else {
+    window.open(webUrl, '_blank', 'noopener,noreferrer');
+  }
+}
 
 type ColKey = 'title' | 'artist' | 'album' | 'time' | 'rank' | 'listens';
 interface ColDef { key: ColKey; label: string; widthFrac: number; }
@@ -248,6 +274,7 @@ export class WMPPopup {
   private infoTitleEl!: HTMLDivElement;      // track title text
   private infoArtistWrap!: HTMLDivElement;   // artist centering wrapper
   private infoArtistEl!: HTMLDivElement;     // artist name text
+  private infoHeartBtn!: HTMLDivElement;      // heart favorite toggle (info panel)
   private infoSpotifyBtn!: HTMLButtonElement; // "Listen on Spotify" button
   private statusEl!: HTMLSpanElement;
   private progGroove!: HTMLDivElement;
@@ -321,6 +348,7 @@ export class WMPPopup {
   // === Phaser: Track info panel ===
   private infoTitleP!: Phaser.GameObjects.Text;
   private infoArtistP!: Phaser.GameObjects.Text;
+  private infoHeartP!: Phaser.GameObjects.Text;
   private infoSpotifyBtnP!: Phaser.GameObjects.Text;
   private infoSpotifyLogoP!: Phaser.GameObjects.Image;
 
@@ -333,6 +361,12 @@ export class WMPPopup {
   private thumbCache = new Map<string, string>();          // albumImageUrl -> phaser texture key
   private thumbLoading = new Set<string>();                // currently loading URLs
   private thumbCounter = 0;                                // unique key counter
+
+  // === Phaser: Heart (favorite) icons ===
+  private heartTextsP: Phaser.GameObjects.Text[] = [];    // pool of heart text objects (one per visible row)
+  private hoverHeartTrackIdx = -1;                         // track index of heart being hovered (-1 = none)
+  private heartBounceTrackId: string | null = null;        // spotifyTrackId currently bouncing
+  private heartBounceT = 0;                                // bounce animation progress (0..1)
 
   // === State ===
   private videoActive = true;
@@ -587,8 +621,8 @@ export class WMPPopup {
     btnGroup.style.display = 'flex';
     btnGroup.style.gap = `${WMP_WINBTN_GAP}px`;
     btnGroup.style.marginRight = `${WMP_BTNGROUP_PAD_R}px`;
-    const fsBtn = this.win95Btn('⬜', () => this.isFullscreen ? this.exitFullscreen() : this.enterFullscreen());
-    const closeBtn = this.win95Btn('×', () => this.close());
+    const fsBtn = this.win95Btn('□', () => this.isFullscreen ? this.exitFullscreen() : this.enterFullscreen());
+    const closeBtn = this.win95Btn('✕', () => this.close());
     this.winBtns = [fsBtn, closeBtn];
     btnGroup.append(fsBtn, closeBtn);
     this.titleBar.append(this.titleTextEl, btnGroup);
@@ -672,20 +706,36 @@ export class WMPPopup {
     });
     this.infoArtistEl.textContent = '\u00A0';
     this.infoArtistWrap.appendChild(this.infoArtistEl);
-    // Button — transparent HTML click target, Phaser renders the visuals through CRT
-    this.infoSpotifyBtn = document.createElement('button');
+    // Heart favorite toggle — transparent HTML click target, Phaser renders visuals
     const btnH = TUNING.WMP_INFO_BTN_FONT * 6;
+    const heartBtnW = btnH; // square hit area
+    this.infoHeartBtn = this.div();
+    Object.assign(this.infoHeartBtn.style, {
+      width: `${heartBtnW}px`, height: `${btnH}px`,
+      flexShrink: '0', cursor: 'none',
+    });
+    this.infoHeartBtn.addEventListener('click', () => {
+      if (!this.playingTrackId) return;
+      const track = this.libTracks.find(t => t.spotifyTrackId === this.playingTrackId);
+      if (track) {
+        this.heartBounceTrackId = track.spotifyTrackId;
+        this.heartBounceT = 0;
+        this.toggleFavorite(track);
+      }
+    });
+    // Spotify button — transparent HTML click target, Phaser renders the visuals through CRT
+    this.infoSpotifyBtn = document.createElement('button');
     Object.assign(this.infoSpotifyBtn.style, {
       border: 'none',
       background: 'transparent',
-      cursor: 'none', width: '500px',
+      cursor: 'none', width: `${500 - heartBtnW - 40}px`,
       height: `${btnH}px`,
       flexShrink: '0',
       padding: '0',
     });
     this.infoSpotifyBtn.addEventListener('click', () => {
       const url = this.cb.getSpotifyUrl();
-      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+      if (url) openSpotify(url);
     });
     // transportDiv is built later — appended in the assembly section below
     this.trackInfoPanel.append(this.infoTitleEl, this.infoArtistWrap);
@@ -823,7 +873,7 @@ export class WMPPopup {
       paddingRight: '40px',     // 40px padding on right side
       flexShrink: '0',
     });
-    spotifyVolRow.append(this.infoSpotifyBtn, volGroup);
+    spotifyVolRow.append(this.infoHeartBtn, this.infoSpotifyBtn, volGroup);
 
     this.controlsRow.append(this.progressGroup);
     this.trackInfoPanel.append(spotifyVolRow);
@@ -860,7 +910,7 @@ export class WMPPopup {
     });
 
     // Column header row — height matches visual header, not data rows
-    const headerRowH = 11 * WMP_TEXT_LIB_ROW_MULT + WMP_HEADER_PAD + 4; // font + pad + border
+    const headerRowH = WMP_HEADER_H_CSS;
     // Offset header row past thumbnail + left padding so HTML cells align with Phaser columns
     const headerLeftOffset = TUNING.WMP_LIB_ROW_H + 10; // thumbnail (=rowH) + rowTextPadL
     this.libHeaderRow = this.div();
@@ -911,6 +961,17 @@ export class WMPPopup {
     }
     // Click handler — uses hoverTrackIdx computed from mouse position in syncPhaser
     this.libraryList.addEventListener('click', () => {
+      // Heart click — toggle favorite with bounce animation
+      if (this.hoverHeartTrackIdx >= 0) {
+        const tracks = this.getDisplayTracks();
+        const track = tracks[this.hoverHeartTrackIdx];
+        if (track) {
+          this.heartBounceTrackId = track.spotifyTrackId;
+          this.heartBounceT = 0;
+          this.toggleFavorite(track);
+        }
+        return;
+      }
       if (this.hoverTrackIdx >= 0) this.onLibRowClick(this.hoverTrackIdx);
     });
     // Right-click handler — uses hoverTrackIdx like click does
@@ -939,11 +1000,11 @@ export class WMPPopup {
       e.stopPropagation();
       const listRect = this.libraryList.getBoundingClientRect();
       const totalH = this.getDisplayTracks().length * TUNING.WMP_LIB_ROW_H;
-      const viewH = listRect.height - TUNING.WMP_LIB_ROW_H;
+      const viewH = listRect.height - WMP_HEADER_H_CSS;
       const maxScroll = Math.max(0, totalH - viewH);
       if (maxScroll <= 0) return;
       // Compute thumb position to decide: click on thumb vs click on track
-      const trackH = listRect.height;
+      const trackH = listRect.height - WMP_HEADER_H_CSS;
       const thumbFrac = Math.min(1, viewH / totalH);
       const thumbH = Math.max(WMP_SCROLLBAR_MIN_THUMB, thumbFrac * trackH);
       const scrollFracNorm = maxScroll > 0 ? this.libScrollTarget / maxScroll : 0;
@@ -1254,7 +1315,7 @@ export class WMPPopup {
     this.bottomTextP = mkText('Ready', style);
     this.volIconP = mkText('Vol', style, 0.5, 0.5);
 
-    for (const label of ['⬜', '×']) {
+    for (const label of ['□', '✕']) {
       this.winBtnTextsP.push(mkText(label, style, 0.5, 0.5));
     }
     for (const label of ['|◄', '◄◄', '▶', '►►', '►|', '⤭']) {
@@ -1269,6 +1330,10 @@ export class WMPPopup {
     // Track info panel texts
     this.infoTitleP = mkText('', style);
     this.infoArtistP = mkText('', style);
+    this.infoHeartP = this.scene.add.text(0, 0, '\u2665', {
+      fontFamily: 'Arial, sans-serif', fontSize: '16px',
+      color: 'rgba(0,0,0,0)', stroke: '#ffffff', strokeThickness: WMP_HEART_STROKE,
+    }).setDepth(d + 1).setScrollFactor(0).setOrigin(0.5, 0.5).setVisible(false);
     this.infoSpotifyBtnP = mkText('Listen on', { ...style, color: '#ffffff' }, 0, 0.5);
     this.infoSpotifyLogoP = this.scene.add.image(0, 0, 'spotify-text-logo')
       .setDepth(d + 1).setScrollFactor(0).setOrigin(0.5, 0.5).setVisible(false);
@@ -1305,6 +1370,19 @@ export class WMPPopup {
       this.thumbImgsP.push(img);
     }
 
+    // Heart (favorite) icon pool — sits on top of thumbnails (depth d+1.1)
+    for (let i = 0; i < WMP_LIB_ROW_POOL; i++) {
+      const ht = this.scene.add.text(0, 0, '\u2665', {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '16px',
+        color: 'rgba(0,0,0,0)',
+        stroke: '#ffffff',
+        strokeThickness: WMP_HEART_STROKE,
+      }).setDepth(d + 1.1).setScrollFactor(0).setOrigin(0.5, 1).setVisible(false);
+      ht.setMask(this.dataMask);
+      this.heartTextsP.push(ht);
+    }
+
     // Sign-in popup texts (depth +3 so they render above everything)
     this.signInTitleTextP = this.scene.add.text(0, 0, WMP_TITLE, titleStyle)
       .setDepth(d + 3).setScrollFactor(0).setOrigin(0, 0.5).setVisible(false);
@@ -1332,8 +1410,8 @@ export class WMPPopup {
       this.gfx, this.gfxHeaderOv, this.gfxLift, this.titleTextP, this.statusTextP,
       this.tLeftP, this.tRightP, this.bottomTextP, this.volIconP,
       ...this.winBtnTextsP, ...this.transportTextsP, ...this.tabTextsP,
-      this.infoTitleP, this.infoArtistP, this.infoSpotifyBtnP, this.infoSpotifyLogoP,
-      ...this.colHeaderTextsP, ...this.colCellTextsP, ...this.thumbImgsP,
+      this.infoTitleP, this.infoArtistP, this.infoHeartP, this.infoSpotifyBtnP, this.infoSpotifyLogoP,
+      ...this.colHeaderTextsP, ...this.colCellTextsP, ...this.thumbImgsP, ...this.heartTextsP,
       this.sidebarHeaderTextP, ...this.sidebarTextsP, this.sidebarPlusBtnTextP,
       this.signInTitleTextP, this.signInLabelP, this.signInBtnTextP, this.signInCloseBtnTextP,
       ...this.ctxTextsP, ...this.ctxSubTextsP,
@@ -1464,7 +1542,7 @@ export class WMPPopup {
     if (track.spotifyUrl) {
       this.ctxMenuItems.push({
         label: 'Play in Spotify',
-        action: () => { window.open(track.spotifyUrl!, '_blank'); },
+        action: () => { openSpotify(track.spotifyUrl!); },
       });
     }
     this.ctxMenuItems.push({
@@ -1853,6 +1931,7 @@ export class WMPPopup {
   private getDisplayTracks(): CatalogTrack[] {
     if (this.activeTab === 0) return this.getArtistTracks();
     if (this.activeTab === 2) return this.getPlaylistTracks(this.selectedPlaylistIdx);
+    if (this.activeTab === 3) return this.favoriteTracks;
     return this.libTracks;
   }
 
@@ -2075,7 +2154,7 @@ export class WMPPopup {
     for (let i = 0; i < this.winBtns.length; i++) {
       const b = this.toGame(this.winBtns[i], or, sx, sy);
       this.drawRaised(b.x, b.y, b.w, b.h, bwThin);
-      this.winBtnTextsP[i].setPosition(b.cx, b.cy).setColor('#000000');
+      this.winBtnTextsP[i].setPosition(b.cx, b.cy).setColor('#000000').setStroke('#000000', 2 * sx);
     }
 
     // Video area (sunken black)
@@ -2098,6 +2177,19 @@ export class WMPPopup {
     const ia = this.toGame(this.infoArtistEl, or, sx, sy);
     this.infoArtistP.setPosition(ia.x, ia.cy);
     this.infoArtistP.setCrop(0, 0, infoCropW, ia.h * 2);
+    // Info heart (favorite toggle for currently playing track)
+    const ih = this.toGame(this.infoHeartBtn, or, sx, sy);
+    const infoIsFav = !!this.playingTrackId && this.favoriteTrackIds.has(this.playingTrackId);
+    const infoBouncing = this.heartBounceTrackId === this.playingTrackId && this.heartBounceT < 1;
+    const infoHeartScale = infoBouncing ? 1 + 0.4 * Math.sin(this.heartBounceT * Math.PI) : 1;
+    this.infoHeartP.setFontSize(ih.h * 0.75);
+    this.infoHeartP.setStroke('#4a0080', 3 * sy);
+    this.infoHeartP.setColor(infoIsFav ? '#4a0080' : 'rgba(0,0,0,0)');
+    this.infoHeartP.setAlpha(infoIsFav ? 1 : 0.8);
+    this.infoHeartP.setScale(infoHeartScale);
+    this.infoHeartP.setPosition(ih.cx, ih.cy);
+    this.infoHeartP.setVisible(ih.w > 0 && ih.h > 0);
+
     // Spotify button (green fill + "Listen on" text + logo)
     const ib = this.toGame(this.infoSpotifyBtn, or, sx, sy);
     if (ib.w > 0 && ib.h > 0) {
@@ -2283,8 +2375,10 @@ export class WMPPopup {
     // Smooth scroll: how many rows fit + 1 extra for partial
     const visRows = Math.ceil(dataH / rowH) + 1;
     // First visible row index and pixel offset within that row
-    const firstRow = Math.floor(this.libScrollPx / rowH);
-    const scrollFrac = this.libScrollPx - firstRow * rowH; // px into the first row
+    // libScrollPx is in CSS px, so use CSS row height for row counting, then scale offset to game px
+    const cssRowH = TUNING.WMP_LIB_ROW_H;
+    const firstRow = Math.floor(this.libScrollPx / cssRowH);
+    const scrollFrac = (this.libScrollPx - firstRow * cssRowH) * sy; // CSS remainder → game px
 
     // Header background (gray) — spans full width including scrollbar
     g.fillStyle(PH_FACE);
@@ -2431,6 +2525,7 @@ export class WMPPopup {
       // Skip rows entirely outside visible data area
       if (rowY + rowH <= dataTop || rowY >= dataBottom) {
         if (i < this.thumbImgsP.length) this.thumbImgsP[i].setVisible(false);
+        if (i < this.heartTextsP.length) this.heartTextsP[i].setVisible(false);
         for (let ci = 0; ci < numCols; ci++) {
           const cellIdx = i * numCols + ci;
           if (cellIdx < this.colCellTextsP.length) this.colCellTextsP[cellIdx].setVisible(false);
@@ -2486,6 +2581,41 @@ export class WMPPopup {
           thumbImg.setVisible(true);
         } else {
           thumbImg.setVisible(false);
+        }
+      }
+
+      // Heart (favorite) icon — bottom-left corner of thumbnail
+      const heartText = i < this.heartTextsP.length ? this.heartTextsP[i] : null;
+      if (heartText) {
+        if (trackIdx < displayTracks.length) {
+          const track = displayTracks[trackIdx];
+          const isFav = this.favoriteTrackIds.has(track.spotifyTrackId);
+          const isHeartHover = trackIdx === this.hoverHeartTrackIdx;
+          const heartSize = thumbW * WMP_HEART_FRAC;
+          heartText.setFontSize(heartSize);
+          heartText.setStroke('#ffffff', WMP_HEART_STROKE * sy);
+          if (isFav) {
+            // Favorited: purple fill, white stroke
+            heartText.setColor('#4a0080');
+            heartText.setAlpha(1);
+          } else if (isHeartHover) {
+            // Hovered (not fav): white fill, white stroke
+            heartText.setColor('#ffffff');
+            heartText.setAlpha(1);
+          } else {
+            // Default: transparent fill, white stroke only
+            heartText.setColor('rgba(0,0,0,0)');
+            heartText.setAlpha(0.7);
+          }
+          // Bounce animation
+          const isBouncing = this.heartBounceTrackId === track.spotifyTrackId && this.heartBounceT < 1;
+          const bounceScale = isBouncing ? 1 + 0.4 * Math.sin(this.heartBounceT * Math.PI) : 1;
+          const hPad = WMP_HEART_PAD * sy;
+          heartText.setScale(bounceScale);
+          heartText.setPosition(listX + hPad + heartSize * 0.5, rowY + rowH - hPad);
+          heartText.setVisible(true);
+        } else {
+          heartText.setVisible(false);
         }
       }
 
@@ -2577,8 +2707,11 @@ export class WMPPopup {
       const sbX = listX + dataContentW;
       const sbTop = dataTop;
       const sbH = dataH;
-      const totalContentH = displayTracks.length * rowH;
-      const maxScrollPx = Math.max(0, totalContentH - dataH);
+      // Use CSS-px maxScroll so thumb position matches libScrollPx (which is CSS px)
+      const listRect = this.libraryList.getBoundingClientRect();
+      const totalContentCss = displayTracks.length * TUNING.WMP_LIB_ROW_H;
+      const viewCss = listRect.height - WMP_HEADER_H_CSS;
+      const maxScrollCss = Math.max(0, totalContentCss - viewCss);
 
       // Track background
       g.fillStyle(PH_FACE);
@@ -2586,10 +2719,10 @@ export class WMPPopup {
       g.fillStyle(PH_SHADOW);
       g.fillRect(sbX, sbTop, 1, sbH);
 
-      if (maxScrollPx > 0) {
-        const thumbFrac = Math.min(1, dataH / totalContentH);
+      if (maxScrollCss > 0) {
+        const thumbFrac = Math.min(1, viewCss / totalContentCss);
         const thumbH = Math.max(WMP_SCROLLBAR_MIN_THUMB * sy, thumbFrac * sbH);
-        const scrollFracNorm = this.libScrollPx / maxScrollPx;
+        const scrollFracNorm = this.libScrollPx / maxScrollCss;
         const thumbY = sbTop + scrollFracNorm * (sbH - thumbH);
 
         // Purple thumb
@@ -2612,6 +2745,7 @@ export class WMPPopup {
       let newRow = -1;
       let newCol = -1;
       let newHoverTrack = -1;
+      let newHoverHeart = -1;
       // Hover over full row width (thumbnail + columns) for row highlight
       if (this.cursorOver && mgy >= dataTop && mgy < dataBottom && mgx >= listX && mgx < listX + dataContentW) {
         const relY = mgy - dataTop + scrollFrac;
@@ -2619,6 +2753,15 @@ export class WMPPopup {
         const trackIdx = firstRow + visRow;
         if (trackIdx >= 0 && trackIdx < displayTracks.length) {
           newHoverTrack = trackIdx;
+        }
+        // Heart hit area: bottom-left quadrant of thumbnail
+        const heartAreaW = thumbW * WMP_HEART_FRAC * 1.6; // generous hit area
+        const heartAreaH = rowH * WMP_HEART_FRAC * 1.6;
+        const rowY = dataTop + visRow * rowH - scrollFrac;
+        if (mgx >= listX && mgx < listX + heartAreaW && mgy >= rowY + rowH - heartAreaH && mgy < rowY + rowH) {
+          if (trackIdx >= 0 && trackIdx < displayTracks.length) {
+            newHoverHeart = trackIdx;
+          }
         }
         // Column detection (only in column area)
         if (mgx >= colAreaX && mgx < colAreaX + colAreaW) {
@@ -2632,6 +2775,7 @@ export class WMPPopup {
         }
       }
       this.hoverTrackIdx = newHoverTrack;
+      this.hoverHeartTrackIdx = newHoverHeart;
       if (newRow !== this.hoverCellRow || newCol !== this.hoverCellCol) {
         this.hoverCellRow = newRow;
         this.hoverCellCol = newCol;
@@ -2642,9 +2786,10 @@ export class WMPPopup {
       }
     }
 
-    // Hide unused pool cells + thumbnails beyond rendered rows
+    // Hide unused pool cells + thumbnails + hearts beyond rendered rows
     for (let i = visRows; i < WMP_LIB_ROW_POOL; i++) {
       if (i < this.thumbImgsP.length) this.thumbImgsP[i].setVisible(false);
+      if (i < this.heartTextsP.length) this.heartTextsP[i].setVisible(false);
       for (let ci = 0; ci < numCols; ci++) {
         const cellIdx = i * numCols + ci;
         if (cellIdx < this.colCellTextsP.length) {
@@ -2990,6 +3135,8 @@ export class WMPPopup {
     this.infoTitleP.setText(title);
     this.infoArtistP.setText(artist);
     const hasSpotify = !!spotifyUrl;
+    const hasTrack = !!this.playingTrackId;
+    this.infoHeartBtn.style.display = hasTrack ? '' : 'none';
     this.infoSpotifyBtn.style.display = hasSpotify ? '' : 'none';
     this.infoSpotifyBtnP.setVisible(hasSpotify);
     this.infoSpotifyLogoP.setVisible(hasSpotify);
@@ -3011,6 +3158,11 @@ export class WMPPopup {
     const now = performance.now() / 1000;
     const dt = this.lastTickTime > 0 ? Math.min(now - this.lastTickTime, 0.1) : 0;
     this.lastTickTime = now;
+
+    // Heart bounce animation (~300ms total)
+    if (this.heartBounceTrackId && this.heartBounceT < 1) {
+      this.heartBounceT = Math.min(1, this.heartBounceT + dt * 3.3);
+    }
 
     // Tab transition animation — lerp each tab's fraction toward target
     for (let i = 0; i < this.tabAnimFrac.length; i++) {
@@ -3097,7 +3249,7 @@ export class WMPPopup {
   /** Calculate how many data rows fit in the current library list height. */
   private getVisibleRowCount(): number {
     const listRect = this.libraryList.getBoundingClientRect();
-    const available = listRect.height - TUNING.WMP_LIB_ROW_H; // subtract header
+    const available = listRect.height - WMP_HEADER_H_CSS; // subtract header
     return Math.max(1, Math.floor(available / TUNING.WMP_LIB_ROW_H));
   }
 
@@ -3119,13 +3271,11 @@ export class WMPPopup {
     this.clampScrollTarget();
   }
 
-  /** Clamp scroll target to valid range. */
+  /** Clamp scroll target to valid range (all values in CSS px). */
   private clampScrollTarget(): void {
     const totalH = this.getDisplayTracks().length * TUNING.WMP_LIB_ROW_H;
     const listRect = this.libraryList.getBoundingClientRect();
-    // Header height in CSS px: font size + padding + sunken border (~2px each side)
-    const headerPx = 11 * WMP_TEXT_LIB_ROW_MULT + WMP_HEADER_PAD + 4;
-    const viewH = listRect.height - headerPx;
+    const viewH = listRect.height - WMP_HEADER_H_CSS;
     const maxScroll = Math.max(0, totalH - viewH);
     this.libScrollTarget = Math.max(0, Math.min(maxScroll, this.libScrollTarget));
   }
@@ -3174,12 +3324,11 @@ export class WMPPopup {
     const listRect = this.libraryList.getBoundingClientRect();
     if (listRect.height === 0) return;
     const totalH = this.getDisplayTracks().length * TUNING.WMP_LIB_ROW_H;
-    const viewH = listRect.height - TUNING.WMP_LIB_ROW_H;
+    const viewH = listRect.height - WMP_HEADER_H_CSS;
     const maxScroll = Math.max(0, totalH - viewH);
     if (maxScroll <= 0) return;
-    // The scrollbar track height ≈ listRect.height (data area).
-    // Map mouse delta to scroll fraction delta.
-    const trackH = listRect.height;
+    // The scrollbar track height = data area (below header).
+    const trackH = listRect.height - WMP_HEADER_H_CSS;
     const thumbFrac = Math.min(1, viewH / totalH);
     const thumbH = Math.max(WMP_SCROLLBAR_MIN_THUMB, thumbFrac * trackH);
     const scrollableTrackH = trackH - thumbH;
@@ -3295,8 +3444,8 @@ export class WMPPopup {
     this.fsAnimating = true;
 
     // Swap icon to windowed/restore
-    this.winBtns[0].textContent = '❐';
-    this.winBtnTextsP[0].setText('❐');
+    this.winBtns[0].textContent = '⧉';
+    this.winBtnTextsP[0].setText('⧉');
 
     // Save current window rect so we can restore on exit
     const s = this.win.style;
@@ -3335,8 +3484,8 @@ export class WMPPopup {
     this.fsAnimating = true;
 
     // Swap icon back to fullscreen
-    this.winBtns[0].textContent = '⬜';
-    this.winBtnTextsP[0].setText('⬜');
+    this.winBtns[0].textContent = '□';
+    this.winBtnTextsP[0].setText('□');
 
     // Animate win back to saved rect
     const s = this.win.style;
@@ -3454,6 +3603,21 @@ export class WMPPopup {
   /** Set the currently playing track by Spotify track ID (highlights in library). */
   setPlayingTrack(spotifyTrackId: string | null): void {
     this.playingTrackId = spotifyTrackId;
+  }
+
+  /** Check if a track is favorited. */
+  isFavorited(spotifyTrackId: string): boolean {
+    return this.favoriteTrackIds.has(spotifyTrackId);
+  }
+
+  /** Toggle favorite for a track by its Spotify ID (used by external UI like MusicPlayer). */
+  toggleFavoriteById(spotifyTrackId: string): void {
+    const track = this.libTracks.find(t => t.spotifyTrackId === spotifyTrackId);
+    if (track) {
+      this.heartBounceTrackId = spotifyTrackId;
+      this.heartBounceT = 0;
+      this.toggleFavorite(track);
+    }
   }
 
   /** Hide/show iframe when another popup (e.g. profile) needs to be on top. */

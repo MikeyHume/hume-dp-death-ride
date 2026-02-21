@@ -400,6 +400,24 @@ export class BootScene extends Phaser.Scene {
     shieldGlowGfx.generateTexture('shield-glow', glowSize, glowSize);
     shieldGlowGfx.destroy();
 
+    // Soft feathered glow for rocket lane targeting (tight core, fast falloff)
+    // Uses cubic falloff: brightness = (1 - r)^3 — hot center, drops quickly, long soft tail.
+    const rocketGlowGfx = this.add.graphics();
+    const rocketGlowSteps = TUNING.ROCKET_GLOW_STEPS;
+    const peak = TUNING.ROCKET_GLOW_STEP_ALPHA * rocketGlowSteps;
+    for (let i = 0; i < rocketGlowSteps; i++) {
+      const radius = 1 - i / rocketGlowSteps; // 1.0 (outermost) → ~0 (innermost)
+      // Target accumulated brightness: cubic falloff from center
+      const bHere = peak * (1 - radius) * (1 - radius) * (1 - radius);
+      const prevR = (i > 0) ? 1 - (i - 1) / rocketGlowSteps : 1.0;
+      const bPrev = peak * (1 - prevR) * (1 - prevR) * (1 - prevR);
+      const ringAlpha = Math.min(Math.max(bHere - bPrev, 0), 1);
+      rocketGlowGfx.fillStyle(0xffffff, ringAlpha);
+      rocketGlowGfx.fillCircle(glowSize / 2, glowSize / 2, radius * glowSize / 2);
+    }
+    rocketGlowGfx.generateTexture('rocket-lane-glow', glowSize, glowSize);
+    rocketGlowGfx.destroy();
+
     // Rocket projectile spritesheet — loaded in preload(), animations created here
 
     // Force-load custom fonts before transitioning (browser won't load them until something uses them)

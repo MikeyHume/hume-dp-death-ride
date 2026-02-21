@@ -53,6 +53,77 @@ This rule is mandatory for all future restarts.
 
 ---
 
+## Hume Ecosystem — Keys & Connections
+
+> **Portable section.** Copy this into any new hume app/game to instantly wire up the same Spotify playback, YouTube companion, Supabase backend, and user profile system. All apps share one Supabase project and one Spotify app — one ecosystem.
+
+### Supabase (shared backend for all hume apps)
+
+| What | Value |
+|------|-------|
+| Project ref | `wdaljqcoyhselitaxaeu` |
+| API URL | `https://wdaljqcoyhselitaxaeu.supabase.co` |
+| Anon key | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndkYWxqcWNveWhzZWxpdGF4YWV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwNjI2MTQsImV4cCI6MjA4NjYzODYxNH0.6PP4Ar9jxMxtx5M3K9WHDBK6iNrjhrsxfQ4EkQFrNS4` |
+| MCP access token | `sbp_6013b20056fff94cd12dcf68413ebf9003242bad` (in `.mcp.json`) |
+| Link command | `npx supabase link --project-ref wdaljqcoyhselitaxaeu` |
+| Tables | `music_artists`, `music_tracks`, `user_favorites`, `user_playlists`, `user_playlist_tracks`, `leaderboard` |
+| Edge functions | `sync_music_catalog` (catalog sync + YT match + popularity) |
+
+### Spotify (user-facing playback + catalog API)
+
+| What | Value |
+|------|-------|
+| Client ID | `e20013b88ebc46018a93ab9c0489edd8` |
+| Client secret | `c875811cee0d436c9df8e9b5e752984d` |
+| Redirect URI (dev) | `http://127.0.0.1:8081/callback` |
+| Auth flow | PKCE (no server needed) |
+| Scopes | `streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state` |
+| SDK | Web Playback SDK (Premium required for full playback) |
+| App mode | Dev mode — `limit=10` max on album endpoints, `/v1/albums?ids=` batch returns 403 |
+
+### YouTube (companion video + catalog matching)
+
+| What | Value |
+|------|-------|
+| API key | `AIzaSyASulXrMXNOvseby4KxiGMZvPZNyy-8bS4` |
+| API | YouTube Data API v3 |
+| Used for | Channel video list pulls, search for track matching, WMP video companion |
+
+### Edge Function Env Vars (set in Supabase dashboard → Project Settings → Edge Functions)
+
+| Var | Source | Purpose |
+|-----|--------|---------|
+| `PROJECT_URL` | Auto-set by Supabase | Supabase project URL |
+| `SERVICE_ROLE_KEY` | Auto-set by Supabase | Bypasses RLS for catalog writes |
+| `SPOTIFY_CLIENT_ID` | Same as client app | Catalog sync search/fetch |
+| `SPOTIFY_CLIENT_SECRET` | Same as client app | Client credentials token for server-side Spotify API |
+| `YOUTUBE_API_KEY` | Same as client app | Auto-match tracks to YouTube videos |
+
+### `.env.local` Template (for any new hume app)
+
+```
+VITE_SUPABASE_URL=https://wdaljqcoyhselitaxaeu.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndkYWxqcWNveWhzZWxpdGF4YWV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwNjI2MTQsImV4cCI6MjA4NjYzODYxNH0.6PP4Ar9jxMxtx5M3K9WHDBK6iNrjhrsxfQ4EkQFrNS4
+VITE_SPOTIFY_CLIENT_ID=e20013b88ebc46018a93ab9c0489edd8
+VITE_SPOTIFY_REDIRECT_URI=http://127.0.0.1:8081/callback
+SPOTIFY_CLIENT_SECRET=c875811cee0d436c9df8e9b5e752984d
+YOUTUBE_API_KEY=AIzaSyASulXrMXNOvseby4KxiGMZvPZNyy-8bS4
+```
+
+### How It All Connects
+
+```
+User launches app
+  → Spotify PKCE login (Client ID + Redirect URI)
+  → Web Playback SDK registers device ("Playing on DP Moto")
+  → PlaybackController reads music_tracks from Supabase
+  → Spotify plays track → PlaybackController loads matching YouTube video in WMP
+  → User favorites/playlists stored in Supabase (user_favorites, user_playlists)
+  → sync_music_catalog edge function keeps catalog fresh (Spotify → DB ← YouTube)
+```
+
+---
+
 ## Hume Music Catalog
 
 **Last full audit: 2026-02-20**

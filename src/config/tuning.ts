@@ -154,7 +154,23 @@ export const TUNING = {
   REFLECTION_ROCKET_PIVOT_Y: 43,    // rocket projectile: px offset from sprite bottom edge
   REFLECTION_SLASH_PIVOT_Y: 0,      // slash VFX: px offset from sprite bottom edge
 
-  // Obstacles — car (animated sprites, instant death, moves slower than road)
+  // Water reflection distortion (retro sine wave + turbulence)
+  REFLECTION_WAVE_AMPLITUDE: 0.01,   // UV-space horizontal displacement (~15px at 1920w)
+  REFLECTION_WAVE_FREQUENCY: 200.0,  // sine wave cycles across vertical span
+  REFLECTION_WAVE_FPS: 4,            // phase step rate (4 = retro chunky feel)
+  REFLECTION_TURB_OCTAVES: 1,        // turbulence layers (1=clean sine, 2-4=increasingly chaotic)
+  REFLECTION_TURB_LACUNARITY: 1.0,   // frequency multiplier per octave (2.0 = each layer 2x tighter)
+  REFLECTION_TURB_GAIN: 0.5,         // amplitude multiplier per octave (0.5 = each layer half strength)
+  REFLECTION_TURB_Y_AMOUNT: 0,      // vertical displacement as fraction of horizontal (0=none, 1=equal)
+
+  // Water reflection color tint (monochromatic hue shift)
+  REFLECTION_TINT_HUE: 220,         // target hue in degrees (220 = blue, 0 = red, 120 = green)
+  REFLECTION_TINT_SATURATION: 0.7,  // saturation of the tinted color (0 = grayscale, 1 = vivid)
+  REFLECTION_TINT_MIX: 0.5,         // blend: 0 = original colors, 1 = full monochromatic tint
+
+  // Puddle road overlay
+  PUDDLE_ROAD_OPACITY: 0.4,        // road texture opacity inside puddle holes (0 = fully transparent, 1 = solid)
+
   CAR_COUNT: 20,                    // number of car sprite sheets
   CAR_FRAME_WIDTH: 441,             // px per frame in sprite sheet
   CAR_FRAME_HEIGHT: 186,            // px per frame in sprite sheet
@@ -190,12 +206,12 @@ export const TUNING = {
   // Score — cars
   SCORE_CAR_ROCKET: 420,          // points for destroying a car with a rocket
   SCORE_CAR_INVINCIBLE: 1000,     // points for running into a car while invincible (rage)
-  SCORE_CAR_SHIELD: 240,          // points for running into a car and consuming a shield
+  SCORE_CAR_SHIELD: -240,         // penalty for running into a car and consuming a shield
 
   // Score — obstacles (barriers)
   SCORE_OBSTACLE_ROCKET: 300,     // points for blowing up an obstacle with a rocket
   SCORE_OBSTACLE_INVINCIBLE: 500, // points for running into an obstacle while invincible (rage)
-  SCORE_OBSTACLE_SHIELD: 200,     // points for running into an obstacle and consuming a shield
+  SCORE_OBSTACLE_SHIELD: -200,    // penalty for running into an obstacle and consuming a shield
 
   // Score — pickups
   SCORE_PICKUP_ROCKET: 1000,      // points for collecting a rocket pickup
@@ -215,6 +231,14 @@ export const TUNING = {
   SCORE_POPUP_FADE_OUT: 0.8,      // seconds to fade out from full to 0 opacity
   SCORE_POPUP_EASE: 'Cubic.easeOut', // easing for the upward travel (Phaser ease string)
 
+  // Player score flash
+  PLAYER_FLASH_DURATION: 1.2,       // seconds — total duration of the color flash
+  PLAYER_FLASH_CYCLE_MS: 80,        // ms per color step in the flash cycle
+
+  // Score streak
+  SCORE_STREAK_WINDOW: 2.0,         // seconds — streak window (can outlast slam animation)
+  SCORE_STREAK_BONUS: 0.25,         // multiplier increase per streak level (+25% per streak)
+
   // FX — speed lines
   SPEED_LINE_COUNT: 20,            // pre-allocated horizontal speed lines
   SPEED_LINE_THRESHOLD: 0.8,       // speed lines appear when playerSpeed > roadSpeed * this
@@ -231,6 +255,16 @@ export const TUNING = {
   // FX — screen flash
   FLASH_DEATH_DURATION: 200,       // ms — white flash on death
   FLASH_DEATH_COLOR: 0xff0000,
+
+  // FX — damage (shield absorb hit)
+  SHAKE_DAMAGE_DURATION: 350,      // ms — violent shake on shield-absorb hit
+  SHAKE_DAMAGE_INTENSITY: 0.025,   // shake intensity (stronger than death shake for impact feel)
+  FLASH_DAMAGE_DURATION: 700,      // ms — damage PostFX fade-out duration (longer to be noticeable)
+  DAMAGE_FLASH_CONTRAST: 1.4,     // contrast boost during damage (1.0 = normal)
+  DAMAGE_FLASH_BRIGHTNESS: 0.05,  // brightness lift during damage
+  DAMAGE_FLASH_WHITE_THRESHOLD: 0.6, // luminance above this stays white (shine-through)
+  DAMAGE_FLASH_GLOW_RADIUS: 0.004,   // UV-space glow sample offset
+  DAMAGE_FLASH_GLOW_STRENGTH: 0.5,   // glow bloom intensity
 
   // FX — death exposure transition
   DEATH_RAMP_DURATION: 0.5,        // seconds for exposure ramp-up (6 frames at 12fps)
@@ -399,7 +433,7 @@ export const TUNING = {
   // Rocket launcher pickups
   PICKUP_DIAMETER: 135,              // yellow circle diameter (= laneHeight)
   PICKUP_GAP: 200,                   // px gap between obstacle right edge and pickup left edge
-  PICKUP_SPAWN_CHANCE: 0.12,         // probability a CRASH obstacle spawns a pickup behind it
+  PICKUP_SPAWN_CHANCE: 0.25,         // probability a CRASH obstacle spawns a pickup behind it
   PICKUP_MAX_AMMO: 3,                // max rockets player can carry
   PICKUP_HUD_CIRCLE_RADIUS: 12,     // small yellow circle radius for HUD ammo indicator
   PICKUP_HUD_X: 30,                 // X position of first ammo circle in HUD
@@ -463,6 +497,11 @@ export const TUNING = {
   ROCKET_PROJ_SCALE: .36,          // visual scale multiplier for projectile sprite
   ROCKET_PROJ_OFFSET_X: 150,        // px horizontal offset from player fire position (positive = right)
   ROCKET_PROJ_OFFSET_Y: 0,        // px vertical offset from player fire position (positive = down)
+  ROCKET_GLOW_ALPHA: 0.45,          // lane glow opacity
+  ROCKET_GLOW_COLOR: 0xff8800,      // lane glow tint (orange)
+  ROCKET_GLOW_WIDTH_MULT: 2.0,      // glow width as multiple of lane height
+  ROCKET_GLOW_STEPS: 24,            // radial gradient quality (concentric circles)
+  ROCKET_GLOW_STEP_ALPHA: 0.08,     // peak alpha per concentric circle step (Gaussian-weighted)
   ROCKET_COOLDOWN: 0.3,             // seconds between rocket shots
   ATTACK_COOLDOWN_SLASH: .5,       // seconds after katana before any attack allowed
   ATTACK_COOLDOWN_ROCKET: 1.0,      // seconds after rocket before any attack allowed

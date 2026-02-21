@@ -10,6 +10,7 @@ export class RocketSystem {
   // Parallel arrays per rocket
   private lanes: number[] = [];
   private ages: number[] = [];
+  private glows: Phaser.GameObjects.Image[] = [];
 
   // Callbacks
   public onHit: ((x: number, y: number, type?: ObstacleType) => void) | null = null;
@@ -26,6 +27,13 @@ export class RocketSystem {
       this.pool.push(rocket);
       this.lanes.push(0);
       this.ages.push(0);
+
+      const glow = scene.add.image(0, 0, 'rocket-lane-glow');
+      glow.setBlendMode(Phaser.BlendModes.SCREEN);
+      glow.setTint(TUNING.ROCKET_GLOW_COLOR);
+      glow.setAlpha(TUNING.ROCKET_GLOW_ALPHA);
+      glow.setActive(false).setVisible(false);
+      this.glows.push(glow);
     }
   }
 
@@ -47,6 +55,13 @@ export class RocketSystem {
       this.pool.push(rocket);
       this.lanes.push(0);
       this.ages.push(0);
+
+      const glow = this.scene.add.image(0, 0, 'rocket-lane-glow');
+      glow.setBlendMode(Phaser.BlendModes.SCREEN);
+      glow.setTint(TUNING.ROCKET_GLOW_COLOR);
+      glow.setAlpha(TUNING.ROCKET_GLOW_ALPHA);
+      glow.setActive(false).setVisible(false);
+      this.glows.push(glow);
     }
 
     // Scale offset by perspective so it stays proportional at all Y positions
@@ -60,6 +75,18 @@ export class RocketSystem {
     rocket.setDepth(y + 0.15);
     this.lanes[idx] = lane;
     this.ages[idx] = 0;
+
+    // Activate lane glow (ellipse centered on lane, follows rocket X)
+    const laneH = (TUNING.ROAD_BOTTOM_Y - TUNING.ROAD_TOP_Y) / TUNING.LANE_COUNT;
+    const laneCenterY = TUNING.ROAD_TOP_Y + lane * laneH + laneH / 2;
+    const glowH = laneH * perspScale;
+    const glowW = glowH * TUNING.ROCKET_GLOW_WIDTH_MULT;
+    const glow = this.glows[idx];
+    glow.setDisplaySize(glowW, glowH);
+    glow.setPosition(rocket.x, laneCenterY);
+    glow.setDepth(rocket.y - 0.5);
+    glow.setAlpha(TUNING.ROCKET_GLOW_ALPHA);
+    glow.setActive(true).setVisible(true);
 
     // Play intro once, then chain into the loop
     rocket.play('rocket-proj-intro');
@@ -90,10 +117,14 @@ export class RocketSystem {
       const speed = TUNING.ROCKET_SPEED * (t * t);
       rocket.x += speed * dt;
 
+      // Track glow to rocket X
+      this.glows[i].setPosition(rocket.x, this.glows[i].y);
+
       // Recycle if off-screen right
       if (rocket.x > TUNING.GAME_WIDTH + 100) {
         rocket.stop();
         rocket.setActive(false).setVisible(false);
+        this.glows[i].setActive(false).setVisible(false);
         continue;
       }
 
@@ -102,6 +133,7 @@ export class RocketSystem {
       if (hitResult) {
         rocket.stop();
         rocket.setActive(false).setVisible(false);
+        this.glows[i].setActive(false).setVisible(false);
         if (this.onHit) this.onHit(hitResult.x, hitResult.y, hitResult.type);
       }
     }
@@ -111,6 +143,7 @@ export class RocketSystem {
     for (let i = 0; i < this.pool.length; i++) {
       this.pool[i].stop();
       this.pool[i].setActive(false).setVisible(false);
+      this.glows[i].setActive(false).setVisible(false);
     }
   }
 
@@ -118,6 +151,7 @@ export class RocketSystem {
     for (let i = 0; i < this.pool.length; i++) {
       this.pool[i].stop();
       this.pool[i].setActive(false).setVisible(false);
+      this.glows[i].setActive(false).setVisible(false);
     }
   }
 
@@ -128,9 +162,11 @@ export class RocketSystem {
   destroy(): void {
     for (let i = 0; i < this.pool.length; i++) {
       this.pool[i].destroy();
+      this.glows[i].destroy();
     }
     this.pool.length = 0;
     this.lanes.length = 0;
     this.ages.length = 0;
+    this.glows.length = 0;
   }
 }
