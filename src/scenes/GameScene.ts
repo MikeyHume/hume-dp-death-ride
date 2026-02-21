@@ -306,11 +306,11 @@ export class GameScene extends Phaser.Scene {
   private countdownIndex: number = 0;
   private countdownPhaseTimer: number = 0;
   private countdownPhase: 'animate' | 'delay' | 'cutscene' | 'grace' | 'done' = 'done';
-  private preStartSprite!: Phaser.GameObjects.Sprite;
+  private preStartSprite: Phaser.GameObjects.Sprite | null = null;
   private spawnGraceTimer: number = 0;
 
   // Tutorial (pre-countdown screens)
-  private introTutSprite!: Phaser.GameObjects.Sprite;
+  private introTutSprite: Phaser.GameObjects.Sprite | null = null;
   private introTutPlaying: boolean = false;
   private tutorialBlank!: Phaser.GameObjects.Image;
   private tutorialControlsSprite!: Phaser.GameObjects.Sprite;
@@ -617,7 +617,8 @@ export class GameScene extends Phaser.Scene {
         TUNING.GAME_HEIGHT
       );
     }
-    this.titleLoopSprite.play('title-loop');
+    if (!GAME_MODE.mobileMode) this.titleLoopSprite.play('title-loop');
+    // Mobile: static first frame (no animation)
 
     // --- Title screen ---
     this.titleContainer = this.add.container(0, 0).setDepth(200);
@@ -886,16 +887,18 @@ export class GameScene extends Phaser.Scene {
     ).setDepth(249).setScrollFactor(0).setVisible(false);
 
     // Pre-start cutscene (fullscreen, plays once after countdown, above game world)
-    this.preStartSprite = this.add.sprite(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00000'
-    ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT)
-     .setDepth(248).setScrollFactor(0).setVisible(false);
+    // Mobile: skip cutscene sprites entirely (textures not loaded)
+    if (!GAME_MODE.mobileMode) {
+      this.preStartSprite = this.add.sprite(
+        TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00000'
+      ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT)
+       .setDepth(248).setScrollFactor(0).setVisible(false);
 
-    // Intro-to-tutorial cutscene (fullscreen, plays once between title and tutorial)
-    this.introTutSprite = this.add.sprite(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'intro-tut-00000'
-    ).setDisplaySize(TUNING.GAME_WIDTH * TUNING.INTRO_TUT_SCALE, TUNING.GAME_HEIGHT)
-     .setDepth(248).setScrollFactor(0).setVisible(false);
+      this.introTutSprite = this.add.sprite(
+        TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'intro-tut-00000'
+      ).setDisplaySize(TUNING.GAME_WIDTH * TUNING.INTRO_TUT_SCALE, TUNING.GAME_HEIGHT)
+       .setDepth(248).setScrollFactor(0).setVisible(false);
+    }
 
     // Death exposure white overlay (above everything game-related)
     this.deathWhiteOverlay = this.add.rectangle(
@@ -2269,12 +2272,12 @@ export class GameScene extends Phaser.Scene {
       this.tweens.killTweensOf(this.blackOverlay);
       this.tweens.killTweensOf(this.cursorMain);
       if (this.cursorStroke) this.tweens.killTweensOf(this.cursorStroke);
-      this.tweens.killTweensOf(this.preStartSprite);
+      if (this.preStartSprite) this.tweens.killTweensOf(this.preStartSprite);
       this.blackOverlay.setAlpha(0).setVisible(false);
       this.cursorMain.setAlpha(0);
       if (this.cursorStroke) this.cursorStroke.setAlpha(0);
-      this.preStartSprite.stop();
-      this.preStartSprite.setVisible(false);
+      this.preStartSprite?.stop();
+      this.preStartSprite?.setVisible(false);
       this.titleLoopSprite.stop();
       this.titleLoopSprite.setVisible(false);
       this.musicPlayer.skipCountdownAudio();
@@ -2313,23 +2316,30 @@ export class GameScene extends Phaser.Scene {
           this.titleLoopSprite.stop();
           this.titleLoopSprite.setVisible(false);
           this.playerSystem.reset();
-          this.preStartSprite.setVisible(true).setAlpha(1);
-          this.preStartSprite.play('pre-start-cutscene');
-          this.preStartSprite.once('animationcomplete', () => {
-            if (this.countdownPhase !== 'done') {
-              this.countdownPhase = 'done';
-              this.startGame();
-              this.spawnGraceTimer = TUNING.COUNTDOWN_SPAWN_DELAY;
-              this.tweens.add({
-                targets: this.preStartSprite,
-                alpha: 0,
-                duration: 1000,
-                onComplete: () => {
-                  this.preStartSprite.setVisible(false);
-                },
-              });
-            }
-          });
+          if (this.preStartSprite) {
+            this.preStartSprite.setVisible(true).setAlpha(1);
+            this.preStartSprite.play('pre-start-cutscene');
+            this.preStartSprite.once('animationcomplete', () => {
+              if (this.countdownPhase !== 'done') {
+                this.countdownPhase = 'done';
+                this.startGame();
+                this.spawnGraceTimer = TUNING.COUNTDOWN_SPAWN_DELAY;
+                this.tweens.add({
+                  targets: this.preStartSprite!,
+                  alpha: 0,
+                  duration: 1000,
+                  onComplete: () => {
+                    this.preStartSprite?.setVisible(false);
+                  },
+                });
+              }
+            });
+          } else {
+            // Mobile: no cutscene — start game immediately
+            this.countdownPhase = 'done';
+            this.startGame();
+            this.spawnGraceTimer = TUNING.COUNTDOWN_SPAWN_DELAY;
+          }
           // Fade black overlay + cursor out over the delay period
           const fadeDur = TUNING.COUNTDOWN_DELAY * 1000;
           this.tweens.add({ targets: this.blackOverlay, alpha: 0, duration: fadeDur });
@@ -2394,10 +2404,10 @@ export class GameScene extends Phaser.Scene {
     this.deathWhiteOverlay.setVisible(false);
     this.countdownSprite.setVisible(false);
     this.blackOverlay.setVisible(false);
-    this.preStartSprite.setVisible(false);
-    this.preStartSprite.stop();
-    this.introTutSprite.setVisible(false);
-    this.introTutSprite.stop();
+    this.preStartSprite?.setVisible(false);
+    this.preStartSprite?.stop();
+    this.introTutSprite?.setVisible(false);
+    this.introTutSprite?.stop();
     this.introTutPlaying = false;
     this.playerSystem.setVisible(false);
     this.deathExplosion.setVisible(false);
@@ -2462,7 +2472,7 @@ export class GameScene extends Phaser.Scene {
     this.parallaxSystem.setVisible(true);
     this.skyGlowSystem.setVisible(true);
     this.titleLoopSprite.setVisible(true);
-    this.titleLoopSprite.play('title-loop');
+    if (!GAME_MODE.mobileMode) this.titleLoopSprite.play('title-loop');
     this.titleContainer.setVisible(true);
 
     // Show music player in compact mode on title
@@ -2488,39 +2498,53 @@ export class GameScene extends Phaser.Scene {
     this.titleContainer.setVisible(false);
 
     // Switch from loop to play-once start animation (fire-and-forget visual underneath)
-    this.titleLoopSprite.play('title-start');
-    this.titleLoopSprite.once('animationcomplete', () => {
-      this.titleLoopSprite.stop();
+    if (!GAME_MODE.mobileMode) {
+      this.titleLoopSprite.play('title-start');
+      this.titleLoopSprite.once('animationcomplete', () => {
+        this.titleLoopSprite.stop();
+        this.titleLoopSprite.setVisible(false);
+      });
+    } else {
+      // Mobile: no title-start animation — just hide immediately
       this.titleLoopSprite.setVisible(false);
-    });
+    }
 
     // Play intro-to-tutorial cutscene over everything
-    this.introTutPlaying = true;
-    this.introTutSprite.setVisible(true).setAlpha(1);
-    this.introTutSprite.play('intro-tut-cutscene');
-    this.introTutSprite.once('animationcomplete', () => {
-      // Cutscene finished — fade it out to reveal the tutorial underneath
-      this.tweens.add({
-        targets: this.introTutSprite,
-        alpha: 0,
-        duration: 1000,
-        onComplete: () => {
-          this.introTutSprite.setVisible(false);
-          this.introTutPlaying = false;
-        },
+    if (this.introTutSprite) {
+      this.introTutPlaying = true;
+      this.introTutSprite.setVisible(true).setAlpha(1);
+      this.introTutSprite.play('intro-tut-cutscene');
+      this.introTutSprite.once('animationcomplete', () => {
+        // Cutscene finished — fade it out to reveal the tutorial underneath
+        this.tweens.add({
+          targets: this.introTutSprite!,
+          alpha: 0,
+          duration: 1000,
+          onComplete: () => {
+            this.introTutSprite?.setVisible(false);
+            this.introTutPlaying = false;
+          },
+        });
+        // Cutscene fades out to reveal controls directly — skip black_reveal
+        this.tutorialPhase = 'controls_wait';
+        this.tutorialTimer = 0;
+        this.tutorialAdvance = false;
+        this.tutorialSkipBtn.setVisible(true).setAlpha(SKIP_BTN_PULSE_MAX).setScale(0.5).setTintFill(0xffffff).setInteractive({ useHandCursor: true });
+        (this.tutorialSkipBtn.getData('startPulse') as () => void)();
       });
-      // Cutscene fades out to reveal controls directly — skip black_reveal
+    } else {
+      // Mobile: no cutscene — go straight to tutorial controls_wait
       this.tutorialPhase = 'controls_wait';
       this.tutorialTimer = 0;
       this.tutorialAdvance = false;
       this.tutorialSkipBtn.setVisible(true).setAlpha(SKIP_BTN_PULSE_MAX).setScale(0.5).setTintFill(0xffffff).setInteractive({ useHandCursor: true });
       (this.tutorialSkipBtn.getData('startPulse') as () => void)();
-    });
+    }
 
     // Prepare tutorial layers underneath the cutscene (hidden by black overlay)
     this.tutorialBlank.setVisible(true);
     this.tutorialControlsSprite.setVisible(true).setAlpha(1);
-    this.tutorialControlsSprite.play('tutorial-controls');
+    if (!GAME_MODE.mobileMode) this.tutorialControlsSprite.play('tutorial-controls');
     this.tutorialObstaclesImage.setVisible(false).setAlpha(0);
     this.tutorialRageSprite.setVisible(false).setAlpha(0);
 
@@ -2611,7 +2635,7 @@ export class GameScene extends Phaser.Scene {
           this.tutorialObstaclesImage.setVisible(false);
           // Start rage animation and begin fading it in
           this.tutorialRageSprite.setVisible(true).setAlpha(0);
-          this.tutorialRageSprite.play('tutorial-rage');
+          if (!GAME_MODE.mobileMode) this.tutorialRageSprite.play('tutorial-rage');
           this.tutorialPhase = 'rage_in';
           this.tutorialTimer = 0;
         }

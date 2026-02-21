@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
 import { ensureAnonUser } from '../systems/AuthSystem';
+import { GAME_MODE } from '../config/gameMode';
 
-const TITLE_LOOP_FRAME_COUNT = 27;
-const TITLE_START_FRAME_COUNT = 25;
-const PRE_START_FRAME_COUNT = 46;
-const INTRO_TO_TUT_FRAME_COUNT = 27;
+export const TITLE_LOOP_FRAME_COUNT = 27;
+export const TITLE_START_FRAME_COUNT = 25;
+export const PRE_START_FRAME_COUNT = 46;
+export const INTRO_TO_TUT_FRAME_COUNT = 27;
 export class BootScene extends Phaser.Scene {
   constructor() {
     super({ key: 'BootScene' });
@@ -22,21 +23,27 @@ export class BootScene extends Phaser.Scene {
     this.load.on('progress', (value: number) => {
       (window as any).__bootOverlay?.setProgress?.(value);
     });
-    for (let i = 0; i < TITLE_LOOP_FRAME_COUNT; i++) {
-      const idx = String(i).padStart(2, '0');
-      this.load.image(`start-loop-${idx}`, `assets/start/start_loop/DP_Death_Ride_Title_Loop${idx}.jpg`);
-    }
-    for (let i = 0; i < TITLE_START_FRAME_COUNT; i++) {
-      const idx = String(i).padStart(2, '0');
-      this.load.image(`start-play-${idx}`, `assets/start/start_play/DP_Death_Ride_Title_Start${idx}.jpg`);
-    }
-    for (let i = 0; i < PRE_START_FRAME_COUNT; i++) {
-      const idx = String(i).padStart(5, '0');
-      this.load.image(`pre-start-${idx}`, `assets/cutscenes/pre_start/v02/pre_start_v02__${idx}.png`);
-    }
-    for (let i = 0; i < INTRO_TO_TUT_FRAME_COUNT; i++) {
-      const idx = String(i).padStart(5, '0');
-      this.load.image(`intro-tut-${idx}`, `assets/cutscenes/intro_to_tut/v3/intro_to_tut_v03__${idx}.jpg`);
+    // Frame sequences: ~1.3 GB VRAM total — skip on mobile, load only first frame as static
+    if (!GAME_MODE.mobileMode) {
+      for (let i = 0; i < TITLE_LOOP_FRAME_COUNT; i++) {
+        const idx = String(i).padStart(2, '0');
+        this.load.image(`start-loop-${idx}`, `assets/start/start_loop/DP_Death_Ride_Title_Loop${idx}.jpg`);
+      }
+      for (let i = 0; i < TITLE_START_FRAME_COUNT; i++) {
+        const idx = String(i).padStart(2, '0');
+        this.load.image(`start-play-${idx}`, `assets/start/start_play/DP_Death_Ride_Title_Start${idx}.jpg`);
+      }
+      for (let i = 0; i < PRE_START_FRAME_COUNT; i++) {
+        const idx = String(i).padStart(5, '0');
+        this.load.image(`pre-start-${idx}`, `assets/cutscenes/pre_start/v02/pre_start_v02__${idx}.png`);
+      }
+      for (let i = 0; i < INTRO_TO_TUT_FRAME_COUNT; i++) {
+        const idx = String(i).padStart(5, '0');
+        this.load.image(`intro-tut-${idx}`, `assets/cutscenes/intro_to_tut/v3/intro_to_tut_v03__${idx}.jpg`);
+      }
+    } else {
+      // Mobile: load only first frame of title loop for static title background
+      this.load.image('start-loop-00', 'assets/start/start_loop/DP_Death_Ride_Title_Loop00.jpg');
     }
     this.load.spritesheet('player-start', 'assets/dp_player/dp_start.png', {
       frameWidth: TUNING.START_ANIM_FRAME_WIDTH,
@@ -154,63 +161,49 @@ export class BootScene extends Phaser.Scene {
     this.load.image('tutorial-skip', 'assets/tutorial/skip_v02.png');
     this.load.image('tutorial-blank', 'assets/tutorial/how_to_play_v2.jpg');
     this.load.image('tutorial-obstacles', 'assets/tutorial/tut_v2/rules_v2.jpg');
-    for (let i = 0; i < TUNING.TUTORIAL_CONTROLS_FRAMES; i++) {
-      const idx = String(i).padStart(2, '0');
-      const fileIdx = String(i).padStart(5, '0');
-      this.load.image(`tutorial-controls-${idx}`, `assets/tutorial/controls_v4/controls_v4__${fileIdx}.jpg`);
-    }
-    for (let i = 0; i < TUNING.TUTORIAL_RAGE_FRAMES; i++) {
-      this.load.image(`tutorial-rage-${i}`, `assets/tutorial/tut_v2/rage_v2/rage_v2_${i}.jpg`);
+    if (!GAME_MODE.mobileMode) {
+      for (let i = 0; i < TUNING.TUTORIAL_CONTROLS_FRAMES; i++) {
+        const idx = String(i).padStart(2, '0');
+        const fileIdx = String(i).padStart(5, '0');
+        this.load.image(`tutorial-controls-${idx}`, `assets/tutorial/controls_v4/controls_v4__${fileIdx}.jpg`);
+      }
+      for (let i = 0; i < TUNING.TUTORIAL_RAGE_FRAMES; i++) {
+        this.load.image(`tutorial-rage-${i}`, `assets/tutorial/tut_v2/rage_v2/rage_v2_${i}.jpg`);
+      }
+    } else {
+      // Mobile: load only first frame of each for static display
+      this.load.image('tutorial-controls-00', 'assets/tutorial/controls_v4/controls_v4__00000.jpg');
+      this.load.image('tutorial-rage-0', 'assets/tutorial/tut_v2/rage_v2/rage_v2_0.jpg');
     }
   }
 
   async create() {
-    // Title loop animation (from loaded image sequence)
-    const frames: Phaser.Types.Animations.AnimationFrame[] = [];
-    for (let i = 0; i < TITLE_LOOP_FRAME_COUNT; i++) {
-      frames.push({ key: `start-loop-${String(i).padStart(2, '0')}` });
-    }
-    this.anims.create({
-      key: 'title-loop',
-      frames,
-      frameRate: 12,
-      repeat: -1,
-    });
+    // Frame sequence animations — desktop only (mobile uses static frames)
+    if (!GAME_MODE.mobileMode) {
+      const frames: Phaser.Types.Animations.AnimationFrame[] = [];
+      for (let i = 0; i < TITLE_LOOP_FRAME_COUNT; i++) {
+        frames.push({ key: `start-loop-${String(i).padStart(2, '0')}` });
+      }
+      this.anims.create({ key: 'title-loop', frames, frameRate: 12, repeat: -1 });
 
-    // Start play animation (plays once after spacebar)
-    const startFrames: Phaser.Types.Animations.AnimationFrame[] = [];
-    for (let i = 0; i < TITLE_START_FRAME_COUNT; i++) {
-      startFrames.push({ key: `start-play-${String(i).padStart(2, '0')}` });
-    }
-    this.anims.create({
-      key: 'title-start',
-      frames: startFrames,
-      frameRate: 12,
-      repeat: 0,
-    });
-    // Pre-start cutscene animation (plays once after countdown, before gameplay)
-    const preStartFrames: Phaser.Types.Animations.AnimationFrame[] = [];
-    for (let i = 0; i < PRE_START_FRAME_COUNT; i++) {
-      preStartFrames.push({ key: `pre-start-${String(i).padStart(5, '0')}` });
-    }
-    this.anims.create({
-      key: 'pre-start-cutscene',
-      frames: preStartFrames,
-      frameRate: 12,
-      repeat: 0,
-    });
+      const startFrames: Phaser.Types.Animations.AnimationFrame[] = [];
+      for (let i = 0; i < TITLE_START_FRAME_COUNT; i++) {
+        startFrames.push({ key: `start-play-${String(i).padStart(2, '0')}` });
+      }
+      this.anims.create({ key: 'title-start', frames: startFrames, frameRate: 12, repeat: 0 });
 
-    // Intro-to-tutorial cutscene (plays once between title and tutorial)
-    const introTutFrames: Phaser.Types.Animations.AnimationFrame[] = [];
-    for (let i = 0; i < INTRO_TO_TUT_FRAME_COUNT; i++) {
-      introTutFrames.push({ key: `intro-tut-${String(i).padStart(5, '0')}` });
+      const preStartFrames: Phaser.Types.Animations.AnimationFrame[] = [];
+      for (let i = 0; i < PRE_START_FRAME_COUNT; i++) {
+        preStartFrames.push({ key: `pre-start-${String(i).padStart(5, '0')}` });
+      }
+      this.anims.create({ key: 'pre-start-cutscene', frames: preStartFrames, frameRate: 12, repeat: 0 });
+
+      const introTutFrames: Phaser.Types.Animations.AnimationFrame[] = [];
+      for (let i = 0; i < INTRO_TO_TUT_FRAME_COUNT; i++) {
+        introTutFrames.push({ key: `intro-tut-${String(i).padStart(5, '0')}` });
+      }
+      this.anims.create({ key: 'intro-tut-cutscene', frames: introTutFrames, frameRate: 12, repeat: 0 });
     }
-    this.anims.create({
-      key: 'intro-tut-cutscene',
-      frames: introTutFrames,
-      frameRate: 12,
-      repeat: 0,
-    });
 
     // Player start animation (plays once before ride loop)
     this.anims.create({
@@ -319,29 +312,20 @@ export class BootScene extends Phaser.Scene {
       });
     }
 
-    // Tutorial controls animation (29 frames, 12fps, loops)
-    const tutControlsFrames: Phaser.Types.Animations.AnimationFrame[] = [];
-    for (let i = 0; i < TUNING.TUTORIAL_CONTROLS_FRAMES; i++) {
-      tutControlsFrames.push({ key: `tutorial-controls-${String(i).padStart(2, '0')}` });
-    }
-    this.anims.create({
-      key: 'tutorial-controls',
-      frames: tutControlsFrames,
-      frameRate: 12,
-      repeat: -1,
-    });
+    // Tutorial animations — desktop only (mobile shows static first frame)
+    if (!GAME_MODE.mobileMode) {
+      const tutControlsFrames: Phaser.Types.Animations.AnimationFrame[] = [];
+      for (let i = 0; i < TUNING.TUTORIAL_CONTROLS_FRAMES; i++) {
+        tutControlsFrames.push({ key: `tutorial-controls-${String(i).padStart(2, '0')}` });
+      }
+      this.anims.create({ key: 'tutorial-controls', frames: tutControlsFrames, frameRate: 12, repeat: -1 });
 
-    // Tutorial rage animation (4 frames, 12fps, loops)
-    const tutRageFrames: Phaser.Types.Animations.AnimationFrame[] = [];
-    for (let i = 0; i < TUNING.TUTORIAL_RAGE_FRAMES; i++) {
-      tutRageFrames.push({ key: `tutorial-rage-${i}` });
+      const tutRageFrames: Phaser.Types.Animations.AnimationFrame[] = [];
+      for (let i = 0; i < TUNING.TUTORIAL_RAGE_FRAMES; i++) {
+        tutRageFrames.push({ key: `tutorial-rage-${i}` });
+      }
+      this.anims.create({ key: 'tutorial-rage', frames: tutRageFrames, frameRate: 12, repeat: -1 });
     }
-    this.anims.create({
-      key: 'tutorial-rage',
-      frames: tutRageFrames,
-      frameRate: 12,
-      repeat: -1,
-    });
 
     // Explosion animation (plays once at 12fps)
     this.anims.create({
