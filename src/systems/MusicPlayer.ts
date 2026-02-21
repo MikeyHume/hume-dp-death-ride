@@ -304,7 +304,7 @@ export class MusicPlayer {
       width: `calc(${widthPct}% + ${MUSIC_BG_PAD * 2}px)`,
       display: 'none',
       alignItems: 'flex-start',
-      gap: '14px',
+      gap: GAME_MODE.mobileMode ? '40px' : '14px',
       pointerEvents: 'auto',
       transform: `scale(${MUSIC_UI_SCALE})`,
       transformOrigin: 'top right',
@@ -405,6 +405,14 @@ export class MusicPlayer {
       whiteSpace: 'nowrap',
       display: 'inline-block',
     });
+    // Mobile: tap track title to collapse UI
+    if (GAME_MODE.mobileMode) {
+      this.trackTitle.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.hovered = false;
+        this.collapseUI();
+      });
+    }
     this.trackTitle.addEventListener('mouseenter', () => {
       this.trackTitle.style.textDecoration = 'underline';
     });
@@ -1377,7 +1385,7 @@ export class MusicPlayer {
   private expandUI(): void {
     const widthPct = (TUNING.MUSIC_UI_WIDTH / TUNING.GAME_WIDTH) * 100;
     this.container.style.width = `calc(${widthPct}% + ${2 * 20}px)`;
-    this.container.style.gap = '14px';
+    this.container.style.gap = GAME_MODE.mobileMode ? '40px' : '14px';
     this.rightColumnEl.style.opacity = '1';
 
     // Fade Phaser button sprites, title text, and heart in
