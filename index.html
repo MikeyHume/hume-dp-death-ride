@@ -157,8 +157,6 @@
       font-size: var(--bios-title-size);
     }
     #boot-lines .bios-version {
-      font-family: var(--bios-title-font);
-      font-size: var(--bios-title-size);
       transform-origin: left center;
     }
 
@@ -268,28 +266,30 @@
       var hh = String(now.getHours()).padStart(2, '0');
       var mi = String(now.getMinutes()).padStart(2, '0');
       var ss = String(now.getSeconds()).padStart(2, '0');
-      var versionText = 'ver 0.00.02 . . . last saved [ ' + dd + ' : ' + mm + ' : ' + yy + ' ]  [ ' + hh + ' : ' + mi + ' : ' + ss + ' ]';
+      var versionText = 'ver 0.00.04 . . . last saved [ ' + dd + ' : ' + mm + ' : ' + yy + ' ]  [ ' + hh + ' : ' + mi + ' : ' + ss + ' ]';
       var versionEl = document.querySelector('.bios-version');
       if (versionEl) {
         versionEl.setAttribute('data-text', versionText);
         // Scale version line to match title width after fonts load
         function scaleVersion() {
-          var titleEl = document.querySelector('#boot-lines .line:first-child');
-          if (!titleEl || !versionEl) return;
+          // Scale to match the VIDEO line width (3rd line, index 2)
+          var allLines = document.querySelectorAll('#boot-lines .line');
+          var refEl = allLines[2]; // VIDEO ............... OK
+          if (!refEl || !versionEl) return;
           // Temporarily make both visible to measure
-          titleEl.style.visibility = 'visible';
-          titleEl.textContent = titleEl.getAttribute('data-text') || '';
+          refEl.style.visibility = 'visible';
+          refEl.textContent = refEl.getAttribute('data-text') || '';
           versionEl.style.visibility = 'visible';
           versionEl.textContent = versionText;
           versionEl.style.transform = 'none';
-          var titleW = titleEl.getBoundingClientRect().width;
+          var refW = refEl.getBoundingClientRect().width;
           var versionW = versionEl.getBoundingClientRect().width;
-          if (versionW > 0 && titleW > 0) {
-            versionEl.style.transform = 'scaleX(' + (titleW / versionW) + ')';
+          if (versionW > 0 && refW > 0) {
+            versionEl.style.transform = 'scaleX(' + (refW / versionW) + ')';
           }
           // Reset visibility — the typewriter will reveal them
-          titleEl.style.visibility = '';
-          titleEl.textContent = '';
+          refEl.style.visibility = '';
+          refEl.textContent = '';
           versionEl.style.visibility = '';
           versionEl.textContent = '';
         }

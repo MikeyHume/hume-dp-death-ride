@@ -296,7 +296,8 @@ export class MusicPlayer {
     this.container = document.createElement('div');
     const topPct = (TUNING.MUSIC_UI_PAD_TOP / TUNING.GAME_HEIGHT) * 100;
     const rightPct = (TUNING.MUSIC_UI_PAD_RIGHT / TUNING.GAME_WIDTH) * 100;
-    const widthPct = (TUNING.MUSIC_UI_WIDTH / TUNING.GAME_WIDTH) * 100;
+    const uiWidth = GAME_MODE.mobileMode ? TUNING.MUSIC_UI_MOBILE_WIDTH : TUNING.MUSIC_UI_WIDTH;
+    const widthPct = (uiWidth / TUNING.GAME_WIDTH) * 100;
     const MUSIC_BG_PAD = 20;  // px padding inside background
     Object.assign(this.container.style, {
       position: 'absolute',
@@ -430,8 +431,7 @@ export class MusicPlayer {
 
     // Control buttons row with source indicator
     const btnContainer = document.createElement('div');
-    const btnScale = GAME_MODE.mobileMode ? 1 : MUSIC_BTN_SCALE;
-    Object.assign(btnContainer.style, { display: 'flex', justifyContent: 'flex-end', gap: '14px', alignItems: 'center', transform: `scale(${btnScale})`, transformOrigin: 'bottom right' });
+    Object.assign(btnContainer.style, { display: 'flex', justifyContent: 'flex-end', gap: '14px', alignItems: 'center', transform: `scale(${MUSIC_BTN_SCALE})`, transformOrigin: 'bottom right' });
     const menuBtn = this.createIconButton('ui/music menu.png', () => {
       if (!this.wmpPopup?.getIsOpen()) this.onWMPOpenCb?.();
       this.wmpPopup?.toggle();
@@ -1391,7 +1391,8 @@ export class MusicPlayer {
   }
 
   private expandUI(): void {
-    const widthPct = (TUNING.MUSIC_UI_WIDTH / TUNING.GAME_WIDTH) * 100;
+    const uiWidth = GAME_MODE.mobileMode ? TUNING.MUSIC_UI_MOBILE_WIDTH : TUNING.MUSIC_UI_WIDTH;
+    const widthPct = (uiWidth / TUNING.GAME_WIDTH) * 100;
     this.container.style.width = `calc(${widthPct}% + ${2 * 20}px)`;
     this.container.style.gap = GAME_MODE.mobileMode ? '40px' : '14px';
     this.rightColumnEl.style.opacity = '1';

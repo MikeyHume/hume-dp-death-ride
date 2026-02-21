@@ -366,7 +366,8 @@ export const TUNING = {
   MUSIC_UI_PAD_TOP: 40,            // game-unit padding above the music player group
   MUSIC_UI_PAD_RIGHT: 40,          // game-unit padding from right edge to music player container
   MUSIC_UI_THUMB_SCALE: 1.3,       // thumbnail scale factor (1.0 = 96px base height)
-  MUSIC_UI_WIDTH: 740,             // fixed container width in game units
+  MUSIC_UI_WIDTH: 740,             // fixed container width in game units (desktop)
+  MUSIC_UI_MOBILE_WIDTH: 1050,     // wider container for mobile (full-size buttons + thumbnail + gap)
 
   // WMP popup window
   WMP_WIDTH_PCT: 80,                 // popup width as % of overlay
