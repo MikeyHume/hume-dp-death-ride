@@ -1,0 +1,20 @@
+[
+  {
+    "user_id": "0ed5126f-43f5-5538-8572-ba1340f844be",
+    "username": "MikeyCslt",
+    "avatar_url": "mikey.a.caro/avatar.png",
+    "spotify_connected": true,
+    "spotify_user_id": "mikey.a.caro",
+    "spotify_display_name": null,
+    "updated_at": "2026-02-15T08:53:52.725282+00:00"
+  },
+  {
+    "user_id": "2a832c2c-2f03-5d81-8269-80a91cdfb44c",
+    "username": "david",
+    "avatar_url": null,
+    "spotify_connected": true,
+    "spotify_user_id": "yf1kybcy12k62mm4sdqp2w6m1",
+    "spotify_display_name": null,
+    "updated_at": "2026-02-18T02:29:04.622772+00:00"
+  }
+]

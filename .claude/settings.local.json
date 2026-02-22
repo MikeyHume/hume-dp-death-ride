@@ -53,10 +53,24 @@
       "Bash(python:*)",
       "WebFetch(domain:cdn.discordapp.com)",
       "Bash(identify:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "WebFetch(domain:support.apple.com)",
+      "WebFetch(domain:blisk.io)",
+      "WebFetch(domain:www.ios-resolution.com)",
+      "Bash(git config:*)",
+      "Bash(bash \"c:/Users/mikey/Claude_Playground/dp_moto/scripts/copy_masters.sh\")",
+      "Bash(ffmpeg:*)",
+      "Bash(bash \"c:/Users/mikey/Claude_Playground/dp_moto/scripts/convert_to_mp3.sh\")",
+      "Bash(bash \"c:/Users/mikey/Claude_Playground/dp_moto/scripts/backup_supabase.sh\" --all)",
+      "Bash(git lfs:*)",
+      "Bash(git status:*)"
     ],
     "additionalDirectories": [
-      "c:\\Users\\mikey\\Claude_Playground\\dp_moto\\scripts\\beat_data"
+      "c:\\Users\\mikey\\Claude_Playground\\dp_moto\\scripts\\beat_data",
+      "\\tmp"
     ]
   }
 }

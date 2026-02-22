@@ -6,6 +6,9 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DP Moto">
   <title>DP Moto</title>
   <style>
     @font-face {
@@ -65,13 +68,17 @@
       --bios-font-size:         clamp(12px, 2vw, 18px);
       --bios-line-height:       1.8;
       --bios-title-font:        'Alagard', 'Courier New', monospace;
-      --bios-title-size:        clamp(16px, 3vw, 42px);
+      --bios-title-size:        clamp(13.8px, 2.59vw, 36.3px);
       --bios-scale:             2;             /* scale multiplier for entire BIOS group     */
       --bios-row-gap:           20px;           /* extra spacing between text rows             */
       --bios-text-top:          -169px;           /* Y offset of first text row within group     */
       --bios-bar-top:           180px;         /* Y offset of loading bar within group        */
       --bios-enter-top:            120px;        /* [ENTER] prompt distance below boot-content top */
       --bios-enter-scale:          .5;           /* [ENTER] prompt scale multiplier             */
+      --bios-ver-font:             'Courier New', monospace;  /* version line font (basic monospace) */
+      --bios-ver-size:             clamp(7.6px, 1.14vw, 13.3px);  /* version line font size         */
+      --bios-ver-offset-x:         0px;          /* version line horizontal nudge (+ = right)   */
+      --bios-ver-offset-y:         -40px;          /* version line vertical nudge (+ = down)      */
     }
 
     #boot-overlay {
@@ -155,9 +162,15 @@
     #boot-lines .line:first-child {
       font-family: var(--bios-title-font);
       font-size: var(--bios-title-size);
+      transform-origin: left center;
     }
     #boot-lines .bios-version {
+      font-family: var(--bios-ver-font);
+      font-size: var(--bios-ver-size);
+      font-weight: bold;
       transform-origin: left center;
+      margin-left: var(--bios-ver-offset-x);
+      margin-top: var(--bios-ver-offset-y);
     }
 
     #boot-bar-wrap {
@@ -209,6 +222,21 @@
       93%  { opacity: 1; }
       100% { opacity: 1; }
     }
+    /* iPad Preview Mode (desktop debug: press I) */
+    html.ipad-preview {
+      background: #000 !important;
+    }
+    html.ipad-preview body {
+      width: var(--ipad-preview-w, 1180px) !important;
+      height: var(--ipad-preview-h, 820px) !important;
+      position: fixed !important;
+      top: 50% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%) scale(var(--ipad-preview-scale, 1)) !important;
+      overflow: hidden !important;
+      outline: 2px solid #333;
+      border-radius: 18px;
+    }
   </style>
 </head>
 <body>
@@ -216,7 +244,7 @@
   <div id="boot-overlay">
     <div id="boot-content">
       <div id="boot-lines">
-        <div class="line" data-text="DP MOTO BIOS      v0.1"></div>
+        <div class="line" id="bios-title-line" data-text="DP MOTO BIOS      v0.1"></div>
         <div class="line bios-version" data-text=""></div>
         <div class="line" data-text="VIDEO  ............... OK"></div>
         <div class="line" data-text="AUDIO  ............. SURE"></div>
@@ -261,44 +289,60 @@
     (function() {
       var now = new Date();
       var dd = String(now.getDate()).padStart(2, '0');
-      var mm = String(now.getMonth() + 1).padStart(2, '0');
-      var yy = String(now.getFullYear()).slice(-2);
+      var monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var monthName = monthNames[now.getMonth()];
+      var yyyy = String(now.getFullYear());
       var hh = String(now.getHours()).padStart(2, '0');
       var mi = String(now.getMinutes()).padStart(2, '0');
       var ss = String(now.getSeconds()).padStart(2, '0');
-      var versionText = 'ver 0.00.04 . . . last saved [ ' + dd + ' : ' + mm + ' : ' + yy + ' ]  [ ' + hh + ' : ' + mi + ' : ' + ss + ' ]';
+      var verNum = '0.00.17';
+      var versionText = 'last saved [ ' + dd + ' : ' + monthName + ' : ' + yyyy + ' ]  [ ' + hh + ' : ' + mi + ' : ' + ss + ' ]';
+      // Set title line version dynamically
+      var titleLine = document.getElementById('bios-title-line');
+      if (titleLine) titleLine.setAttribute('data-text', 'DP MOTO BIOS      v' + verNum);
       var versionEl = document.querySelector('.bios-version');
       if (versionEl) {
         versionEl.setAttribute('data-text', versionText);
-        // Scale version line to match title width after fonts load
-        function scaleVersion() {
-          // Scale to match the VIDEO line width (3rd line, index 2)
-          var allLines = document.querySelectorAll('#boot-lines .line');
-          var refEl = allLines[2]; // VIDEO ............... OK
-          if (!refEl || !versionEl) return;
-          // Temporarily make both visible to measure
-          refEl.style.visibility = 'visible';
-          refEl.textContent = refEl.getAttribute('data-text') || '';
-          versionEl.style.visibility = 'visible';
-          versionEl.textContent = versionText;
-          versionEl.style.transform = 'none';
-          var refW = refEl.getBoundingClientRect().width;
-          var versionW = versionEl.getBoundingClientRect().width;
-          if (versionW > 0 && refW > 0) {
-            versionEl.style.transform = 'scaleX(' + (refW / versionW) + ')';
+      }
+
+      // Auto-fit: if title or version line overflows the container, shrink with scaleX
+      // Font sizes from CSS vars set the base; this just clamps overflow
+      function autoFitLines() {
+        var barEl = document.getElementById('boot-bar-wrap');
+        if (!barEl) return;
+        var targetW = barEl.getBoundingClientRect().width;
+        if (targetW <= 0) return;
+
+        var linesToFit = [titleLine, versionEl];
+        for (var fi = 0; fi < linesToFit.length; fi++) {
+          var el = linesToFit[fi];
+          if (!el) continue;
+          // Temporarily reveal + reset transform to measure natural width
+          var prevVis = el.style.visibility;
+          var prevText = el.textContent;
+          el.style.visibility = 'visible';
+          el.textContent = el.getAttribute('data-text') || '';
+          el.style.transform = '';
+          el.style.transformOrigin = 'left center';
+          var naturalW = el.getBoundingClientRect().width;
+          if (naturalW > targetW && naturalW > 0) {
+            el.style.transform = 'scaleX(' + (targetW / naturalW) + ')';
           }
-          // Reset visibility — the typewriter will reveal them
-          refEl.style.visibility = '';
-          refEl.textContent = '';
-          versionEl.style.visibility = '';
-          versionEl.textContent = '';
-        }
-        if (document.fonts && document.fonts.ready) {
-          document.fonts.ready.then(scaleVersion);
-        } else {
-          setTimeout(scaleVersion, 100);
+          // Restore — typewriter will reveal later
+          el.style.visibility = prevVis;
+          el.textContent = prevText;
         }
       }
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(autoFitLines);
+      } else {
+        setTimeout(autoFitLines, 100);
+      }
+      // Re-fit on resize so it tracks container width changes
+      window.addEventListener('resize', function() {
+        if (document.getElementById('boot-overlay').classList.contains('hidden')) return;
+        autoFitLines();
+      });
     })();
 
     var fill = document.getElementById('boot-bar-fill');
@@ -341,19 +385,24 @@
     document.addEventListener('keydown', tryPlayBootAudio);
 
     // Dismiss handler — any key or tap after [ENTER] prompt is shown
+    var guideMode = false; // debug guide mode blocks dismiss
     var dismissPointerStart = 0;
     var BIOS_TAP_THRESHOLD = 250; // ms — touch shorter than this = tap
     function handleDismissDown() {
+      if (guideMode) return;
       dismissPointerStart = Date.now();
     }
     function handleDismissUp() {
+      if (guideMode) return;
       if (!readyForEnter) return;
       if (Date.now() - dismissPointerStart < BIOS_TAP_THRESHOLD) {
         dismissOverlay();
       }
     }
-    function handleDismissKey() {
+    function handleDismissKey(e) {
+      if (guideMode) return;
       if (!readyForEnter) return;
+      if (e && e.key === 'g') return; // let G through to toggle guide
       dismissOverlay();
     }
     document.addEventListener('pointerdown', handleDismissDown);
@@ -556,6 +605,147 @@
       biosClickAudio: biosClickAudio
     };
 
+    // ---- DEBUG GUIDE MODE (G key during BIOS) ----
+    var guideSelectedIdx = 0;
+    var guideSizes = [];      // current font-size in px per line
+    var guideOrigSizes = [];  // snapshot on enter
+    var guideElL = null, guideElR = null, guideLabel = null, guideHL = null;
+
+    function enterGuideMode() {
+      guideMode = true;
+      // Reveal all lines so they're visible and measurable
+      for (var i = 0; i < lineEls.length; i++) {
+        lineEls[i].classList.add('visible');
+        if (!lineEls[i].textContent) {
+          lineEls[i].textContent = lineEls[i].getAttribute('data-text') || '';
+        }
+        // Strip any scaleX transforms — we're using font-size now
+        lineEls[i].style.transform = '';
+      }
+      // Snapshot current computed font sizes
+      guideSizes = [];
+      guideOrigSizes = [];
+      for (var i = 0; i < lineEls.length; i++) {
+        var px = parseFloat(getComputedStyle(lineEls[i]).fontSize) || 14;
+        guideSizes.push(px);
+        guideOrigSizes.push(px);
+      }
+      // Green guide lines at loading bar edges
+      var barRect = document.getElementById('boot-bar-wrap').getBoundingClientRect();
+      guideElL = document.createElement('div');
+      guideElL.style.cssText = 'position:fixed;top:0;bottom:0;width:1px;background:rgba(0,255,0,0.5);z-index:100000;pointer-events:none;';
+      guideElL.style.left = barRect.left + 'px';
+      document.body.appendChild(guideElL);
+      guideElR = document.createElement('div');
+      guideElR.style.cssText = 'position:fixed;top:0;bottom:0;width:1px;background:rgba(0,255,0,0.5);z-index:100000;pointer-events:none;';
+      guideElR.style.left = (barRect.right - 1) + 'px';
+      document.body.appendChild(guideElR);
+      // HUD label
+      guideLabel = document.createElement('div');
+      guideLabel.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);color:#0f0;font-family:monospace;font-size:13px;z-index:100001;pointer-events:none;text-align:center;background:rgba(0,0,0,0.85);padding:8px 16px;border:1px solid #0f0;white-space:pre;';
+      document.body.appendChild(guideLabel);
+      // Highlight box
+      guideHL = document.createElement('div');
+      guideHL.style.cssText = 'position:fixed;pointer-events:none;z-index:99999;border:1px solid rgba(0,255,0,0.6);background:rgba(0,255,0,0.06);';
+      document.body.appendChild(guideHL);
+      guideSelectedIdx = 0;
+      updateGuideUI();
+    }
+
+    function exitGuideMode() {
+      guideMode = false;
+      if (guideElL) { guideElL.remove(); guideElL = null; }
+      if (guideElR) { guideElR.remove(); guideElR = null; }
+      if (guideLabel) { guideLabel.remove(); guideLabel = null; }
+      if (guideHL) { guideHL.remove(); guideHL = null; }
+    }
+
+    function updateGuideUI() {
+      var el = lineEls[guideSelectedIdx];
+      var rect = el.getBoundingClientRect();
+      if (guideHL) {
+        guideHL.style.left = rect.left + 'px';
+        guideHL.style.top = rect.top + 'px';
+        guideHL.style.width = rect.width + 'px';
+        guideHL.style.height = rect.height + 'px';
+      }
+      var txt = (el.getAttribute('data-text') || '').substring(0, 35);
+      var orig = guideOrigSizes[guideSelectedIdx];
+      var cur = guideSizes[guideSelectedIdx];
+      var delta = cur - orig;
+      if (guideLabel) {
+        guideLabel.textContent =
+          'GUIDE MODE  [G]=exit  [\u2191\u2193]=select  [\u2190\u2192]=size  [Shift]=fine  [Enter]=copy\n' +
+          'Line ' + guideSelectedIdx + '/' + (lineEls.length - 1) + ': "' + txt + '"\n' +
+          'fontSize: ' + cur.toFixed(2) + 'px  (orig: ' + orig.toFixed(2) + 'px  delta: ' + (delta >= 0 ? '+' : '') + delta.toFixed(2) + 'px)';
+      }
+    }
+
+    function adjustGuideFontSize(delta) {
+      guideSizes[guideSelectedIdx] += delta;
+      if (guideSizes[guideSelectedIdx] < 1) guideSizes[guideSelectedIdx] = 1;
+      lineEls[guideSelectedIdx].style.fontSize = guideSizes[guideSelectedIdx] + 'px';
+      updateGuideUI();
+    }
+
+    function copyGuideChanges() {
+      var msg = 'BIOS GUIDE DEBUG \u2014 paste this so Claude can apply changes:\n';
+      var hasChanges = false;
+      for (var i = 0; i < lineEls.length; i++) {
+        var orig = guideOrigSizes[i];
+        var cur = guideSizes[i];
+        if (Math.abs(cur - orig) > 0.05) {
+          hasChanges = true;
+          var txt = (lineEls[i].getAttribute('data-text') || '').substring(0, 50);
+          msg += 'Line ' + i + ' ("' + txt + '"): fontSize ' + orig.toFixed(2) + 'px -> ' + cur.toFixed(2) + 'px  (ratio: ' + (cur / orig).toFixed(6) + ')\n';
+        }
+      }
+      if (!hasChanges) msg += 'No changes made.\n';
+      navigator.clipboard.writeText(msg).then(function() {
+        if (guideLabel) guideLabel.textContent += '\n\u2705 Copied to clipboard!';
+      });
+    }
+
+    // Click on lines to select them during guide mode
+    for (var gi = 0; gi < lineEls.length; gi++) {
+      (function(idx) {
+        lineEls[idx].addEventListener('click', function() {
+          if (!guideMode) return;
+          guideSelectedIdx = idx;
+          updateGuideUI();
+        });
+      })(gi);
+    }
+
+    // Guide mode keyboard handler — capture phase fires before dismiss handler
+    document.addEventListener('keydown', function(e) {
+      if (dismissed) return;
+      // G toggles guide mode (works even before [ENTER] prompt)
+      if (e.key === 'g' || e.key === 'G') {
+        if (!guideMode) { enterGuideMode(); } else { exitGuideMode(); }
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+      if (!guideMode) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      var step = e.shiftKey ? 0.1 : 0.5; // px
+      if (e.key === 'ArrowUp') {
+        guideSelectedIdx = (guideSelectedIdx - 1 + lineEls.length) % lineEls.length;
+        updateGuideUI();
+      } else if (e.key === 'ArrowDown') {
+        guideSelectedIdx = (guideSelectedIdx + 1) % lineEls.length;
+        updateGuideUI();
+      } else if (e.key === 'ArrowLeft') {
+        adjustGuideFontSize(-step);
+      } else if (e.key === 'ArrowRight') {
+        adjustGuideFontSize(step);
+      } else if (e.key === 'Enter') {
+        copyGuideChanges();
+      }
+    }, true); // capture phase
+
     // --- Custom cursor (reads from window.__cursorConfig) ---
     var cc = window.__cursorConfig;
     var bootCursor = document.createElement('div');
@@ -595,6 +785,83 @@
     document.addEventListener('mousemove', function(e) { updateBootCursor(e.clientX, e.clientY); });
     document.addEventListener('pointerdown', function(e) { updateBootCursor(e.clientX, e.clientY); });
     document.addEventListener('pointermove', function(e) { updateBootCursor(e.clientX, e.clientY); });
+  })();
+
+  // ---- iPad Preview Mode (I key — desktop only) ----
+  (function() {
+    // Skip on actual mobile/tablet devices — this is a desktop debug tool
+    var isMobile = /iPad|iPhone|iPod|Android/i.test(navigator.userAgent) ||
+      (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
+    if (isMobile) return;
+
+    // iPad 10th gen landscape viewport sizes (CSS px)
+    var MODES = {
+      webapp:  { w: 1180, h: 820, label: 'Web App (standalone)' },
+      browser: { w: 1180, h: 764, label: 'Safari Browser' }
+    };
+    var active = false;
+    var mode = 'webapp'; // 'webapp' or 'browser'
+    var label = null;
+
+    function currentMode() { return MODES[mode]; }
+
+    function calcScale() {
+      var m = currentMode();
+      document.documentElement.style.setProperty('--ipad-preview-w', m.w + 'px');
+      document.documentElement.style.setProperty('--ipad-preview-h', m.h + 'px');
+      var s = Math.min(window.innerHeight / m.h, window.innerWidth / m.w);
+      document.documentElement.style.setProperty('--ipad-preview-scale', s);
+    }
+
+    function updateLabel() {
+      if (!label) return;
+      var m = currentMode();
+      label.textContent = 'iPad 10th gen (' + m.w + '\u00d7' + m.h + ' @2x) \u2014 ' + m.label + '  [B]=toggle  [I]=exit';
+    }
+
+    function enter() {
+      active = true;
+      document.documentElement.classList.add('ipad-preview');
+      calcScale();
+      window.addEventListener('resize', calcScale);
+      // Label outside body transform (appended to html element)
+      label = document.createElement('div');
+      label.style.cssText = 'position:fixed;bottom:8px;left:50%;transform:translateX(-50%);color:#0ff;font-family:monospace;font-size:12px;z-index:200000;pointer-events:none;background:rgba(0,0,0,0.85);padding:4px 12px;border:1px solid #0ff;white-space:nowrap;';
+      updateLabel();
+      document.documentElement.appendChild(label);
+      setTimeout(function() { window.dispatchEvent(new Event('resize')); }, 50);
+    }
+
+    function exit() {
+      active = false;
+      document.documentElement.classList.remove('ipad-preview');
+      document.documentElement.style.removeProperty('--ipad-preview-scale');
+      document.documentElement.style.removeProperty('--ipad-preview-w');
+      document.documentElement.style.removeProperty('--ipad-preview-h');
+      window.removeEventListener('resize', calcScale);
+      if (label) { label.remove(); label = null; }
+      setTimeout(function() { window.dispatchEvent(new Event('resize')); }, 50);
+    }
+
+    function toggleMode() {
+      mode = (mode === 'webapp') ? 'browser' : 'webapp';
+      calcScale();
+      updateLabel();
+      setTimeout(function() { window.dispatchEvent(new Event('resize')); }, 50);
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'i' || e.key === 'I') {
+        if (active) exit(); else enter();
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      } else if ((e.key === 'b' || e.key === 'B') && active) {
+        toggleMode();
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    }, true);
   })();
   </script>
 

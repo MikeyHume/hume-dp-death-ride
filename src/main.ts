@@ -13,6 +13,13 @@ import { GAME_MODE } from './config/gameMode';
 handleCallback().then((wasCallback) => {
   if (wasCallback) return; // page is redirecting, don't start the game
 
+  // On mobile, match viewport aspect ratio to fill the entire screen (no letterboxing)
+  // This adjusts GAME_HEIGHT so all systems that reference TUNING see the correct value
+  if (GAME_MODE.mobileMode && window.innerWidth > 0 && window.innerHeight > 0) {
+    const viewportAspect = window.innerWidth / window.innerHeight;
+    (TUNING as any).GAME_HEIGHT = Math.round(TUNING.GAME_WIDTH / viewportAspect);
+  }
+
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.WEBGL,
     width: TUNING.GAME_WIDTH,
