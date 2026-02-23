@@ -1,0 +1,35 @@
+{
+  "name": "full-flow",
+  "description": "Complete game flow: BIOS dismiss → Title → Tutorial → Countdown → Playing → survive 10s",
+  "target": "https://192.168.1.69:8081/?test=1",
+  "attempts": 3,
+  "timeout": 60000,
+  "steps": [
+    { "log": "── BIOS Phase ──" },
+    { "wait": "TITLE", "timeout": 15000 },
+
+    { "log": "── Title Screen ──" },
+    { "cmd": "tap", "delay": 500 },
+
+    { "log": "── Tutorial ──" },
+    { "wait": "TUTORIAL", "timeout": 5000 },
+    { "cmd": "tap", "delay": 800 },
+    { "cmd": "tap", "delay": 800 },
+    { "cmd": "tap", "delay": 800 },
+
+    { "log": "── Countdown ──" },
+    { "waitAnyOf": ["STARTING", "PLAYING"], "timeout": 8000 },
+    { "cmd": "tap", "delay": 200 },
+
+    { "log": "── Playing ──" },
+    { "wait": "PLAYING", "timeout": 10000 },
+    { "assert": "alive", "eq": true },
+
+    { "log": "── Survival Test (10s) ──" },
+    { "cmd": { "type": "move-y", "y": 400 }, "delay": 200 },
+    { "survive": 10000 },
+
+    { "log": "── Flow Complete ──" },
+    { "assert": "alive", "eq": true }
+  ]
+}

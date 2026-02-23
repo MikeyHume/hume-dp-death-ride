@@ -246,7 +246,7 @@ export interface WMPCallbacks {
   getTrackTitle: () => string;
   getTrackArtist: () => string;
   getSpotifyUrl: () => string | null;
-  getSource: () => 'youtube' | 'spotify';
+  getSource: () => 'youtube' | 'spotify' | 'hume';
   isSpotifyLoggedIn: () => boolean;
   playTrack: (track: CatalogTrack) => void;
   prev: () => void;
@@ -1456,7 +1456,9 @@ export class WMPPopup {
 
   private updateBottomBar(): void {
     const source = this.cb.getSource();
-    if (source === 'youtube') {
+    if (source === 'hume') {
+      this.bottomBarEl.textContent = `${this.libTracks.length} tracks | hume`;
+    } else if (source === 'youtube') {
       const playable = this.libTracks.filter(t => t.youtubeVideoId).length;
       this.bottomBarEl.textContent = `${playable} tracks | YouTube`;
     } else {

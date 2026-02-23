@@ -1,0 +1,33 @@
+{
+  "name": "tutorial-stress",
+  "description": "Stress-test tutorial transitions with rapid taps and varied timing — targets iPad Safari crash near tutorial→countdown",
+  "target": "https://192.168.1.69:8081/?test=1",
+  "attempts": 5,
+  "timeout": 45000,
+  "steps": [
+    { "log": "── Wait for BIOS auto-dismiss ──" },
+    { "wait": "TITLE", "timeout": 15000 },
+
+    { "log": "── Rapid-fire into tutorial ──" },
+    { "cmd": "tap", "delay": 200 },
+    { "wait": "TUTORIAL", "timeout": 5000 },
+
+    { "log": "── Rapid taps through tutorial pages ──" },
+    { "cmd": "tap", "repeat": 6, "interval": 150, "delay": 100 },
+
+    { "log": "── Should have exited tutorial ──" },
+    { "waitAnyOf": ["STARTING", "PLAYING"], "timeout": 8000 },
+
+    { "log": "── Quick tap to skip countdown ──" },
+    { "cmd": "tap", "delay": 100 },
+    { "cmd": "speed-tap", "delay": 100 },
+
+    { "log": "── Verify PLAYING ──" },
+    { "wait": "PLAYING", "timeout": 8000 },
+    { "assert": "alive", "eq": true },
+
+    { "log": "── Brief survival check ──" },
+    { "survive": 5000 },
+    { "assert": "alive", "eq": true }
+  ]
+}

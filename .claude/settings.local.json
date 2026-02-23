@@ -66,11 +66,34 @@
       "Bash(bash \"c:/Users/mikey/Claude_Playground/dp_moto/scripts/convert_to_mp3.sh\")",
       "Bash(bash \"c:/Users/mikey/Claude_Playground/dp_moto/scripts/backup_supabase.sh\" --all)",
       "Bash(git lfs:*)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Read(//c/Users/Humie/AppData/Local/Temp/claude/c--Claude-Playground-dp-moto/tasks/**)",
+      "Bash(pkill:*)",
+      "Bash(netsh interface ip show address:*)",
+      "Bash(for ip in 192.168.1.150 192.168.1.155 192.168.1.160 192.168.1.200 192.168.1.210)",
+      "Bash(do)",
+      "Bash(ping:*)",
+      "mcp__supabase__list_projects",
+      "Bash(npx vite:*)",
+      "Bash(git rm:*)",
+      "Bash(taskkill:*)",
+      "Bash(npm init:*)",
+      "Bash(grep:*)",
+      "Read(//c/Claude_Playground//**)",
+      "Read(//c/Users/Humie/**)",
+      "Read(//c/Claude_Playground/**)",
+      "Bash(ss:*)"
     ],
     "additionalDirectories": [
       "c:\\Users\\mikey\\Claude_Playground\\dp_moto\\scripts\\beat_data",
-      "\\tmp"
+      "\\tmp",
+      "C:\\Claude_Playground\\dp_moto\\telemetry",
+      "C:\\Claude_Playground\\qa_bridge\\data",
+      "C:\\Claude_Playground\\qa_bridge"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }

@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DP Moto Skill Definition",
+  "description": "Composable reactive behaviors for autonomous play testing",
+  "type": "object",
+  "required": ["name", "tier", "type", "description"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Unique skill identifier (kebab-case)"
+    },
+    "tier": {
+      "type": "integer",
+      "enum": [0, 1, 2],
+      "description": "0=atomic action, 1=reactive behavior (uses sensors), 2=compound (chains skills)"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["action", "reactive", "compound"],
+      "description": "action=fire-and-forget, reactive=observe→decide→act loop, compound=chain of sub-skills"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of what this skill does"
+    },
+    "params": {
+      "type": "object",
+      "description": "Parameters the skill accepts (keys are param names, values are defaults)",
+      "additionalProperties": true
+    },
+    "requires": {
+      "type": "object",
+      "description": "State requirements for the skill to be applicable",
+      "properties": {
+        "states": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Game states where this skill can run (e.g. ['PLAYING'])"
+        },
+        "alive": {
+          "type": "boolean",
+          "description": "Whether player must be alive"
+        }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "description": "For tier 0: sequence of game commands to execute",
+      "items": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": { "type": "string" },
+          "delay": { "type": "number", "description": "ms to wait before this command" },
+          "repeat": { "type": "integer", "description": "Number of times to repeat" },
+          "interval": { "type": "number", "description": "ms between repeats" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "logic": {
+      "type": "string",
+      "description": "For tier 1+: name of the built-in logic function to run"
+    },
+    "subSkills": {
+      "type": "array",
+      "description": "For tier 2: ordered list of sub-skill names to chain",
+      "items": { "type": "string" }
+    }
+  }
+}

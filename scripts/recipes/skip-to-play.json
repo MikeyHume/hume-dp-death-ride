@@ -1,0 +1,29 @@
+{
+  "name": "skip-to-play",
+  "description": "Skip BIOS/tutorial/countdown via skip-to-play command, then survive 30s with movement",
+  "target": "https://192.168.1.69:8081/?test=1",
+  "attempts": 5,
+  "timeout": 90000,
+  "seed": 42,
+  "steps": [
+    { "log": "── Wait for game init ──" },
+    { "waitAnyOf": ["TITLE", "TUTORIAL", "STARTING", "PLAYING"], "timeout": 15000 },
+
+    { "log": "── Skip directly to PLAYING ──" },
+    { "cmd": "skip-to-play", "delay": 500 },
+    { "wait": "PLAYING", "timeout": 5000 },
+    { "assert": "alive", "eq": true },
+
+    { "log": "── Sustained play with lane changes ──" },
+    { "cmd": { "type": "move-y", "y": 300 }, "delay": 1000 },
+    { "cmd": { "type": "move-y", "y": 600 }, "delay": 1000 },
+    { "cmd": { "type": "move-y", "y": 200 }, "delay": 1000 },
+    { "cmd": { "type": "move-y", "y": 700 }, "delay": 1000 },
+    { "cmd": { "type": "move-y", "y": 450 }, "delay": 500 },
+
+    { "log": "── 30s survival test ──" },
+    { "survive": 30000 },
+
+    { "assert": "alive", "eq": true }
+  ]
+}

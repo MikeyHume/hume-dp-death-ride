@@ -1005,6 +1005,34 @@ export class ObstacleSystem {
     return this.pool;
   }
 
+  /** Return nearest active obstacle relative to player position (for test sensors) */
+  getNearestThreat(playerX: number, playerY: number): { dx: number; dy: number; type: string } | null {
+    let best: { dx: number; dy: number; type: string } | null = null;
+    let bestDist = Infinity;
+    for (let i = 0; i < this.pool.length; i++) {
+      const obs = this.pool[i];
+      if (!obs.active || obs.getData('dying')) continue;
+      const dx = obs.x - playerX;
+      const dy = obs.y - playerY;
+      // Only consider obstacles ahead of or near the player
+      if (dx < -100) continue;
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = { dx, dy, type: (obs.getData('type') as string) || 'unknown' };
+      }
+    }
+    return best;
+  }
+
+  getActiveCount(): number {
+    let count = 0;
+    for (let i = 0; i < this.pool.length; i++) {
+      if (this.pool[i].active) count++;
+    }
+    return count;
+  }
+
   destroy(): void {
     for (let i = 0; i < this.pool.length; i++) {
       this.pool[i].destroy();

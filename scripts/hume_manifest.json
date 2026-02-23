@@ -1,0 +1,532 @@
+[
+  {
+    "name": "ANGELBABY - AM I JUST HIGH",
+    "file": "ANGELBABY - AM I JUST HIGH.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20-%20AM%20I%20JUST%20HIGH.mp3"
+  },
+  {
+    "name": "ANGELBABY - COCA COLA",
+    "file": "ANGELBABY - COCA COLA.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20-%20COCA%20COLA.mp3"
+  },
+  {
+    "name": "ANGELBABY - DIE4YOU",
+    "file": "ANGELBABY - DIE4YOU.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20-%20DIE4YOU.mp3"
+  },
+  {
+    "name": "ANGELBABY - ENDLESS SUMMER",
+    "file": "ANGELBABY - ENDLESS SUMMER.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20-%20ENDLESS%20SUMMER.mp3"
+  },
+  {
+    "name": "ANGELBABY - FEEL GOOD INC",
+    "file": "ANGELBABY - FEEL GOOD INC.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20-%20FEEL%20GOOD%20INC.mp3"
+  },
+  {
+    "name": "ANGELBABY - GRINCH ON CHRISTMAS",
+    "file": "ANGELBABY - GRINCH ON CHRISTMAS.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20-%20GRINCH%20ON%20CHRISTMAS.mp3"
+  },
+  {
+    "name": "ANGELBABY - I BROKE TIME",
+    "file": "ANGELBABY - I BROKE TIME.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20-%20I%20BROKE%20TIME.mp3"
+  },
+  {
+    "name": "ANGELBABY - NEW LOCATION",
+    "file": "ANGELBABY - NEW LOCATION.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20-%20NEW%20LOCATION.mp3"
+  },
+  {
+    "name": "ANGELBABY - NOTHING REALLY MATTERS",
+    "file": "ANGELBABY - NOTHING REALLY MATTERS.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20-%20NOTHING%20REALLY%20MATTERS.mp3"
+  },
+  {
+    "name": "ANGELBABY - SURRENDER",
+    "file": "ANGELBABY - SURRENDER.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20-%20SURRENDER.mp3"
+  },
+  {
+    "name": "ANGELBABY - UNSEEN",
+    "file": "ANGELBABY - UNSEEN.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20-%20UNSEEN.mp3"
+  },
+  {
+    "name": "ANGELBABY - WALKING DEAD",
+    "file": "ANGELBABY - WALKING DEAD.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20-%20WALKING%20DEAD.mp3"
+  },
+  {
+    "name": "ANGELBABY - WAYSIDE",
+    "file": "ANGELBABY - WAYSIDE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20-%20WAYSIDE.mp3"
+  },
+  {
+    "name": "ANGELBABY - WHAT HAPPENS WHEN WE DIE",
+    "file": "ANGELBABY - WHAT HAPPENS WHEN WE DIE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20-%20WHAT%20HAPPENS%20WHEN%20WE%20DIE.mp3"
+  },
+  {
+    "name": "ANGELBABY x ARRESTED YOUTH - FACEDOWN",
+    "file": "ANGELBABY x ARRESTED YOUTH - FACEDOWN.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20ARRESTED%20YOUTH%20-%20FACEDOWN.mp3"
+  },
+  {
+    "name": "ANGELBABY x BLVCK SVM - LIVE FOREVER",
+    "file": "ANGELBABY x BLVCK SVM - LIVE FOREVER.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20BLVCK%20SVM%20-%20LIVE%20FOREVER.mp3"
+  },
+  {
+    "name": "ANGELBABY x BRANDYN BURNETTE - MINTED",
+    "file": "ANGELBABY x BRANDYN BURNETTE - MINTED.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20BRANDYN%20BURNETTE%20-%20MINTED.mp3"
+  },
+  {
+    "name": "ANGELBABY x BRYCE VINE - GOD MADE ME LIKE THIS",
+    "file": "ANGELBABY x BRYCE VINE - GOD MADE ME LIKE THIS.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20BRYCE%20VINE%20-%20GOD%20MADE%20ME%20LIKE%20THIS.mp3"
+  },
+  {
+    "name": "ANGELBABY x GINO THE GHOST - THE OTHERSIDE",
+    "file": "ANGELBABY x GINO THE GHOST - THE OTHERSIDE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20GINO%20THE%20GHOST%20-%20THE%20OTHERSIDE.mp3"
+  },
+  {
+    "name": "ANGELBABY x GRIMESAI - IM FINE",
+    "file": "ANGELBABY x GRIMESAI - IM FINE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20GRIMESAI%20-%20IM%20FINE.mp3"
+  },
+  {
+    "name": "ANGELBABY x JAGWAR TWIN - LIFE IS GOOD",
+    "file": "ANGELBABY x JAGWAR TWIN - LIFE IS GOOD.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20JAGWAR%20TWIN%20-%20LIFE%20IS%20GOOD.mp3"
+  },
+  {
+    "name": "ANGELBABY x JFARRARI - WAKE UP FUCKED UP",
+    "file": "ANGELBABY x JFARRARI - WAKE UP FUCKED UP.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20JFARRARI%20-%20WAKE%20UP%20FUCKED%20UP.mp3"
+  },
+  {
+    "name": "ANGELBABY x MADALEN DUKE - CUT THE LIGHTS",
+    "file": "ANGELBABY x MADALEN DUKE - CUT THE LIGHTS.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20MADALEN%20DUKE%20-%20CUT%20THE%20LIGHTS.mp3"
+  },
+  {
+    "name": "ANGELBABY x PORCHLIGHT - SO DUMB",
+    "file": "ANGELBABY x PORCHLIGHT - SO DUMB.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20PORCHLIGHT%20-%20SO%20DUMB.mp3"
+  },
+  {
+    "name": "ANGELBABY x PRETTYMUCH - BEFORE YOU",
+    "file": "ANGELBABY x PRETTYMUCH - BEFORE YOU.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20PRETTYMUCH%20-%20BEFORE%20YOU.mp3"
+  },
+  {
+    "name": "ANGELBABY x PRETTYMUCH x NIGHT TALES - BEFORE YOU REMIX",
+    "file": "ANGELBABY x PRETTYMUCH x NIGHT TALES - BEFORE YOU REMIX.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20PRETTYMUCH%20x%20NIGHT%20TALES%20-%20BEFORE%20YOU%20REMIX.mp3"
+  },
+  {
+    "name": "ANGELBABY x PRETTYMUCH x OLIVER NELSON - BEFORE YOU REMIX",
+    "file": "ANGELBABY x PRETTYMUCH x OLIVER NELSON - BEFORE YOU REMIX.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20PRETTYMUCH%20x%20OLIVER%20NELSON%20-%20BEFORE%20YOU%20REMIX.mp3"
+  },
+  {
+    "name": "ANGELBABY x RUDYWADE - DARK MODE",
+    "file": "ANGELBABY x RUDYWADE - DARK MODE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20RUDYWADE%20-%20DARK%20MODE.mp3"
+  },
+  {
+    "name": "ANGELBABY x STOLAR - VIEW FROM THE MOON",
+    "file": "ANGELBABY x STOLAR - VIEW FROM THE MOON.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20STOLAR%20-%20VIEW%20FROM%20THE%20MOON.mp3"
+  },
+  {
+    "name": "ANGELBABY x TK - BLACK HOLE",
+    "file": "ANGELBABY x TK - BLACK HOLE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20TK%20-%20BLACK%20HOLE.mp3"
+  },
+  {
+    "name": "ANGELBABY x VOILA - IMPOSTER",
+    "file": "ANGELBABY x VOILA - IMPOSTER.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ANGELBABY%20x%20VOILA%20-%20IMPOSTER.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - 44",
+    "file": "DEATHPIXIE - 44.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%2044.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - ATE",
+    "file": "DEATHPIXIE - ATE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20ATE.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - BLOOD BEAT",
+    "file": "DEATHPIXIE - BLOOD BEAT.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20BLOOD%20BEAT.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - DEATH MACHINE",
+    "file": "DEATHPIXIE - DEATH MACHINE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20DEATH%20MACHINE.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - DEATHPIXIES PROLOGUE",
+    "file": "DEATHPIXIE - DEATHPIXIES PROLOGUE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20DEATHPIXIES%20PROLOGUE.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - DOMINATRIX",
+    "file": "DEATHPIXIE - DOMINATRIX.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20DOMINATRIX.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - GAS ON FIRE",
+    "file": "DEATHPIXIE - GAS ON FIRE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20GAS%20ON%20FIRE.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - HELL GIRL",
+    "file": "DEATHPIXIE - HELL GIRL.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20HELL%20GIRL.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - HENTAI",
+    "file": "DEATHPIXIE - HENTAI.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20HENTAI.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - KAWASAKI",
+    "file": "DEATHPIXIE - KAWASAKI.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20KAWASAKI.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - KILLAMONSTA",
+    "file": "DEATHPIXIE - KILLAMONSTA.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20KILLAMONSTA.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - LIL BITCH",
+    "file": "DEATHPIXIE - LIL BITCH.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20LIL%20BITCH.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - MAIN CHARACTER ENERGY",
+    "file": "DEATHPIXIE - MAIN CHARACTER ENERGY.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20MAIN%20CHARACTER%20ENERGY.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - MATAR 9 KTB",
+    "file": "DEATHPIXIE - MATAR 9 KTB.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20MATAR%209%20KTB.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - MERRY DEATHMAS",
+    "file": "DEATHPIXIE - MERRY DEATHMAS.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20MERRY%20DEATHMAS.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - MONSTER IN MY BED",
+    "file": "DEATHPIXIE - MONSTER IN MY BED.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20MONSTER%20IN%20MY%20BED.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - MORE COWBELL",
+    "file": "DEATHPIXIE - MORE COWBELL.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20MORE%20COWBELL.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - NOSFERATU",
+    "file": "DEATHPIXIE - NOSFERATU.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20NOSFERATU.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - OKINAWA",
+    "file": "DEATHPIXIE - OKINAWA.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20OKINAWA.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - RED MALIBU",
+    "file": "DEATHPIXIE - RED MALIBU.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20RED%20MALIBU.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - SAFE WORD",
+    "file": "DEATHPIXIE - SAFE WORD.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20SAFE%20WORD.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - SLIP",
+    "file": "DEATHPIXIE - SLIP.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20SLIP.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - TOKYO BLOOD",
+    "file": "DEATHPIXIE - TOKYO BLOOD.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20TOKYO%20BLOOD.mp3"
+  },
+  {
+    "name": "DEATHPIXIE - WALKING NIGHTMARE",
+    "file": "DEATHPIXIE - WALKING NIGHTMARE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20-%20WALKING%20NIGHTMARE.mp3"
+  },
+  {
+    "name": "DEATHPIXIE x CISZAK - FEED MY APPETITE",
+    "file": "DEATHPIXIE x CISZAK - FEED MY APPETITE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20x%20CISZAK%20-%20FEED%20MY%20APPETITE.mp3"
+  },
+  {
+    "name": "DEATHPIXIE x CYPARISS - NIGHTMARECORE",
+    "file": "DEATHPIXIE x CYPARISS - NIGHTMARECORE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20x%20CYPARISS%20-%20NIGHTMARECORE.mp3"
+  },
+  {
+    "name": "DEATHPIXIE x DEADMAU5 - RAISE YOUR WEAPON",
+    "file": "DEATHPIXIE x DEADMAU5 - RAISE YOUR WEAPON.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20x%20DEADMAU5%20-%20RAISE%20YOUR%20WEAPON.mp3"
+  },
+  {
+    "name": "DEATHPIXIE x LEXY PANTERRA - SAFE WORD DEATHMIX",
+    "file": "DEATHPIXIE x LEXY PANTERRA - SAFE WORD DEATHMIX.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20x%20LEXY%20PANTERRA%20-%20SAFE%20WORD%20DEATHMIX.mp3"
+  },
+  {
+    "name": "DEATHPIXIE x MERYLL - DIE AND LIVE AGAIN",
+    "file": "DEATHPIXIE x MERYLL - DIE AND LIVE AGAIN.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20x%20MERYLL%20-%20DIE%20AND%20LIVE%20AGAIN.mp3"
+  },
+  {
+    "name": "DEATHPIXIE x ODDKIDOUT - HELL GIRL II",
+    "file": "DEATHPIXIE x ODDKIDOUT - HELL GIRL II.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20x%20ODDKIDOUT%20-%20HELL%20GIRL%20II.mp3"
+  },
+  {
+    "name": "DEATHPIXIE x PRO6LEMA - GRIM REAPER",
+    "file": "DEATHPIXIE x PRO6LEMA - GRIM REAPER.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20x%20PRO6LEMA%20-%20GRIM%20REAPER.mp3"
+  },
+  {
+    "name": "DEATHPIXIE x RAIZHELL - NEW BLOOD",
+    "file": "DEATHPIXIE x RAIZHELL - NEW BLOOD.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20x%20RAIZHELL%20-%20NEW%20BLOOD.mp3"
+  },
+  {
+    "name": "DEATHPIXIE x REZADEAD - BRAIN ROT",
+    "file": "DEATHPIXIE x REZADEAD - BRAIN ROT.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20x%20REZADEAD%20-%20BRAIN%20ROT.mp3"
+  },
+  {
+    "name": "DEATHPIXIE x REZADEAD - DIGITAL KILL SHIT",
+    "file": "DEATHPIXIE x REZADEAD - DIGITAL KILL SHIT.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20x%20REZADEAD%20-%20DIGITAL%20KILL%20SHIT.mp3"
+  },
+  {
+    "name": "DEATHPIXIE x SKYLAR GREY - LET YOU LIE",
+    "file": "DEATHPIXIE x SKYLAR GREY - LET YOU LIE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20x%20SKYLAR%20GREY%20-%20LET%20YOU%20LIE.mp3"
+  },
+  {
+    "name": "DEATHPIXIE x T78 - WELCOME TO THE FREAKSHOW",
+    "file": "DEATHPIXIE x T78 - WELCOME TO THE FREAKSHOW.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20x%20T78%20-%20WELCOME%20TO%20THE%20FREAKSHOW.mp3"
+  },
+  {
+    "name": "DEATHPIXIE x WHIPPED CREAM - PHONK TECHNO",
+    "file": "DEATHPIXIE x WHIPPED CREAM - PHONK TECHNO.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/DEATHPIXIE%20x%20WHIPPED%20CREAM%20-%20PHONK%20TECHNO.mp3"
+  },
+  {
+    "name": "ISOLATE.EXE x DEATHPIXIE - BLIND",
+    "file": "ISOLATE.EXE x DEATHPIXIE - BLIND.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/ISOLATE.EXE%20x%20DEATHPIXIE%20-%20BLIND.mp3"
+  },
+  {
+    "name": "KAI.WAV - BETTER WHEN ITS YOU",
+    "file": "KAI.WAV - BETTER WHEN ITS YOU.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/KAI.WAV%20-%20BETTER%20WHEN%20ITS%20YOU.mp3"
+  },
+  {
+    "name": "KAI.WAV - FUNKTION",
+    "file": "KAI.WAV - FUNKTION.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/KAI.WAV%20-%20FUNKTION.mp3"
+  },
+  {
+    "name": "KAI.WAV - LOVE IN THE MUSIC",
+    "file": "KAI.WAV - LOVE IN THE MUSIC.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/KAI.WAV%20-%20LOVE%20IN%20THE%20MUSIC.mp3"
+  },
+  {
+    "name": "KAI.WAV - SET ME FREE",
+    "file": "KAI.WAV - SET ME FREE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/KAI.WAV%20-%20SET%20ME%20FREE.mp3"
+  },
+  {
+    "name": "KAI.WAV - THATS A VIBE",
+    "file": "KAI.WAV - THATS A VIBE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/KAI.WAV%20-%20THATS%20A%20VIBE.mp3"
+  },
+  {
+    "name": "KAI.WAV - TOP FLOOR",
+    "file": "KAI.WAV - TOP FLOOR.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/KAI.WAV%20-%20TOP%20FLOOR.mp3"
+  },
+  {
+    "name": "KAI.WAV - UNO DOS TRES",
+    "file": "KAI.WAV - UNO DOS TRES.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/KAI.WAV%20-%20UNO%20DOS%20TRES.mp3"
+  },
+  {
+    "name": "KAI.WAV x ALOE BLACC - I NEED A DOLLAR",
+    "file": "KAI.WAV x ALOE BLACC - I NEED A DOLLAR.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/KAI.WAV%20x%20ALOE%20BLACC%20-%20I%20NEED%20A%20DOLLAR.mp3"
+  },
+  {
+    "name": "KAI.WAV x ALOE BLACC x TIAGO RIBEIRO - I NEED A DOLLAR REMIX",
+    "file": "KAI.WAV x ALOE BLACC x TIAGO RIBEIRO - I NEED A DOLLAR REMIX.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/KAI.WAV%20x%20ALOE%20BLACC%20x%20TIAGO%20RIBEIRO%20-%20I%20NEED%20A%20DOLLAR%20REMIX.mp3"
+  },
+  {
+    "name": "LOFI GMA - BONSAI",
+    "file": "LOFI GMA - BONSAI.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/LOFI%20GMA%20-%20BONSAI.mp3"
+  },
+  {
+    "name": "LOFI GMA - CHERRY TREE",
+    "file": "LOFI GMA - CHERRY TREE.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/LOFI%20GMA%20-%20CHERRY%20TREE.mp3"
+  },
+  {
+    "name": "LOFI GMA - GARDEN DREAMS",
+    "file": "LOFI GMA - GARDEN DREAMS.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/LOFI%20GMA%20-%20GARDEN%20DREAMS.mp3"
+  },
+  {
+    "name": "LOFI GMA - GENTLE NIGHT",
+    "file": "LOFI GMA - GENTLE NIGHT.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/LOFI%20GMA%20-%20GENTLE%20NIGHT.mp3"
+  },
+  {
+    "name": "LOFI GMA - GREEN TEA",
+    "file": "LOFI GMA - GREEN TEA.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/LOFI%20GMA%20-%20GREEN%20TEA.mp3"
+  },
+  {
+    "name": "LOFI GMA - QUIET HOUR",
+    "file": "LOFI GMA - QUIET HOUR.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/LOFI%20GMA%20-%20QUIET%20HOUR.mp3"
+  },
+  {
+    "name": "LOFI GMA - RAINY WINDOW",
+    "file": "LOFI GMA - RAINY WINDOW.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/LOFI%20GMA%20-%20RAINY%20WINDOW.mp3"
+  },
+  {
+    "name": "LOFI GMA - RAMEN",
+    "file": "LOFI GMA - RAMEN.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/LOFI%20GMA%20-%20RAMEN.mp3"
+  },
+  {
+    "name": "LOFI GMA - SHUMAI",
+    "file": "LOFI GMA - SHUMAI.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/LOFI%20GMA%20-%20SHUMAI.mp3"
+  },
+  {
+    "name": "LOFI GMA - SOUP DUMPLINGS",
+    "file": "LOFI GMA - SOUP DUMPLINGS.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/LOFI%20GMA%20-%20SOUP%20DUMPLINGS.mp3"
+  },
+  {
+    "name": "LOFI GMA - TEA LEAVES",
+    "file": "LOFI GMA - TEA LEAVES.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/LOFI%20GMA%20-%20TEA%20LEAVES.mp3"
+  },
+  {
+    "name": "PRO6LEMA - BICUDA PHONK",
+    "file": "PRO6LEMA - BICUDA PHONK.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20-%20BICUDA%20PHONK.mp3"
+  },
+  {
+    "name": "PRO6LEMA - BREJA BREJA",
+    "file": "PRO6LEMA - BREJA BREJA.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20-%20BREJA%20BREJA.mp3"
+  },
+  {
+    "name": "PRO6LEMA - CORTURA",
+    "file": "PRO6LEMA - CORTURA.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20-%20CORTURA.mp3"
+  },
+  {
+    "name": "PRO6LEMA - FEITICO 99",
+    "file": "PRO6LEMA - FEITICO 99.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20-%20FEITICO%2099.mp3"
+  },
+  {
+    "name": "PRO6LEMA - HIPNOTICA",
+    "file": "PRO6LEMA - HIPNOTICA.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20-%20HIPNOTICA.mp3"
+  },
+  {
+    "name": "PRO6LEMA - HOJE EM DIA E DIFICIL ENCONTRAR",
+    "file": "PRO6LEMA - HOJE EM DIA E DIFICIL ENCONTRAR.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20-%20HOJE%20EM%20DIA%20E%20DIFICIL%20ENCONTRAR.mp3"
+  },
+  {
+    "name": "PRO6LEMA - ITALY",
+    "file": "PRO6LEMA - ITALY.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20-%20ITALY.mp3"
+  },
+  {
+    "name": "PRO6LEMA - MINION BRAIN ROT",
+    "file": "PRO6LEMA - MINION BRAIN ROT.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20-%20MINION%20BRAIN%20ROT.mp3"
+  },
+  {
+    "name": "PRO6LEMA - QUE PERIGX",
+    "file": "PRO6LEMA - QUE PERIGX.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20-%20QUE%20PERIGX.mp3"
+  },
+  {
+    "name": "PRO6LEMA - QUE YONA",
+    "file": "PRO6LEMA - QUE YONA.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20-%20QUE%20YONA.mp3"
+  },
+  {
+    "name": "PRO6LEMA - TRANCEMELODIA",
+    "file": "PRO6LEMA - TRANCEMELODIA.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20-%20TRANCEMELODIA.mp3"
+  },
+  {
+    "name": "PRO6LEMA - VIDA",
+    "file": "PRO6LEMA - VIDA.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20-%20VIDA.mp3"
+  },
+  {
+    "name": "PRO6LEMA x CHILX x RUBIKDICE - GENESIS",
+    "file": "PRO6LEMA x CHILX x RUBIKDICE - GENESIS.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20x%20CHILX%20x%20RUBIKDICE%20-%20GENESIS.mp3"
+  },
+  {
+    "name": "PRO6LEMA x DEATHPIXIE - MENINA",
+    "file": "PRO6LEMA x DEATHPIXIE - MENINA.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20x%20DEATHPIXIE%20-%20MENINA.mp3"
+  },
+  {
+    "name": "PRO6LEMA x HXDES - ALL EYES ON RANI",
+    "file": "PRO6LEMA x HXDES - ALL EYES ON RANI.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20x%20HXDES%20-%20ALL%20EYES%20ON%20RANI.mp3"
+  },
+  {
+    "name": "PRO6LEMA x NASHI x ANKXRA - VAPO NO SETOR",
+    "file": "PRO6LEMA x NASHI x ANKXRA - VAPO NO SETOR.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/PRO6LEMA%20x%20NASHI%20x%20ANKXRA%20-%20VAPO%20NO%20SETOR.mp3"
+  },
+  {
+    "name": "TWENTY16 - STRANGER",
+    "file": "TWENTY16 - STRANGER.mp3",
+    "url": "https://wdaljqcoyhselitaxaeu.supabase.co/storage/v1/object/public/music/Rythem_Songs/TWENTY16%20-%20STRANGER.mp3"
+  }
+]

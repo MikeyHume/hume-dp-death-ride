@@ -5,7 +5,9 @@ import { SpotifyPlayerSystem } from './SpotifyPlayerSystem';
 import { WMPPopup } from '../ui/WMPPopup';
 import { PlaybackController } from './PlaybackController';
 import { fetchAllTracks, type CatalogTrack } from './MusicCatalogService';
+import { HumePlayerSystem } from './HumePlayerSystem';
 import { GAME_MODE } from '../config/gameMode';
+import { TEST_MODE } from '../util/testMode';
 
 const MUSIC_UI_SCALE = 1;             // uniform scale from upper-right corner
 const MUSIC_BTN_SCALE = 1.5;           // scale multiplier for control buttons group (anchor: bottom-right)
@@ -21,7 +23,7 @@ const YT_AVOID_FIRST_IDS = ['GZwNZU7AviA', 'EkPDn519DFs'];
 const YT_THUMB_WIDTH = 171;
 const YT_THUMB_HEIGHT = 96;
 
-export type MusicSource = 'youtube' | 'spotify';
+export type MusicSource = 'youtube' | 'spotify' | 'hume';
 
 export class MusicPlayer {
   private scene: Phaser.Scene;
@@ -91,6 +93,7 @@ export class MusicPlayer {
   private ytAvoidCountdownTrack: boolean = false;
   private wmpPopup: WMPPopup | null = null;
   private playbackCtrl: PlaybackController;
+  private humePlayer: HumePlayerSystem;
   private onWMPOpenCb: (() => void) | null = null;
   private onWMPCloseCb: (() => void) | null = null;
 
@@ -98,6 +101,7 @@ export class MusicPlayer {
     this.scene = scene;
     this.playbackCtrl = new PlaybackController();
     this.playbackCtrl.warmup(); // non-blocking catalog preload
+    this.humePlayer = new HumePlayerSystem();
     this.createUI();
 
     // WMP popup (must come after createUI so canvasOverlay exists)
@@ -120,9 +124,29 @@ export class MusicPlayer {
       onWMPClose: () => this.onWMPClosed(),
     });
 
-    // Load YouTube API early so it's ready for title track
-    this.loadYouTubeAPI();
-    this.tryInitSpotify();
+    // Wire hume track changes
+    this.humePlayer.onTrackChanged((track) => {
+      if (this.source !== 'hume') return;
+      this.currentTrackName = track.title;
+      this.currentArtist = track.artist;
+      this.currentSpotifyUrl = null;
+      this.currentTrackId = null;
+      this.currentAlbumImageUrl = null;
+      const display = `${track.title} - ${track.artist}`;
+      this.trackTitle.textContent = display;
+      this.titleClip.style.display = 'block';
+      this.startTitleScroll();
+      if (this.compact && !this.hovered) {
+        this.collapseUI(false);
+      }
+    });
+
+    // In test mode, skip all music loading to prevent async blocking
+    if (!TEST_MODE.active || !TEST_MODE.skipMusic) {
+      // Load YouTube API early so it's ready for title track
+      this.loadYouTubeAPI();
+      this.tryInitSpotify();
+    }
 
     // Handle Spotify login/disconnect
     scene.events.on('spotify-auth-changed', () => this.onSpotifyAuthChanged());
@@ -130,6 +154,7 @@ export class MusicPlayer {
 
   /** Start the in-game title music. Call from a user gesture handler. */
   startTitleMusic(): void {
+    if (TEST_MODE.active && TEST_MODE.skipMusic) return;
     if (this.titleTrackPlaying || this.playlistStarted) return;
 
     this.trackTitle.textContent = `${TUNING.INTRO_TRACK_TITLE} - ${TUNING.INTRO_TRACK_ARTIST}`;
@@ -784,6 +809,7 @@ export class MusicPlayer {
 
   /** Stop title music and start playlist. Call from a user gesture handler. */
   switchToPlaylist(): void {
+    if (TEST_MODE.active && TEST_MODE.skipMusic) return;
     if (this.playlistStarted) return;
     this.playlistStarted = true;
 
@@ -933,7 +959,11 @@ export class MusicPlayer {
     this.countdownMusic.destroy();
     this.countdownMusic = null;
 
-    if (this.source === 'spotify') {
+    if (this.source === 'hume') {
+      // Hume doesn't use countdown — just start
+      this.humePlayer.startPlaylist();
+      this.playlistStarted = true;
+    } else if (this.source === 'spotify') {
       // Clear the crossfade timer and start Spotify immediately
       if (this.crossfadeTimer) {
         window.clearTimeout(this.crossfadeTimer);
@@ -945,6 +975,58 @@ export class MusicPlayer {
         this.startYTPlaylist();
       } else {
         this.pendingPlay = true;
+      }
+    }
+  }
+
+  /**
+   * Switch to hume audio source. Stops Spotify + YouTube completely.
+   * Called by GameScene when entering rhythm mode or when beat sync is needed.
+   */
+  switchToHume(): void {
+    // Stop Spotify
+    if (this.spotifyPlayer) {
+      this.spotifyPlayer.pause();
+    }
+    // Stop YouTube
+    if (this.ytPlayer) {
+      try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); } catch {}
+    }
+
+    this.source = 'hume';
+    this.applyUserVolume();
+
+    // Start hume playlist if not already playing
+    if (!this.humePlayer.isPaused() || this.humePlayer.getCurrentTrack()) {
+      this.humePlayer.resume();
+    } else {
+      this.humePlayer.startPlaylist();
+    }
+    this.playlistStarted = true;
+  }
+
+  /**
+   * Switch from hume back to the previous source (Spotify if available, else YouTube).
+   * Called by GameScene when exiting rhythm mode.
+   */
+  switchFromHume(): void {
+    // Stop hume audio
+    this.humePlayer.pause();
+
+    // Restore to best available source
+    if (this.spotifyPlayer?.isReady()) {
+      this.source = 'spotify';
+      this.startSpotifyPlaylist();
+      // Re-enable YouTube as muted visual companion
+      if (this.ytPlayer) {
+        try { this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+      }
+    } else {
+      this.source = 'youtube';
+      if (this.ytReady) {
+        this.ytPlayer.unMute();
+        this.applyUserVolume();
+        this.ytPlayer.playVideo();
       }
     }
   }
@@ -1075,7 +1157,9 @@ export class MusicPlayer {
       }
       return;
     }
-    if (this.source === 'spotify' && this.spotifyPlayer) {
+    if (this.source === 'hume') {
+      this.humePlayer.prev();
+    } else if (this.source === 'spotify' && this.spotifyPlayer) {
       this.spotifyPlayer.prev();
     } else if (this.ytPlayer && (this.playlistStarted || this.titlePlaylistLoaded)) {
       this.ytPlayer.previousVideo();
@@ -1104,7 +1188,9 @@ export class MusicPlayer {
     if (now - this.lastSkipTime < 800) return;
     this.lastSkipTime = now;
 
-    if (this.source === 'spotify' && this.spotifyPlayer) {
+    if (this.source === 'hume') {
+      this.humePlayer.next();
+    } else if (this.source === 'spotify' && this.spotifyPlayer) {
       this.spotifyPlayer.next();
     } else if (this.ytPlayer && (this.playlistStarted || this.titlePlaylistLoaded)) {
       this.ytPlayer.nextVideo();
@@ -1113,7 +1199,9 @@ export class MusicPlayer {
   }
 
   private togglePlayPause(): void {
-    if (this.source === 'spotify' && this.spotifyPlayer) {
+    if (this.source === 'hume') {
+      this.humePlayer.togglePlayPause();
+    } else if (this.source === 'spotify' && this.spotifyPlayer) {
       this.spotifyPlayer.togglePlayPause();
     } else if (this.ytPlayer) {
       try {
@@ -1125,7 +1213,9 @@ export class MusicPlayer {
   }
 
   private toggleShuffle(): void {
-    if (this.source === 'spotify' && this.spotifyPlayer) {
+    if (this.source === 'hume') {
+      this.humePlayer.next(); // hume is always shuffled
+    } else if (this.source === 'spotify' && this.spotifyPlayer) {
       // Spotify shuffle is managed at playlist level — just skip to next
       this.next();
     } else if (this.ytPlayer) {
@@ -1140,7 +1230,9 @@ export class MusicPlayer {
   setVolumeBoost(multiplier: number): void {
     const playing = this.titleTrackPlaying || this.playlistStarted || this.titlePlaylistLoaded;
     const scaled = Math.min(1, this.userVolume * TUNING.MUSIC_VOL_MASTER * multiplier);
-    if (this.source === 'spotify' && this.spotifyPlayer) {
+    if (this.source === 'hume') {
+      this.humePlayer.setVolumeBoost(scaled);
+    } else if (this.source === 'spotify' && this.spotifyPlayer) {
       this.spotifyPlayer.setVolumeBoost(scaled);
     } else if (this.ytPlayer && playing) {
       try {
@@ -1158,13 +1250,19 @@ export class MusicPlayer {
 
   /** Set music playback rate for time dilation slow-mo. 1.0 = normal speed. */
   setPlaybackRate(rate: number): void {
-    if (this.source === 'youtube' && this.ytPlayer && (this.titleTrackPlaying || this.playlistStarted || this.titlePlaylistLoaded)) {
+    if (this.source === 'hume') {
+      this.humePlayer.setPlaybackRate(rate);
+    } else if (this.source === 'youtube' && this.ytPlayer && (this.titleTrackPlaying || this.playlistStarted || this.titlePlaylistLoaded)) {
       try { this.ytPlayer.setPlaybackRate(rate); } catch (_) { /* YT not ready */ }
     }
   }
 
   private toggleMute(): void {
-    if (this.source === 'spotify' && this.spotifyPlayer && (this.titleTrackPlaying || this.playlistStarted || this.titlePlaylistLoaded)) {
+    if (this.source === 'hume') {
+      const m = this.humePlayer.toggleMute();
+      this.muteBtnImg.src = m ? 'ui/muted.png' : 'ui/unmuted.png';
+      this.muteBtnSprite.setTexture(m ? 'ui-muted' : 'ui-unmuted');
+    } else if (this.source === 'spotify' && this.spotifyPlayer && (this.titleTrackPlaying || this.playlistStarted || this.titlePlaylistLoaded)) {
       const muted = this.spotifyPlayer.toggleMute();
       // toggleMute returns a Promise<boolean> — handle async
       if (muted instanceof Promise) {
@@ -1189,6 +1287,9 @@ export class MusicPlayer {
 
   // ─── WMP popup callbacks ──────────────────────────────────
   private getTrackPosition(): { current: number; duration: number } {
+    if (this.source === 'hume') {
+      return this.humePlayer.getPosition();
+    }
     if (this.source === 'spotify' && this.spotifyPlayer) {
       const pos = this.spotifyPlayer.getPositionSync();
       this.syncYTVideoToSpotify(pos.current);
@@ -1206,7 +1307,9 @@ export class MusicPlayer {
   }
 
   private seekToPosition(seconds: number): void {
-    if (this.source === 'spotify' && this.spotifyPlayer) {
+    if (this.source === 'hume') {
+      this.humePlayer.seek(seconds);
+    } else if (this.source === 'spotify' && this.spotifyPlayer) {
       this.spotifyPlayer.seek(Math.round(seconds * 1000));
       // Also seek YouTube visual companion
       if (this.ytPlayer) {
@@ -1231,7 +1334,9 @@ export class MusicPlayer {
   /** Apply userVolume * MUSIC_VOL_MASTER to all active audio outputs. */
   private applyUserVolume(): void {
     const scaled = Math.min(1, this.userVolume * TUNING.MUSIC_VOL_MASTER);
-    if (this.source === 'spotify' && this.spotifyPlayer) {
+    if (this.source === 'hume') {
+      this.humePlayer.setVolume(Math.min(1, this.userVolume * TUNING.MUSIC_VOL_MASTER * TUNING.MUSIC_VOL_HUME));
+    } else if (this.source === 'spotify' && this.spotifyPlayer) {
       this.spotifyPlayer.setVolume(scaled);
     } else if (this.source === 'youtube' && this.ytPlayer) {
       this.ytPlayer.setVolume(Math.round(scaled * 100));
@@ -1638,6 +1743,7 @@ export class MusicPlayer {
     if (this.spotifyPlayer) {
       this.spotifyPlayer.destroy();
     }
+    this.humePlayer.destroy();
     this.canvasOverlay.remove();
     const ytEl = document.getElementById('yt-player');
     if (ytEl) ytEl.remove();

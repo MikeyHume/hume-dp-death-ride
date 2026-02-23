@@ -233,6 +233,12 @@ export class InputSystem {
     return false;
   }
 
+  // ── Test injection (programmatic input for robot pilot) ──
+  injectSpeedTap(): void { this.touchBoostTap = true; }
+  injectAttack(): void { this.slashPressed = true; }
+  injectRocket(): void { this.rocketPressed = true; }
+  injectTargetY(y: number): void { this.touchTargetY = y; }
+
   destroy(): void {
     this.scene.input.keyboard?.removeKey(this.spaceKey);
     this.scene.input.keyboard?.removeKey(this.upKey);

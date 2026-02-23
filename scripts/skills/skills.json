@@ -1,0 +1,103 @@
+[
+  {
+    "name": "move-to-y",
+    "tier": 0,
+    "type": "action",
+    "description": "Move player to a specific Y position on screen",
+    "params": { "y": 540 },
+    "requires": { "states": ["PLAYING"], "alive": true },
+    "commands": [{ "type": "move-y", "y": "$y" }]
+  },
+  {
+    "name": "accelerate-burst",
+    "tier": 0,
+    "type": "action",
+    "description": "Rapid speed-tap burst to build up speed quickly",
+    "params": { "taps": 10, "interval": 100 },
+    "requires": { "states": ["PLAYING"], "alive": true },
+    "commands": [{ "type": "speed-tap", "repeat": "$taps", "interval": "$interval" }]
+  },
+  {
+    "name": "fire-rocket",
+    "tier": 0,
+    "type": "action",
+    "description": "Fire a rocket projectile",
+    "params": {},
+    "requires": { "states": ["PLAYING"], "alive": true },
+    "commands": [{ "type": "rocket" }]
+  },
+  {
+    "name": "slash-attack",
+    "tier": 0,
+    "type": "action",
+    "description": "Perform a katana slash attack",
+    "params": {},
+    "requires": { "states": ["PLAYING"], "alive": true },
+    "commands": [{ "type": "attack" }]
+  },
+  {
+    "name": "tap-screen",
+    "tier": 0,
+    "type": "action",
+    "description": "Generic screen tap (advance tutorial, dismiss overlays)",
+    "params": {},
+    "requires": {},
+    "commands": [{ "type": "tap" }]
+  },
+  {
+    "name": "skip-to-play",
+    "tier": 0,
+    "type": "action",
+    "description": "Skip directly from any state to PLAYING (test shortcut)",
+    "params": {},
+    "requires": {},
+    "commands": [{ "type": "skip-to-play" }]
+  },
+  {
+    "name": "return-to-title",
+    "tier": 0,
+    "type": "action",
+    "description": "Return to title screen from any state",
+    "params": {},
+    "requires": {},
+    "commands": [{ "type": "return-title" }]
+  },
+  {
+    "name": "avoid-nearest-threat",
+    "tier": 1,
+    "type": "reactive",
+    "description": "Read nearest threat sensor, move player away from it. If threat is above, move down; if below, move up. Uses road boundaries as limits.",
+    "params": {
+      "safeMargin": 100,
+      "roadTop": 420,
+      "roadBottom": 900,
+      "reactionDistance": 500
+    },
+    "requires": { "states": ["PLAYING"], "alive": true },
+    "logic": "avoid-nearest-threat"
+  },
+  {
+    "name": "stay-center",
+    "tier": 1,
+    "type": "reactive",
+    "description": "Keep player near vertical center of the road. Corrects if player drifts too far from center.",
+    "params": {
+      "targetY": 660,
+      "deadzone": 50
+    },
+    "requires": { "states": ["PLAYING"], "alive": true },
+    "logic": "stay-center"
+  },
+  {
+    "name": "survive-run",
+    "tier": 2,
+    "type": "compound",
+    "description": "Full autonomous play: skip to playing, then continuously avoid threats and maintain speed",
+    "params": {
+      "durationMs": 30000,
+      "speedBurstInterval": 5000
+    },
+    "requires": {},
+    "subSkills": ["skip-to-play", "avoid-nearest-threat", "accelerate-burst"]
+  }
+]

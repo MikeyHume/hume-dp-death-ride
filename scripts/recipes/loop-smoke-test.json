@@ -1,0 +1,16 @@
+{
+  "name": "loop-smoke-test",
+  "description": "Minimal end-to-end validation: boot → title → play → alive → HUD → screenshot. Confirms full dual-agent loop integrity.",
+  "seed": 42,
+  "maxAttempts": 1,
+  "baselineTimeout": 30000,
+  "steps": [
+    { "type": "log", "message": "Smoke test: verifying dual-agent loop" },
+    { "type": "cmd", "cmd": "skip-to-play", "repeat": 1 },
+    { "type": "wait", "target": "PLAYING", "timeout": 10000 },
+    { "type": "assert", "field": "player.alive", "value": true, "timeout": 5000 },
+    { "type": "assert", "field": "ui.hudVisible", "value": true, "timeout": 3000 },
+    { "type": "screenshot" },
+    { "type": "snapshot" }
+  ]
+}

@@ -356,6 +356,7 @@ export const TUNING = {
   MUSIC_VOL_TITLE: 0.1,             // title screen track volume multiplier
   MUSIC_VOL_SPOTIFY: 0.1,           // Spotify playback volume multiplier
   MUSIC_VOL_YOUTUBE: 1.0,           // YouTube playback volume multiplier
+  MUSIC_VOL_HUME: 1.0,               // hume (self-hosted) playback volume multiplier
   MUSIC_VOL_COUNTDOWN: 0.69,         // countdown music volume before Spotify
   SFX_BIOS_MASTER: 1,             // master multiplier for BIOS intro + end beep (scales both together)
   SFX_BIOS_BOOTUP_VOLUME: .2,      // BIOS boot-up sound volume

@@ -41,6 +41,11 @@ function getRedirectUri(): string {
  * Kick off the Spotify PKCE login flow in a new tab.
  * Returns a Promise that resolves to true when auth completes,
  * or false on timeout / popup blocked fallback.
+ *
+ * iOS Safari fix: window.open() is blocked by Safari after any await because
+ * it loses the user-gesture context. We open 'about:blank' synchronously
+ * BEFORE the first await, then navigate it to the auth URL afterward.
+ * On mobile (iPad/iPhone) we skip the popup entirely and redirect the main tab.
  */
 export async function startLogin(): Promise<boolean> {
   const clientId = getClientId();
@@ -57,17 +62,31 @@ export async function startLogin(): Promise<boolean> {
   localStorage.setItem(SESSION_VERIFIER, verifier);
   localStorage.setItem(SESSION_STATE, state);
 
+  const redirectUri = getRedirectUri();
+  console.log('[SpotifyAuth] redirect_uri:', redirectUri);
+
   const url = buildAuthorizeUrl({
     clientId,
-    redirectUri: getRedirectUri(),
+    redirectUri,
     scope: SCOPE,
     state,
     challenge,
   });
 
+  // Safari (macOS + iPadOS) blocks window.open() after any await because it
+  // strictly revokes user-gesture context. iPadOS also sends a Macintosh UA so
+  // mobile detection doesn't work. Detect Safari and always redirect main tab.
+  const isSafari = /Safari/i.test(navigator.userAgent) && !/Chrome|CriOS|FxiOS/i.test(navigator.userAgent);
+
+  if (isSafari) {
+    // Safari: redirect the main tab — /callback will exchange token and redirect back
+    window.location.href = url;
+    return false;
+  }
+
+  // Chrome/Firefox/Edge: open popup (these browsers are lenient with gesture context after await)
   const popup = window.open(url, '_blank');
   if (!popup) {
-    // Popup blocked — fall back to same-page navigation
     window.location.href = url;
     return false;
   }
@@ -177,7 +196,9 @@ export async function handleCallback(): Promise<boolean> {
 
   // Try to close this tab (works when opened via window.open)
   try { window.close(); } catch {}
-  // Fallback: if window.close() didn't work, redirect home
+  // Fallback: if window.close() didn't work, redirect home.
+  // Set skip_bios flag so the BIOS boot sequence doesn't replay after auth redirect.
+  sessionStorage.setItem('skip_bios', '1');
   setTimeout(() => window.location.replace('/'), 300);
   return true;
 }

@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "mcp__supabase__apply_migration"
+      "mcp__supabase__apply_migration",
+      "Bash(ipconfig:*)",
+      "Bash(route print:*)",
+      "Bash(netsh interface ip set address:*)"
     ]
   }
 }

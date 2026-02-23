@@ -31,6 +31,7 @@ import { SkyGlowSystem } from '../systems/SkyGlowSystem';
 import { fetchBeatData, getDominantColor } from '../systems/MusicCatalogService';
 import { CourseRunner, loadCourseData, CourseData } from '../systems/CourseRunner';
 import { SongSelectScreen } from '../ui/SongSelectScreen';
+import { TEST_MODE } from '../util/testMode';
 
 enum GameState {
   TITLE,
@@ -383,6 +384,8 @@ export class GameScene extends Phaser.Scene {
         this.nameSkipConfirmPending = false;
         this.nameSkipWarning.setVisible(false);
       }
+      // Block all input during intro-to-tutorial cutscene (unskippable)
+      if (this.introTutPlaying) return;
       // Only Space and Enter can advance title/tutorial (other keys are ignored)
       const isAdvanceKey = k === ' ' || k === 'enter';
       if (this.state === GameState.TUTORIAL) {
@@ -893,18 +896,19 @@ export class GameScene extends Phaser.Scene {
     ).setDepth(249).setScrollFactor(0).setVisible(false);
 
     // Pre-start cutscene (fullscreen, plays once after countdown, above game world)
-    // Mobile: skip cutscene sprites entirely (textures not loaded)
+    // Desktop only — 46 PNGs, too heavy for mobile
     if (!GAME_MODE.mobileMode) {
       this.preStartSprite = this.add.sprite(
         TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00000'
       ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT)
        .setDepth(248).setScrollFactor(0).setVisible(false);
-
-      this.introTutSprite = this.add.sprite(
-        TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'intro-tut-00000'
-      ).setDisplaySize(TUNING.GAME_WIDTH * TUNING.INTRO_TUT_SCALE, TUNING.GAME_HEIGHT)
-       .setDepth(248).setScrollFactor(0).setVisible(false);
     }
+
+    // Intro-to-tutorial cutscene (all platforms — unskippable transition)
+    this.introTutSprite = this.add.sprite(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'intro-tut-00000'
+    ).setDisplaySize(TUNING.GAME_WIDTH * TUNING.INTRO_TUT_SCALE, TUNING.GAME_HEIGHT)
+     .setDepth(248).setScrollFactor(0).setVisible(false);
 
     // Death exposure white overlay (above everything game-related)
     this.deathWhiteOverlay = this.add.rectangle(
@@ -1638,6 +1642,9 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     const dt = delta / 1000;
 
+    // ── Robot pilot: process injected commands before anything else ──
+    this.processTestCommands();
+
     // Block all game input while debug panel is open
     if (this.debugPanelOpen) {
       this.inputSystem.getAttackPressed();
@@ -2010,6 +2017,172 @@ export class GameScene extends Phaser.Scene {
     if (this.collisionDebug) {
       this.drawCollisionDebug();
     }
+
+    // Test mode: sync state to window.__dpMotoTest for XCUITest polling
+    this.syncTestState();
+  }
+
+  // ─── Robot Pilot: Command Processing ──────────────────────
+  private processTestCommands(): void {
+    if (!TEST_MODE.active) return;
+    const t = (window as any).__dpMotoTest;
+    if (!t) return;
+    const cmds = t.popCommands();
+    const MAX_CMDS = 50;
+    if (cmds.length > MAX_CMDS) {
+      console.warn(`[test] Command flood: ${cmds.length} commands, processing first ${MAX_CMDS}`);
+    }
+    for (let i = 0; i < Math.min(cmds.length, MAX_CMDS); i++) {
+      const raw = cmds[i];
+      try {
+        const cmd = typeof raw === 'object' ? raw : JSON.parse(raw);
+        this.executeTestCommand(cmd);
+      } catch {
+        this.executeTestCommand({ type: raw });
+      }
+    }
+  }
+
+  private executeTestCommand(cmd: { type: string; [k: string]: any }): void {
+    // Track last action for crash attribution
+    const t = (window as any).__dpMotoTest;
+    const details = cmd.type === 'move-y' ? `y=${cmd.y}` : cmd.type === 'set-seed' ? `seed=${cmd.seed}` : undefined;
+    if (t?.setLastAction) t.setLastAction(cmd.type, details);
+
+    switch (cmd.type) {
+      case 'tap':
+        this.anyInputPressed = true;
+        break;
+      case 'speed-tap':
+        this.inputSystem.injectSpeedTap();
+        break;
+      case 'attack':
+        this.inputSystem.injectAttack();
+        break;
+      case 'rocket':
+        this.inputSystem.injectRocket();
+        break;
+      case 'move-y':
+        this.inputSystem.injectTargetY(cmd.y ?? 540);
+        break;
+      case 'die':
+        if (this.state === GameState.PLAYING) this.enterDead();
+        break;
+      case 'return-title':
+        this.returnToTitle();
+        break;
+      case 'skip-to-play':
+        this.skipToPlaying();
+        break;
+      case 'set-seed':
+        if (typeof cmd.seed === 'number') {
+          this.weekSeed = cmd.seed;
+          console.log(`[test] Seed set to ${cmd.seed}`);
+        }
+        break;
+      case 'reset-run':
+        // Composite: set seed (optional) → return to title → deterministic baseline
+        if (typeof cmd.seed === 'number') this.weekSeed = cmd.seed;
+        this.returnToTitle();
+        break;
+      case 'open-profile':
+        this.musicPlayer.closeWMP();
+        this.profilePopup.open(this.profilePopup.getName(), false, this.state === GameState.PLAYING);
+        break;
+      case 'close-profile':
+        if (this.profilePopup.isOpen()) this.profilePopup.close();
+        break;
+      case 'toggle-music-menu':
+        if (this.musicPlayer) {
+          const wmp = (this.musicPlayer as any).wmpPopup;
+          if (wmp?.toggle) wmp.toggle();
+        }
+        break;
+      default:
+        console.warn(`[test] Unknown command: ${cmd.type}`);
+    }
+    console.log(`[test] Executed: ${cmd.type}`);
+  }
+
+  private skipToPlaying(): void {
+    // Jump directly from any state to PLAYING, skipping BIOS/tutorial/countdown
+    this.rhythmMode = false;
+    this.courseRunner = null;
+    this.audioSystem.start();
+    this.startGame();
+  }
+
+  // ─── Test Mode State Sync ──────────────────────────────────
+  private testFrameCount = 0;
+  private testPrevStateName = '';
+  private testStateVersion = 0;
+  // Cumulative metrics (reset per run via resetTestMetrics)
+  private testCollisions = 0;
+  private testPickups = 0;
+  private testRocketsFired = 0;
+  private testObstaclesDestroyed = 0;
+
+  private syncTestState(): void {
+    const t = (window as any).__dpMotoTest;
+    if (!t) return;
+    const s = t.state;
+    const STATE_NAMES = ['TITLE','SONG_SELECT','TUTORIAL','STARTING','PLAYING','DYING','NAME_ENTRY','DEAD'];
+    const prev = this.testPrevStateName;
+    s.state = this.state;
+    s.stateName = STATE_NAMES[this.state] || 'UNKNOWN';
+    s.elapsed = this.elapsed || 0;
+    s.score = this.scoreSystem?.getScore() ?? 0;
+    s.alive = this.state === GameState.PLAYING;
+    s.biosVisible = !document.getElementById('boot-overlay')?.classList.contains('hidden');
+    s.musicSource = this.musicPlayer?.getSource?.() || 'none';
+    s.frameCount = ++this.testFrameCount;
+    s.playerY = this.playerSystem?.getY?.() ?? 0;
+    s.roadSpeed = 0; // roadSpeed is local to updatePlaying — not critical for test verification
+    s.difficulty = this.difficultySystem?.getFactor?.() ?? 0;
+    s.obstacleCount = this.obstacleSystem?.getActiveCount?.() ?? 0;
+    s.lastUpdateMs = Date.now();
+    s.seed = this.weekSeed ?? 0;
+    if (prev !== s.stateName) {
+      s.lastStateChangeTs = Date.now();
+      this.testPrevStateName = s.stateName;
+      this.testStateVersion++;
+      console.log(`[test-mode] State: ${prev || 'INIT'} → ${s.stateName}`);
+      // Clear crash suspect once game successfully reaches PLAYING
+      if (s.stateName === 'PLAYING' && t.clearCrashSuspect) {
+        t.clearCrashSuspect();
+      }
+    }
+    s.stateVersion = this.testStateVersion;
+
+    // ── Phase 3B: Sensors ──────────────────────────────────────
+    s.player.x = this.playerSystem?.getX?.() ?? 0;
+    s.player.y = this.playerSystem?.getY?.() ?? 0;
+    s.player.speed = this.playerSystem?.getPlayerSpeed?.() ?? 0;
+    s.player.alive = this.playerSystem?.isAlive?.() ?? false;
+    s.player.shieldCount = this.shieldSystem?.getShields?.() ?? 0;
+    s.player.rockets = this.pickupSystem?.getAmmo?.() ?? 0;
+
+    s.metrics.collisions = this.testCollisions;
+    s.metrics.pickups = this.testPickups;
+    s.metrics.rocketsFired = this.testRocketsFired;
+    s.metrics.obstaclesDestroyed = this.testObstaclesDestroyed;
+
+    s.threat = this.obstacleSystem?.getNearestThreat?.(
+      this.playerSystem?.getX?.() ?? 0,
+      this.playerSystem?.getY?.() ?? 0
+    ) ?? null;
+
+    // ── Phase 3A: UI Snapshot ──────────────────────────────────
+    s.ui.biosVisible = s.biosVisible;
+    s.ui.titleVisible = this.titleContainer?.visible ?? false;
+    s.ui.tutorialVisible = this.state === GameState.TUTORIAL;
+    s.ui.hudVisible = !this.hudHidden;
+    s.ui.wmpOpen = (this.musicPlayer as any)?.wmpPopup?.getIsOpen?.() ?? false;
+    s.ui.profileOpen = this.profilePopup?.isOpen?.() ?? false;
+    s.ui.deathScreenVisible = this.deathContainer?.visible ?? false;
+    s.ui.countdownVisible = this.state === GameState.STARTING;
+    s.ui.trackTitle = (this.musicPlayer as any)?.currentTrackName || null;
+    s.ui.sceneName = 'Game';
   }
 
   private updateTitle(dt: number): void {
@@ -2503,6 +2676,8 @@ export class GameScene extends Phaser.Scene {
     if (this.profilePopup?.isOpen()) return;
     const biosOverlay = document.getElementById('boot-overlay');
     if (biosOverlay && !biosOverlay.classList.contains('hidden')) return;
+    // Block all input during intro-to-tutorial cutscene (unskippable)
+    if (this.introTutPlaying) return;
     if (this.state === GameState.TUTORIAL || this.state === GameState.TITLE || this.state === GameState.STARTING) {
       this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
     }
@@ -2539,37 +2714,28 @@ export class GameScene extends Phaser.Scene {
       this.titleLoopSprite.setVisible(false);
     }
 
-    // Play intro-to-tutorial cutscene over everything
-    if (this.introTutSprite) {
-      this.introTutPlaying = true;
-      this.introTutSprite.setVisible(true).setAlpha(1);
-      this.introTutSprite.play('intro-tut-cutscene');
-      this.introTutSprite.once('animationcomplete', () => {
-        // Cutscene finished — fade it out to reveal the tutorial underneath
-        this.tweens.add({
-          targets: this.introTutSprite!,
-          alpha: 0,
-          duration: 1000,
-          onComplete: () => {
-            this.introTutSprite?.setVisible(false);
-            this.introTutPlaying = false;
-          },
-        });
-        // Cutscene fades out to reveal controls directly — skip black_reveal
-        this.tutorialPhase = 'controls_wait';
-        this.tutorialTimer = 0;
-        this.tutorialAdvance = false;
-        this.tutorialSkipBtn.setVisible(true).setAlpha(SKIP_BTN_PULSE_MAX).setScale(0.5).setTintFill(0xffffff).setInteractive({ useHandCursor: true });
-        (this.tutorialSkipBtn.getData('startPulse') as () => void)();
+    // Play intro-to-tutorial cutscene over everything (all platforms, unskippable)
+    this.introTutPlaying = true;
+    this.introTutSprite!.setVisible(true).setAlpha(1);
+    this.introTutSprite!.play('intro-tut-cutscene');
+    this.introTutSprite!.once('animationcomplete', () => {
+      // Cutscene finished — fade it out to reveal the tutorial underneath
+      this.tweens.add({
+        targets: this.introTutSprite!,
+        alpha: 0,
+        duration: 1000,
+        onComplete: () => {
+          this.introTutSprite?.setVisible(false);
+          this.introTutPlaying = false;
+        },
       });
-    } else {
-      // Mobile: no cutscene — go straight to tutorial controls_wait
+      // Cutscene fades out to reveal controls directly — skip black_reveal
       this.tutorialPhase = 'controls_wait';
       this.tutorialTimer = 0;
       this.tutorialAdvance = false;
       this.tutorialSkipBtn.setVisible(true).setAlpha(SKIP_BTN_PULSE_MAX).setScale(0.5).setTintFill(0xffffff).setInteractive({ useHandCursor: true });
       (this.tutorialSkipBtn.getData('startPulse') as () => void)();
-    }
+    });
 
     // Prepare tutorial layers underneath the cutscene (hidden by black overlay)
     this.tutorialBlank.setVisible(true);
@@ -2581,13 +2747,10 @@ export class GameScene extends Phaser.Scene {
     // Black overlay starts hidden — will be shown when cutscene finishes
     this.blackOverlay.setVisible(false);
 
-    // Desktop: start in 'done' — cutscene animationcomplete callback kicks off controls_wait
-    // Mobile: introTutSprite is null so the else branch already set phase to 'controls_wait'
-    if (this.introTutSprite) {
-      this.tutorialPhase = 'done';
-      this.tutorialTimer = 0;
-      this.tutorialAdvance = false;
-    }
+    // Start in 'done' — cutscene animationcomplete callback kicks off controls_wait
+    this.tutorialPhase = 'done';
+    this.tutorialTimer = 0;
+    this.tutorialAdvance = false;
   }
 
   private updateTutorial(dt: number): void {
@@ -2740,7 +2903,8 @@ export class GameScene extends Phaser.Scene {
 
   private enterStarting(): void {
     this.state = GameState.STARTING;
-    // blackOverlay already at alpha 1 from tutorial
+    // Ensure black overlay is fully visible behind countdown numbers
+    this.blackOverlay.setVisible(true).setAlpha(1);
     this.titleContainer.setVisible(false);
     this.titleLoopSprite.stop();
     this.titleLoopSprite.setVisible(false);
@@ -3031,6 +3195,11 @@ export class GameScene extends Phaser.Scene {
     this.timeDilation = new TimeDilationSystem();
     this.wasDilating = false;
     this.elapsed = 0;
+    // Reset test metrics for new run
+    this.testCollisions = 0;
+    this.testPickups = 0;
+    this.testRocketsFired = 0;
+    this.testObstaclesDestroyed = 0;
     this.spawnGraceTimer = 0;
     this.blackOverlay.setVisible(false);
     this.deathWhiteOverlay.setVisible(false);
@@ -3410,6 +3579,7 @@ export class GameScene extends Phaser.Scene {
         TUNING.PLAYER_COLLISION_H / 2
       );
       if (hitX >= 0) {
+        this.testObstaclesDestroyed++;
         this.slashInvincibilityTimer = TUNING.KATANA_INVINCIBILITY;
         this.audioSystem.playObstacleKill();
         this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION, TUNING.SHAKE_DEATH_INTENSITY * 0.25);
@@ -3505,6 +3675,7 @@ export class GameScene extends Phaser.Scene {
         this.pickupSystem.consumeAmmo();
       }
       if (launched) {
+        this.testRocketsFired++;
         this.rocketCooldownTimer = TUNING.ROCKET_COOLDOWN;
       }
     }
@@ -3518,6 +3689,7 @@ export class GameScene extends Phaser.Scene {
     // Update pickups (scrolling + collection)
     this.pickupSystem.update(hDt, roadSpeed, playerCollX, playerCollY);
     if (this.pickupSystem.wasCollected()) {
+      this.testPickups++;
       this.playerSystem.playCollectRocket();
       this.audioSystem.playAmmoPickup();
       // Check 2X bonus zone in rhythm mode
@@ -3542,6 +3714,7 @@ export class GameScene extends Phaser.Scene {
     // Update shield pickups (scrolling + collection)
     this.shieldSystem.update(hDt, roadSpeed, playerCollX, playerCollY);
     if (this.shieldSystem.wasCollected()) {
+      this.testPickups++;
       this.playerSystem.playCollectShield();
       this.audioSystem.playPotionPickup();
       this.awardBonus(TUNING.SCORE_PICKUP_SHIELD, 'shield');
@@ -3557,6 +3730,7 @@ export class GameScene extends Phaser.Scene {
         playerCollX, playerCollY, pHalfW, pHalfH
       );
       if (hits.length > 0) {
+        this.testObstaclesDestroyed += hits.length;
         this.cameras.main.shake(TUNING.SHAKE_DEATH_DURATION * 0.5, TUNING.SHAKE_DEATH_INTENSITY * 0.3);
         this.playerSystem.playCollectHit();
         for (let i = 0; i < hits.length; i++) {
@@ -3580,6 +3754,7 @@ export class GameScene extends Phaser.Scene {
       if (result.crashed && this.slashInvincibilityTimer <= 0) {
         if (this.shieldSystem.getShields() > 0) {
           // Shield absorbs the hit — explode obstacle, lose one shield
+          this.testCollisions++;
           this.shieldSystem.consumeShield();
           this.obstacleSystem.spawnExplosion(result.hitX, result.hitY);
           this.audioSystem.playExplosion();
@@ -3608,6 +3783,7 @@ export class GameScene extends Phaser.Scene {
             this.awardBonus(shieldPts, 'damage');
           }
         } else {
+          this.testCollisions++;
           this.playerSystem.kill();
         }
       }
