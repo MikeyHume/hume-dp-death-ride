@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Mac Agent Daemon — Safari WebDriver bridge for iPad testing.
+ * Mac Agent Daemon — Safari WebDriver bridge for iOS device testing.
  *
- * Runs on the Mac tethered to iPad via USB-C.
+ * Runs on the Mac tethered to an iOS device (iPhone/iPad) via USB.
  * Uses safaridriver (built into macOS) + WebDriver protocol to:
- *   - Open/reload the game URL on iPad Safari
+ *   - Open/reload the game URL on device Safari
  *   - Execute JavaScript (inject commands, read state)
  *   - Take device screenshots
  *   - Simulate touch events
@@ -12,14 +12,15 @@
  * Polls the PC Vite server for tasks, executes them, and POSTs results back.
  *
  * Prerequisites:
- *   1. iPad connected via USB-C
- *   2. iPad Settings → Safari → Advanced → "Web Inspector" = ON
- *   3. iPad Settings → Safari → Advanced → "Remote Automation" = ON
+ *   1. iOS device connected via USB
+ *   2. Device Settings → Safari → Advanced → "Web Inspector" = ON
+ *   3. Device Settings → Safari → Advanced → "Remote Automation" = ON
  *   4. Mac: run `safaridriver --enable` once (requires sudo)
  *   5. Mac: start safaridriver: `safaridriver -p 4723 &`
  *
  * Usage:
  *   node scripts/mac-agent.mjs --pc-host 192.168.1.150 --pc-port 8081
+ *   node scripts/mac-agent.mjs --pc-host 192.168.1.150 --scheme http --udid 00008020-001345143C52002E
  *
  * Zero external dependencies — uses only Node.js built-ins (http/https).
  */
@@ -33,18 +34,22 @@ const { values: args } = parseArgs({
   options: {
     'pc-host':  { type: 'string', default: '192.168.1.150' },
     'pc-port':  { type: 'string', default: '8081' },
+    'scheme':   { type: 'string', default: 'http' },
     'wd-port':  { type: 'string', default: '4723' },
     'poll-ms':  { type: 'string', default: '2000' },
     'game-url': { type: 'string', default: '' },
+    'udid':     { type: 'string', default: '' },
     'mac':      { type: 'boolean', default: false },
   },
 });
 
 const PC_HOST   = args['pc-host'];
 const PC_PORT   = parseInt(args['pc-port'], 10);
+const SCHEME    = args['scheme'] === 'https' ? 'https' : 'http';
 const WD_PORT   = parseInt(args['wd-port'], 10);
 const POLL_MS   = parseInt(args['poll-ms'], 10);
-const GAME_URL  = args['game-url'] || `https://${PC_HOST}:${PC_PORT}/?test=1`;
+const DEVICE_UDID = args['udid'] || '';
+const GAME_URL  = args['game-url'] || `${SCHEME}://${PC_HOST}:${PC_PORT}/?test=1`;
 
 // ── Logging ─────────────────────────────────────────────────────
 const log = (tag, msg) => console.log(`\x1b[36m[${tag}]\x1b[0m ${msg}`);
@@ -98,10 +103,11 @@ async function createSession() {
   log('wd', `Creating WebDriver session for ${platform} Safari...`);
 
   // macOS Safari: minimal capabilities
-  // iPad Safari (real device): platformName 'iOS', no useSimulator
+  // iOS Safari (real device): platformName 'iOS', optional UDID targeting
   const caps = isMac
     ? { browserName: 'safari', 'safari:automaticInspection': true }
-    : { browserName: 'safari', platformName: 'iOS', 'safari:automaticInspection': true };
+    : { browserName: 'safari', platformName: 'iOS', 'safari:automaticInspection': true,
+        ...(DEVICE_UDID ? { 'safari:deviceUDID': DEVICE_UDID } : {}) };
 
   const res = await wdRequest('POST', '/session', {
     capabilities: { alwaysMatch: caps },
@@ -234,7 +240,7 @@ async function releaseActions() {
 }
 
 // ── PC Server communication ─────────────────────────────────────
-const pcProto = PC_PORT === 443 ? 'https:' : (PC_PORT === 8081 ? 'https:' : 'http:');
+const pcProto = SCHEME + ':';
 
 async function pcRequest(method, path, body = null) {
   const options = {
@@ -537,9 +543,10 @@ const TASK_HANDLERS = {
 // ── Main loop ───────────────────────────────────────────────────
 async function main() {
   log('init', `Mac Agent starting`);
-  log('init', `PC server: ${pcProto}//${PC_HOST}:${PC_PORT}`);
+  log('init', `PC server: ${SCHEME}://${PC_HOST}:${PC_PORT}`);
   log('init', `WebDriver: http://127.0.0.1:${WD_PORT}`);
   log('init', `Game URL: ${GAME_URL}`);
+  log('init', `Device UDID: ${DEVICE_UDID || '(auto — first available)'}`);
   log('init', `Poll interval: ${POLL_MS}ms`);
 
   // Create WebDriver session
@@ -547,9 +554,10 @@ async function main() {
   if (!sessionOk) {
     err('init', 'Failed to create WebDriver session. Check:');
     err('init', '  1. safaridriver running: safaridriver -p 4723 &');
-    err('init', '  2. iPad connected via USB-C');
-    err('init', '  3. iPad → Settings → Safari → Advanced → Remote Automation = ON');
-    err('init', '  4. iPad → Settings → Safari → Advanced → Web Inspector = ON');
+    err('init', '  2. iOS device connected via USB');
+    err('init', '  3. Device → Settings → Safari → Advanced → Remote Automation = ON');
+    err('init', '  4. Device → Settings → Safari → Advanced → Web Inspector = ON');
+    if (DEVICE_UDID) err('init', `  5. UDID ${DEVICE_UDID} matches connected device`);
     process.exit(1);
   }
 

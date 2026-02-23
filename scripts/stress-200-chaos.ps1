@@ -8,7 +8,7 @@ param(
 )
 
 # ── Config ──────────────────────────────────────────────────────
-$TargetBase       = "https://192.168.1.150:8081"
+$TargetBase       = "http://192.168.1.150:8081"
 $TotalRuns        = 200
 $JitterMinMs      = 250
 $JitterMaxMs      = 1500

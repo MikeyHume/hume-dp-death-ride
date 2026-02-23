@@ -1,5 +1,4 @@
 import { defineConfig, type Plugin } from 'vite';
-import basicSsl from '@vitejs/plugin-basic-ssl';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -394,7 +393,7 @@ function telemetryPlugin(): Plugin {
 
 export default defineConfig({
   base: '/',
-  plugins: [basicSsl(), telemetryPlugin()],
+  plugins: [telemetryPlugin()],
   build: {
     rollupOptions: {
       output: {
@@ -408,7 +407,7 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 8081,
     strictPort: true,
-    https: true,
+    origin: 'http://192.168.1.150:8081',
     headers: {
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',
