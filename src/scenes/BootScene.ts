@@ -19,6 +19,46 @@ export class BootScene extends Phaser.Scene {
     if (bootOverlay?.biosCompleteAudio) bootOverlay.biosCompleteAudio.volume = TUNING.SFX_BIOS_BEEP_VOLUME * TUNING.SFX_BIOS_MASTER;
     if (bootOverlay?.biosClickAudio) bootOverlay.biosClickAudio.volume = TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER;
 
+    // ── Boot Tracking (always active — enables retry + debug summary) ──
+    const loadStartTime = Date.now();
+    const failedAssets: Array<{ key: string; type: string; url: string; config?: any }> = [];
+    let bootLoaded = 0, bootFailed = 0, bootTotal = 0;
+
+    this.load.on('addfile', () => { bootTotal++; });
+    this.load.on('filecomplete', () => { bootLoaded++; });
+    this.load.on('loaderror', (file: any) => {
+      bootFailed++;
+      failedAssets.push({ key: file.key, type: file.type, url: file.url, config: file.config });
+    });
+    this.load.once('complete', () => {
+      (window as any).__bootComplete = true;
+      (window as any).__bootCounts = { loaded: bootLoaded, failed: bootFailed, total: bootTotal, elapsed: Date.now() - loadStartTime };
+      (window as any).__bootFailedAssets = failedAssets;
+    });
+
+    // ── Debug Logging (only when ?debug=1) ──
+    const debugMode = location.search.includes('debug=1');
+    if (debugMode) {
+      const loadTimers = new Map<string, number>();
+      const lc = (window as any).__loaderConfig;
+      console.log(`[boot] loader maxParallel=${lc?.maxParallel ?? '?'} source=${lc?.source ?? '?'} iOS=${lc?.ios ?? '?'}`);
+
+      this.load.on('addfile', (file: any) => { loadTimers.set(file.key, Date.now()); });
+      this.load.on('filecomplete', (key: string, type: string) => {
+        const start = loadTimers.get(key);
+        const dur = start ? Date.now() - start : -1;
+        console.log(`[boot] ok: ${key} (${type}) ${dur}ms [${bootLoaded}/${bootTotal}]`);
+      });
+      this.load.on('loaderror', (file: any) => {
+        const start = loadTimers.get(file.key);
+        const dur = start ? Date.now() - start : -1;
+        console.error(`[boot] FAIL: ${file.key} (${file.type}) ${dur}ms url=${file.url} [${bootFailed} failed]`);
+      });
+      this.load.once('complete', () => {
+        console.log(`[boot] COMPLETE: ${bootLoaded} loaded, ${bootFailed} failed, ${Date.now() - loadStartTime}ms total`);
+      });
+    }
+
     // Report real load progress to the boot overlay (clamped 0..0.9)
     this.load.on('progress', (value: number) => {
       (window as any).__bootOverlay?.setProgress?.(value);
@@ -44,6 +84,11 @@ export class BootScene extends Phaser.Scene {
     } else {
       // Mobile: load only first frame of title loop for static title background
       this.load.image('start-loop-00', 'assets/start/start_loop/DP_Death_Ride_Title_Loop00.jpg');
+      // Mobile: still load intro-to-tutorial cutscene (unskippable transition)
+      for (let i = 0; i < INTRO_TO_TUT_FRAME_COUNT; i++) {
+        const idx = String(i).padStart(5, '0');
+        this.load.image(`intro-tut-${idx}`, `assets/cutscenes/intro_to_tut/v3/intro_to_tut_v03__${idx}.jpg`);
+      }
     }
     // Mobile: load half-res nearest-neighbor sprite sheets (_mobile suffix)
     // Same texture keys, same animations, just smaller textures + frame dims
@@ -186,6 +231,55 @@ export class BootScene extends Phaser.Scene {
   }
 
   async create() {
+    // ── Retry failed assets with backoff (transient network-error recovery) ──
+    const failedAssets = ((window as any).__bootFailedAssets || []) as Array<{ key: string; type: string; url: string; config?: any }>;
+    let retryRecovered = 0;
+
+    for (let attempt = 1; attempt <= 2 && failedAssets.length > 0; attempt++) {
+      await new Promise(r => setTimeout(r, 500 * attempt)); // 500ms, 1000ms backoff
+      const batch = failedAssets.splice(0); // take all, clear array
+      console.log(`[boot] retry #${attempt}: re-downloading ${batch.length} asset(s)...`);
+
+      for (const f of batch) {
+        if (f.type === 'image') this.load.image(f.key, f.url);
+        else if (f.type === 'spritesheet') this.load.spritesheet(f.key, f.url, f.config);
+        else if (f.type === 'audio') this.load.audio(f.key, f.url);
+      }
+
+      if (this.load.list.size > 0) {
+        await new Promise<void>(resolve => {
+          this.load.once('complete', resolve);
+          this.load.start();
+        });
+      }
+
+      const recovered = batch.length - failedAssets.length;
+      retryRecovered += recovered;
+      console.log(`[boot] retry #${attempt}: ${recovered} recovered, ${failedAssets.length} still failed`);
+    }
+
+    // Create fallback textures for images that still failed after retries
+    for (const f of failedAssets) {
+      if (f.type === 'image' || f.type === 'spritesheet') {
+        try {
+          const fw = f.config?.frameWidth || 4;
+          const fh = f.config?.frameHeight || 4;
+          const g = this.add.graphics();
+          g.fillStyle(0xff00ff, 0.3);
+          g.fillRect(0, 0, fw, fh);
+          g.generateTexture(f.key, fw, fh);
+          g.destroy();
+          console.warn(`[boot] placeholder texture: ${f.key} (${fw}x${fh})`);
+        } catch (err) {
+          console.warn(`[boot] failed to create placeholder for ${f.key}:`, err);
+        }
+      }
+    }
+
+    // Store final boot stats for debug summary
+    const bootCounts = (window as any).__bootCounts || {};
+    (window as any).__bootStats = { ...bootCounts, retryRecovered, stillFailed: failedAssets.map(f => f.key) };
+
     // Frame sequence animations — desktop only (mobile uses static frames)
     if (!GAME_MODE.mobileMode) {
       const frames: Phaser.Types.Animations.AnimationFrame[] = [];
@@ -206,12 +300,14 @@ export class BootScene extends Phaser.Scene {
       }
       this.anims.create({ key: 'pre-start-cutscene', frames: preStartFrames, frameRate: 12, repeat: 0 });
 
-      const introTutFrames: Phaser.Types.Animations.AnimationFrame[] = [];
-      for (let i = 0; i < INTRO_TO_TUT_FRAME_COUNT; i++) {
-        introTutFrames.push({ key: `intro-tut-${String(i).padStart(5, '0')}` });
-      }
-      this.anims.create({ key: 'intro-tut-cutscene', frames: introTutFrames, frameRate: 12, repeat: 0 });
     }
+
+    // Intro-to-tutorial cutscene animation — all platforms (unskippable transition)
+    const introTutFrames: Phaser.Types.Animations.AnimationFrame[] = [];
+    for (let i = 0; i < INTRO_TO_TUT_FRAME_COUNT; i++) {
+      introTutFrames.push({ key: `intro-tut-${String(i).padStart(5, '0')}` });
+    }
+    this.anims.create({ key: 'intro-tut-cutscene', frames: introTutFrames, frameRate: 12, repeat: 0 });
 
     // Player start animation (plays once before ride loop)
     this.anims.create({
@@ -412,13 +508,40 @@ export class BootScene extends Phaser.Scene {
 
     // Rocket projectile spritesheet — loaded in preload(), animations created here
 
-    // Force-load custom fonts before transitioning (browser won't load them until something uses them)
-    await Promise.all([
-      document.fonts.load('48px "Early GameBoy"'),
-      document.fonts.load('24px "Alagard"'),
-    ]);
+    // Force-load custom fonts before transitioning (non-critical — catch network errors)
+    try {
+      await Promise.all([
+        document.fonts.load('48px "Early GameBoy"'),
+        document.fonts.load('24px "Alagard"'),
+      ]);
+    } catch (err) {
+      console.warn('[boot] font loading failed (non-critical):', err);
+    }
 
-    await ensureAnonUser();
+    try {
+      await ensureAnonUser();
+    } catch (err) {
+      console.warn('[boot] ensureAnonUser failed (non-critical):', err);
+    }
+
+    // ── Debug Boot Summary (on-screen overlay, ?debug=1 only) ──
+    if (location.search.includes('debug=1')) {
+      const stats = (window as any).__bootStats;
+      if (stats) {
+        const el = document.createElement('div');
+        el.style.cssText = 'position:fixed;top:10px;left:10px;z-index:999998;background:rgba(0,0,0,0.85);color:#0f0;font:13px monospace;padding:8px 12px;border-radius:4px;pointer-events:none;max-width:400px;';
+        let html = `Boot: ${stats.loaded}/${stats.total} loaded, ${stats.elapsed}ms`;
+        if (stats.retryRecovered > 0) html += `<br><span style="color:#ff0">${stats.retryRecovered} recovered via retry</span>`;
+        if (stats.stillFailed?.length > 0) {
+          html += `<br><span style="color:#f00">${stats.stillFailed.length} FAILED: ${stats.stillFailed.join(', ')}</span>`;
+        }
+        el.innerHTML = html;
+        document.body.appendChild(el);
+        setTimeout(() => { el.style.transition = 'opacity 2s'; el.style.opacity = '0'; }, 15000);
+        setTimeout(() => { try { document.body.removeChild(el); } catch {} }, 17000);
+      }
+    }
+
     this.scene.start('GameScene');
   }
 }

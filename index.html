@@ -241,19 +241,19 @@
 </head>
 <body>
   <!-- BIOS boot overlay — renders instantly before any JS -->
-  <div id="boot-overlay">
-    <div id="boot-content">
-      <div id="boot-lines">
+  <div id="boot-overlay" data-testid="bios-overlay">
+    <div id="boot-content" data-testid="bios-content">
+      <div id="boot-lines" data-testid="bios-lines">
         <div class="line" id="bios-title-line" data-text="DP MOTO BIOS      v0.1"></div>
         <div class="line bios-version" data-text=""></div>
         <div class="line" data-text="VIDEO  ............... OK"></div>
         <div class="line" data-text="AUDIO  ............. SURE"></div>
         <div class="line" data-text="LOADING GAME ........ WTV"></div>
       </div>
-      <div id="boot-bar-wrap">
-        <div id="boot-bar-fill"></div>
+      <div id="boot-bar-wrap" data-testid="bios-loading-bar">
+        <div id="boot-bar-fill" data-testid="bios-loading-fill"></div>
       </div>
-      <div id="boot-enter-prompt">[ ENTER ]</div>
+      <div id="boot-enter-prompt" data-testid="bios-enter-prompt" aria-label="Press Enter">[ ENTER ]</div>
     </div>
   </div>
 
@@ -295,7 +295,7 @@
       var hh = String(now.getHours()).padStart(2, '0');
       var mi = String(now.getMinutes()).padStart(2, '0');
       var ss = String(now.getSeconds()).padStart(2, '0');
-      var verNum = '0.00.17';
+      var verNum = '0.00.32';
       var versionText = 'last saved [ ' + dd + ' : ' + monthName + ' : ' + yyyy + ' ]  [ ' + hh + ' : ' + mi + ' : ' + ss + ' ]';
       // Set title line version dynamically
       var titleLine = document.getElementById('bios-title-line');
@@ -439,6 +439,13 @@
     var loadingDone = false;
     var dismissed = false;
     var dripScheduled = false;
+
+    // Skip BIOS after Spotify auth redirect (prevents double-boot on Safari)
+    if (sessionStorage.getItem('skip_bios')) {
+      sessionStorage.removeItem('skip_bios');
+      dismissed = true;
+      overlay.classList.add('hidden');
+    }
 
     // Drip: reveal one item per tick, only if loading progress allows it
     function drip() {
@@ -604,6 +611,20 @@
       biosCompleteAudio: biosCompleteAudio,
       biosClickAudio: biosClickAudio
     };
+
+    // ---- TEST MODE AUTO-DISMISS (?test=1) ----
+    if (location.search.indexOf('test=1') !== -1) {
+      // In test mode, auto-dismiss BIOS after 500ms without user input.
+      // Mark loading done immediately and trigger dismiss when typing finishes.
+      loadingDone = true;
+      targetProgress = 2;
+      setTimeout(function() {
+        if (!dismissed) {
+          readyForEnter = true;
+          dismissOverlay();
+        }
+      }, 500);
+    }
 
     // ---- DEBUG GUIDE MODE (G key during BIOS) ----
     var guideSelectedIdx = 0;
