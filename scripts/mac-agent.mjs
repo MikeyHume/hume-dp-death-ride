@@ -126,6 +126,38 @@ async function deleteSession() {
   sessionId = null;
 }
 
+// Detect dead session from any WebDriver response
+function isSessionDead(res) {
+  if (!res || !res.body) return false;
+  const val = res.body?.value || res.body;
+  const errStr = typeof val === 'string' ? val : JSON.stringify(val);
+  return errStr.includes('invalid session id') ||
+         errStr.includes('no such window') ||
+         errStr.includes('Session not found');
+}
+
+// Re-create session if dead, returns true if session is usable
+async function ensureSession() {
+  // Quick check: try to get current URL
+  try {
+    const res = await wdRequest('GET', `/session/${sessionId}/url`);
+    if (res.status === 200 && !isSessionDead(res)) return true;
+  } catch {}
+
+  // Session is dead — try to clean up and create a new one
+  warn('wd', 'Session dead — attempting re-creation...');
+  try { await wdRequest('DELETE', `/session/${sessionId}`); } catch {}
+  sessionId = null;
+
+  const ok = await createSession();
+  if (ok) {
+    log('wd', `Session re-created: ${sessionId}`);
+  } else {
+    err('wd', 'Session re-creation failed');
+  }
+  return ok;
+}
+
 async function navigateTo(url) {
   log('wd', `Navigating to ${url}`);
   const res = await wdRequest('POST', `/session/${sessionId}/url`, { url });
@@ -311,10 +343,20 @@ const TASK_HANDLERS = {
 
   /** Reload page */
   'reload': async () => {
-    await executeScript('location.reload();');
+    try {
+      await executeScript('location.reload();');
+    } catch (e) {
+      // If reload fails due to dead session, try to recover
+      warn('reload', `executeScript failed: ${e.message} — attempting session recovery`);
+      const recovered = await ensureSession();
+      if (!recovered) return { ok: false, reason: 'session-dead-unrecoverable' };
+      // After new session, navigate instead of reload (new session = no page loaded)
+      const navOk = await navigateTo(GAME_URL);
+      if (!navOk) return { ok: false, reason: 'navigate-after-recovery-failed' };
+    }
     await sleep(3000);
     const state = await readGameState();
-    return { ok: !!state, state };
+    return { ok: !!state, state, recovered: false };
   },
 
   /** Read current game state */
@@ -415,8 +457,48 @@ const TASK_HANDLERS = {
     return { ok: results.every(r => r.ok), steps: results };
   },
 
-  /** Full health check: navigate, wait for boot, check state */
+  /** Soft reset: return game to title via JS command — no page reload, no navigation */
+  'soft-reset': async () => {
+    try {
+      // Push return-title command via test mode
+      await executeScript(
+        `if (window.__dpMotoTest) window.__dpMotoTest.pushCommand(JSON.stringify({ type: "return-title" }));`
+      );
+      await sleep(500);
+
+      // Verify game is alive and back at a known state
+      const pollEnd = Date.now() + 10000;
+      while (Date.now() < pollEnd) {
+        const state = await readGameState();
+        if (state && state.stateName === 'TITLE') {
+          return { ok: true, state, method: 'soft-reset' };
+        }
+        if (state && state.frameCount > 0) {
+          // Game is alive but not at TITLE yet — push again
+          await executeScript(
+            `if (window.__dpMotoTest) window.__dpMotoTest.pushCommand(JSON.stringify({ type: "return-title" }));`
+          );
+        }
+        await sleep(1000);
+      }
+
+      // Fallback: check if game is at least alive
+      const finalState = await readGameState();
+      if (finalState && finalState.frameCount > 0) {
+        return { ok: true, state: finalState, method: 'soft-reset-partial', note: 'alive but not TITLE' };
+      }
+      return { ok: false, method: 'soft-reset', reason: 'game-not-responding' };
+    } catch (e) {
+      return { ok: false, method: 'soft-reset', error: e.message };
+    }
+  },
+
+  /** Full health check: ensure session alive, navigate, wait for boot, check state */
   'health-check': async () => {
+    // Ensure WebDriver session is alive (re-create if dead)
+    const sessionAlive = await ensureSession();
+    if (!sessionAlive) return { ok: false, phase: 'session-recreate' };
+
     // Navigate
     const navOk = await navigateTo(GAME_URL);
     if (!navOk) return { ok: false, phase: 'navigate' };
