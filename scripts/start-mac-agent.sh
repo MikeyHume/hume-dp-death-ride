@@ -1,10 +1,11 @@
 #!/bin/bash
-# start-mac-agent.sh — One-command Mac agent startup
+# start-mac-agent.sh — One-command Mac agent startup (Bash 3.2+ compatible)
 # Usage:
 #   ./scripts/start-mac-agent.sh                          # auto-detect first iOS device
 #   ./scripts/start-mac-agent.sh --udid <UDID>            # target specific device
 #   ./scripts/start-mac-agent.sh --device iphone-xs       # use named device profile
 #   ./scripts/start-mac-agent.sh --list                   # show connected iOS devices
+#   ./scripts/start-mac-agent.sh --pc-host 192.168.1.203  # override PC IP
 #
 # This script: pulls latest code, kills stale safaridriver, starts fresh safaridriver,
 # launches mac-agent targeting the specified device over HTTP.
@@ -12,39 +13,47 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# ── Device profiles (add new devices here) ─────────────────────
-declare -A DEVICES=(
-  [iphone-xs]="00008020-001345143C52002E"
-  # [iphone-12-mini]="UDID_HERE"
-  # [ipad-10th]="UDID_HERE"
-)
+# ── Device profiles (Bash 3.2 compatible — no associative arrays) ──
+# Add new devices as new cases below.
+resolve_device() {
+  case "$1" in
+    iphone-xs)       echo "00008020-001345143C52002E" ;;
+    # iphone-12-mini) echo "UDID_HERE" ;;
+    # ipad-10th)      echo "UDID_HERE" ;;
+    *)               echo "" ;;
+  esac
+}
+
+list_profiles() {
+  echo "  --device iphone-xs       → 00008020-001345143C52002E"
+  # echo "  --device iphone-12-mini  → UDID_HERE"
+  # echo "  --device ipad-10th       → UDID_HERE"
+}
 
 # ── Parse args ─────────────────────────────────────────────────
 UDID=""
-EXTRA_ARGS=()
+EXTRA_ARGS=""
 
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
   case "$1" in
     --list)
       echo "Connected devices:"
       xcrun xctrace list devices 2>/dev/null | grep -i "iphone\|ipad" || echo "  (none found)"
       echo ""
       echo "Registered profiles:"
-      for name in "${!DEVICES[@]}"; do
-        echo "  --device $name  →  ${DEVICES[$name]}"
-      done
+      list_profiles
       exit 0
       ;;
     --device)
       shift
-      if [[ -n "${DEVICES[$1]:-}" ]]; then
-        UDID="${DEVICES[$1]}"
-        echo "Using device profile: $1 → $UDID"
-      else
+      UDID="$(resolve_device "$1")"
+      if [ -z "$UDID" ]; then
         echo "Unknown device: $1"
-        echo "Known devices: ${!DEVICES[*]}"
+        echo "Known devices:"
+        list_profiles
         exit 1
       fi
+      echo "Using device profile: $1 → $UDID"
       shift
       ;;
     --udid)
@@ -53,7 +62,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     *)
-      EXTRA_ARGS+=("$1")
+      EXTRA_ARGS="$EXTRA_ARGS $1"
       shift
       ;;
   esac
@@ -84,15 +93,15 @@ fi
 echo "safaridriver running (PID $SAFARI_PID)"
 
 # ── Build mac-agent command ────────────────────────────────────
-CMD=(node scripts/mac-agent.mjs)
-if [[ -n "$UDID" ]]; then
-  CMD+=(--udid "$UDID")
+CMD="node scripts/mac-agent.mjs"
+if [ -n "$UDID" ]; then
+  CMD="$CMD --udid $UDID"
 fi
-CMD+=("${EXTRA_ARGS[@]}")
+CMD="$CMD $EXTRA_ARGS"
 
 echo ""
 echo "Starting mac-agent..."
-echo "  ${CMD[*]}"
+echo "  $CMD"
 echo ""
 
 # ── Run mac-agent (foreground — Ctrl+C stops both) ─────────────
@@ -102,6 +111,6 @@ cleanup() {
   kill $SAFARI_PID 2>/dev/null || true
   exit 0
 }
-trap cleanup SIGINT SIGTERM
+trap cleanup INT TERM
 
-"${CMD[@]}"
+$CMD
