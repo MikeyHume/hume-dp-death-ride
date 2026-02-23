@@ -36,6 +36,7 @@ const { values: args } = parseArgs({
     'wd-port':  { type: 'string', default: '4723' },
     'poll-ms':  { type: 'string', default: '2000' },
     'game-url': { type: 'string', default: '' },
+    'mac':      { type: 'boolean', default: false },
   },
 });
 
@@ -92,16 +93,18 @@ async function wdRequest(method, path, body = null) {
 }
 
 async function createSession() {
-  log('wd', 'Creating WebDriver session for iPad Safari...');
+  const isMac = args['mac'];
+  const platform = isMac ? 'macOS' : 'iOS';
+  log('wd', `Creating WebDriver session for ${platform} Safari...`);
+
+  // macOS Safari: minimal capabilities
+  // iPad Safari (real device): platformName 'iOS', no useSimulator
+  const caps = isMac
+    ? { browserName: 'safari', 'safari:automaticInspection': true }
+    : { browserName: 'safari', platformName: 'iOS', 'safari:automaticInspection': true };
+
   const res = await wdRequest('POST', '/session', {
-    capabilities: {
-      alwaysMatch: {
-        browserName: 'safari',
-        'safari:platformName': 'iOS',
-        'safari:useSimulator': false,
-        'safari:automaticInspection': true,
-      },
-    },
+    capabilities: { alwaysMatch: caps },
   });
   if (res.status === 200 && res.body?.value?.sessionId) {
     sessionId = res.body.value.sessionId;
@@ -322,8 +325,15 @@ const TASK_HANDLERS = {
 
   /** Take a screenshot and return base64 */
   'screenshot': async () => {
-    const b64 = await takeScreenshot();
-    return { ok: true, image: b64 ? `data:image/png;base64,${b64}` : null };
+    // Use canvas-based screenshot via game's captureScreenshot() — avoids safaridriver quirks
+    try {
+      const captured = await executeScript(
+        'return window.__dpMotoTest ? window.__dpMotoTest.captureScreenshot() : false;'
+      );
+      return { ok: true, method: 'canvas', captured };
+    } catch (e) {
+      return { ok: false, method: 'canvas', error: e.message };
+    }
   },
 
   /** Push a game command (type, params) */
