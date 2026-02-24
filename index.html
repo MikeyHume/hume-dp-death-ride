@@ -52,9 +52,8 @@
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
       touch-action: none;
-      /* Render behind notch on notched iPhones in landscape */
-      padding-left: env(safe-area-inset-left, 0px);
-      padding-right: env(safe-area-inset-right, 0px);
+      /* Safe-area padding removed — was causing asymmetric offset on notched iPhones.
+         Phaser's CENTER_BOTH centers the canvas; black bars serve as notch-safe zones. */
     }
     #game-container canvas {
       touch-action: none;
@@ -328,7 +327,7 @@
       var hh = String(now.getHours()).padStart(2, '0');
       var mi = String(now.getMinutes()).padStart(2, '0');
       var ss = String(now.getSeconds()).padStart(2, '0');
-      var verNum = '0.00.60';
+      var verNum = '0.00.61';
       var versionText = 'last saved [ ' + dd + ' : ' + monthName + ' : ' + yyyy + ' ]  [ ' + hh + ' : ' + mi + ' : ' + ss + ' ]';
       // Set title line version dynamically
       var titleLine = document.getElementById('bios-title-line');

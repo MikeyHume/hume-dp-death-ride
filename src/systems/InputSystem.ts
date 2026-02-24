@@ -36,6 +36,18 @@ export class InputSystem {
   // Visual cursor (green triangle, left edge of screen)
   private cursorGraphic: Phaser.GameObjects.Triangle | null = null;
 
+  // Road Y bounds (stored as fields for external touch API)
+  private clampMinY: number = 0;
+  private clampMaxY: number = 1080;
+
+  // DOM-level handler refs for cleanup
+  private _domPointerDown: ((e: PointerEvent) => void) | null = null;
+  private _domPointerMove: ((e: PointerEvent) => void) | null = null;
+  private _domPointerUp: ((e: PointerEvent) => void) | null = null;
+  private _canvasCapture: ((e: PointerEvent) => void) | null = null;
+  // Track which pointers are "external" (started on black bars, not canvas)
+  private _externalPointerIds = new Set<number>();
+
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.mobileMode = GAME_MODE.mobileMode;
@@ -87,17 +99,22 @@ export class InputSystem {
 
     const halfScreen = TUNING.GAME_WIDTH / 2;
     const halfH = TUNING.PLAYER_DISPLAY_HEIGHT / 2;
-    const minY = TUNING.ROAD_TOP_Y - TUNING.PLAYER_TOP_Y_EXTEND;
-    const maxY = TUNING.ROAD_BOTTOM_Y - halfH;
+    this.clampMinY = TUNING.ROAD_TOP_Y - TUNING.PLAYER_TOP_Y_EXTEND;
+    this.clampMaxY = TUNING.ROAD_BOTTOM_Y - halfH;
+    const minY = this.clampMinY;
+    const maxY = this.clampMaxY;
 
+    // ── Phaser-level handlers (touches ON the canvas) ──────────────
     scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      // Skip if this pointer is already tracked as external (black-bar touch)
+      if (this._externalPointerIds.has(pointer.id)) return;
+
       if (pointer.x < halfScreen) {
         // Left half — steer + boost
         if (this.leftPointerId === null) {
           this.leftPointerId = pointer.id;
           this.leftTouchStartTime = Date.now();
           this.touchBoostHeld = true;
-          // Clamp Y to road bounds
           const y = Phaser.Math.Clamp(pointer.y, minY, maxY);
           this.touchTargetY = y;
         }
@@ -112,6 +129,7 @@ export class InputSystem {
     });
 
     scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this._externalPointerIds.has(pointer.id)) return;
       if (pointer.id === this.leftPointerId) {
         const y = Phaser.Math.Clamp(pointer.y, minY, maxY);
         this.touchTargetY = y;
@@ -119,6 +137,7 @@ export class InputSystem {
     });
 
     scene.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (this._externalPointerIds.has(pointer.id)) return;
       if (pointer.id === this.leftPointerId) {
         this.touchBoostHeld = false;
         if (Date.now() - this.leftTouchStartTime < TUNING.MOBILE_TAP_THRESHOLD) {
@@ -132,6 +151,86 @@ export class InputSystem {
         this.rightPointerId = null;
       }
     });
+
+    // ── setPointerCapture — extend canvas touches into black bars ──
+    // When a touch starts on the canvas and the finger slides off into the
+    // black bar area, the browser normally fires pointerup. setPointerCapture
+    // forces ALL subsequent pointer events for that finger to the canvas,
+    // so Phaser keeps receiving pointermove even in the black bars.
+    const canvas = scene.game.canvas;
+    this._canvasCapture = (e: PointerEvent) => {
+      canvas.setPointerCapture(e.pointerId);
+    };
+    canvas.addEventListener('pointerdown', this._canvasCapture, true);
+
+    // ── DOM-level handlers — touches that START on black bars ──────
+    // When a finger goes down directly on a black bar (#game-container
+    // background, not the canvas), Phaser never sees it. These handlers
+    // catch those touches, map screen coords to game coords, and inject
+    // them into the same leftPointerId / rightPointerId tracking.
+    const container = document.getElementById('game-container');
+    if (container) {
+      this._domPointerDown = (e: PointerEvent) => {
+        // Only handle touches on the container itself (black bars), not the canvas
+        if (e.target === canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const screenHalf = window.innerWidth / 2;
+        const gameY = ((e.clientY - rect.top) / rect.height) * TUNING.GAME_HEIGHT;
+        const clampedY = Phaser.Math.Clamp(gameY, minY, maxY);
+
+        if (e.clientX < screenHalf) {
+          // Left half — steer + boost
+          if (this.leftPointerId === null) {
+            this.leftPointerId = e.pointerId;
+            this._externalPointerIds.add(e.pointerId);
+            this.leftTouchStartTime = Date.now();
+            this.touchBoostHeld = true;
+            this.touchTargetY = clampedY;
+            // Capture this pointer so move/up events come to the container
+            container.setPointerCapture(e.pointerId);
+          }
+        } else {
+          // Right half — attack / rocket
+          if (this.rightPointerId === null) {
+            this.rightPointerId = e.pointerId;
+            this._externalPointerIds.add(e.pointerId);
+            this.rightTouchStartTime = Date.now();
+            this.rightRocketFired = false;
+            container.setPointerCapture(e.pointerId);
+          }
+        }
+      };
+
+      this._domPointerMove = (e: PointerEvent) => {
+        if (!this._externalPointerIds.has(e.pointerId)) return;
+        if (e.pointerId === this.leftPointerId) {
+          const rect = canvas.getBoundingClientRect();
+          const gameY = ((e.clientY - rect.top) / rect.height) * TUNING.GAME_HEIGHT;
+          this.touchTargetY = Phaser.Math.Clamp(gameY, minY, maxY);
+        }
+      };
+
+      this._domPointerUp = (e: PointerEvent) => {
+        if (!this._externalPointerIds.has(e.pointerId)) return;
+        this._externalPointerIds.delete(e.pointerId);
+        if (e.pointerId === this.leftPointerId) {
+          this.touchBoostHeld = false;
+          if (Date.now() - this.leftTouchStartTime < TUNING.MOBILE_TAP_THRESHOLD) {
+            this.touchBoostTap = true;
+          }
+          this.leftPointerId = null;
+        } else if (e.pointerId === this.rightPointerId) {
+          if (!this.rightRocketFired) {
+            this.slashPressed = true; // katana
+          }
+          this.rightPointerId = null;
+        }
+      };
+
+      container.addEventListener('pointerdown', this._domPointerDown);
+      container.addEventListener('pointermove', this._domPointerMove);
+      container.addEventListener('pointerup', this._domPointerUp);
+    }
   }
 
   /** Called each frame from GameScene.update(). Handles mobile hold timer + cursor. */
@@ -256,5 +355,17 @@ export class InputSystem {
       this.cursorGraphic.destroy();
       this.cursorGraphic = null;
     }
+    // Clean up DOM-level handlers
+    const canvas = this.scene.game.canvas;
+    if (this._canvasCapture) {
+      canvas.removeEventListener('pointerdown', this._canvasCapture, true);
+    }
+    const container = document.getElementById('game-container');
+    if (container) {
+      if (this._domPointerDown) container.removeEventListener('pointerdown', this._domPointerDown);
+      if (this._domPointerMove) container.removeEventListener('pointermove', this._domPointerMove);
+      if (this._domPointerUp) container.removeEventListener('pointerup', this._domPointerUp);
+    }
+    this._externalPointerIds.clear();
   }
 }
