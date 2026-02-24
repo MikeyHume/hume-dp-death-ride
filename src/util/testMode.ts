@@ -103,6 +103,27 @@ export interface TestState {
     trackTitle: string | null;
     sceneName: string;
   };
+
+  // ── Performance Metrics (for stress testing) ──────────────
+  /** Current FPS from game.loop.actualFps */
+  fps: number;
+  /** Rolling average FPS (from PerfSystem, 120-sample window) */
+  fpsAvg: number;
+  /** Min FPS seen since PLAYING started (reset per run) */
+  fpsMin: number;
+  /** Max FPS seen since PLAYING started */
+  fpsMax: number;
+  /** Current quality tier ('high' | 'medium' | 'low') */
+  qualityTier: string;
+  /** Active feature flags snapshot */
+  features: {
+    crt: boolean;
+    reflections: boolean;
+    carCount: number;
+    parallaxLayers: number;
+    mobileMode: boolean;
+    simulatedDevice: string | null;
+  };
 }
 
 // ── Config flags ─────────────────────────────────────────────
@@ -181,6 +202,15 @@ export function initTestMode(): void {
       hudVisible: false, wmpOpen: false, profileOpen: false,
       deathScreenVisible: false, countdownVisible: false,
       trackTitle: null, sceneName: 'Boot',
+    },
+    fps: 0,
+    fpsAvg: 0,
+    fpsMin: 999,
+    fpsMax: 0,
+    qualityTier: 'high',
+    features: {
+      crt: false, reflections: false, carCount: 0,
+      parallaxLayers: 8, mobileMode: false, simulatedDevice: null,
     },
   };
 

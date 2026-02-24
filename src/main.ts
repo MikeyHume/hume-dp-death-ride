@@ -5,8 +5,8 @@ import { handleCallback } from './systems/SpotifyAuthSystem';
 import { GAME_MODE, DEVICE_PROFILE } from './config/gameMode';
 import { initTelemetry } from './util/telemetry';
 import { initTestMode, TEST_MODE } from './util/testMode';
-import { isiOS } from './util/device';
-import { initSimulation, isSimulating, applyFpsThrottle } from './systems/DeviceSimulator';
+import { isiOS, isPhoneTier } from './util/device';
+import { initSimulation, isSimulating, applyFpsThrottle, createDeviceCycler } from './systems/DeviceSimulator';
 
 // Device simulation: ?simulate=<slug> overrides DEVICE_PROFILE before anything runs
 const simProfile = initSimulation();
@@ -16,6 +16,9 @@ if (simProfile) {
   GAME_MODE.mobileMode = true; // Simulating a mobile device
   GAME_MODE.quality = simProfile.tier === 'phone-low' ? 'low' : 'medium';
 }
+
+// Set phone mode flag after device profile is finalized (incl. simulation override)
+GAME_MODE.isPhoneMode = isPhoneTier(DEVICE_PROFILE.tier);
 
 // Expose device profile globally for debugging + WebDriver inspection
 (window as any).__deviceProfile = DEVICE_PROFILE;
@@ -125,13 +128,9 @@ handleCallback().then((wasCallback) => {
   // Expose game instance so BIOS overlay can unlock Phaser's audio context
   (window as any).__phaserGame = game;
 
-  // Viewport cycler: ?viewport=1 shows a mode cycle button for A/B testing viewport strategies
-  if (new URLSearchParams(location.search).has('viewport')) {
-    import('./ui/ViewportCycler').then(m => {
-      (window as any).__viewportCycler = new m.ViewportCycler(game);
-      console.log('[main] ViewportCycler activated — tap circle to cycle modes');
-    });
-  }
+  // Device cycle button (desktop dev tool — visible when ?devices=1 or always on desktop)
+  createDeviceCycler();
+
 
   // Dynamic imports: GameScene + pipelines loaded in parallel with BootScene assets.
   // This defers ~400KB of JS evaluation that would otherwise crash iOS Safari.

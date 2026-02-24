@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DP Moto - Phaser Only Test</title></head>
+<body style="background:#000;color:#0f0;font-family:monospace;padding:20px">
+<h2>Phaser-Only Test (no game assets)</h2>
+<div id="log"></div>
+<script>
+var log = document.getElementById('log');
+function L(msg) { log.innerHTML += msg + '<br>'; console.log(msg); }
+L('Loading Phaser...');
+</script>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.88.2/dist/phaser.min.js"></script>
+<script>
+L('Phaser loaded: v' + Phaser.VERSION);
+L('Creating minimal game...');
+
+var config = {
+  type: Phaser.WEBGL,
+  width: 960,
+  height: 540,
+  backgroundColor: '#1a0020',
+  parent: document.body,
+  scene: {
+    create: function() {
+      L('Scene created!');
+      this.add.text(100, 100, 'Phaser running on iPhone Xs!', { fontSize: '24px', color: '#0f0' });
+      this.add.rectangle(480, 270, 200, 200, 0xff0000);
+      L('Game objects added. FPS target: ' + this.game.loop.targetFps);
+    },
+    update: function() {
+      if (!this._beat) this._beat = 0;
+      this._beat++;
+      if (this._beat % 60 === 0) {
+        L('Frame ' + this._beat + ' | FPS: ' + Math.round(this.game.loop.actualFps));
+      }
+    }
+  }
+};
+
+try {
+  var game = new Phaser.Game(config);
+  L('Game instance created');
+} catch(e) {
+  L('GAME CREATION FAILED: ' + e.message);
+}
+</script>
+</body></html>

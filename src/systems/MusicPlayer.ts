@@ -6,7 +6,7 @@ import { WMPPopup } from '../ui/WMPPopup';
 import { PlaybackController } from './PlaybackController';
 import { fetchAllTracks, type CatalogTrack } from './MusicCatalogService';
 import { HumePlayerSystem } from './HumePlayerSystem';
-import { GAME_MODE } from '../config/gameMode';
+import { GAME_MODE, DEVICE_PROFILE } from '../config/gameMode';
 import { TEST_MODE } from '../util/testMode';
 
 const MUSIC_UI_SCALE = 1;             // uniform scale from upper-right corner
@@ -50,6 +50,11 @@ export class MusicPlayer {
   private hovered: boolean = false;
   private cursorOver: boolean = false;
   private mobileExpanded: boolean = false;  // mobile-only: tracks tap-to-toggle state
+  private phonePopupMode: boolean = false;  // phone-only: currently in centered popup
+  private phoneBackdrop: HTMLDivElement | null = null;  // phone-only: semi-transparent backdrop
+  private phoneBackdropP: Phaser.GameObjects.Rectangle | null = null;  // Phaser backdrop (CRT-rendered)
+  private phoneCollapsedTopPct: string = '';   // saved collapsed-state top %
+  private phoneCollapsedRightPct: string = ''; // saved collapsed-state right %
 
   // Phaser sprites that mirror HTML buttons (rendered through CRT shader)
   private btnSprites: Phaser.GameObjects.Image[] = [];
@@ -359,8 +364,33 @@ export class MusicPlayer {
     });
     this.canvasOverlay.appendChild(this.container);
 
+    // Phone mode: save collapsed position + create fullscreen backdrop
+    if (GAME_MODE.isPhoneMode) {
+      this.phoneCollapsedTopPct = `${topPct}%`;
+      this.phoneCollapsedRightPct = `${rightPct}%`;
+
+      this.phoneBackdrop = document.createElement('div');
+      Object.assign(this.phoneBackdrop.style, {
+        position: 'absolute',
+        top: '0', left: '0', width: '100%', height: '100%',
+        background: `rgba(0, 0, 0, ${TUNING.MUSIC_UI_PHONE_BACKDROP_ALPHA})`,
+        opacity: '0',
+        display: 'none',
+        pointerEvents: 'auto',
+        transition: `opacity ${TUNING.MUSIC_UI_PHONE_ANIM_MS}ms ease`,
+        zIndex: '0',  // behind container in overlay stacking
+      });
+      this.phoneBackdrop.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        this.mobileCollapse();
+      });
+      // Insert backdrop before container so it renders behind it
+      this.canvasOverlay.insertBefore(this.phoneBackdrop, this.container);
+    }
+
     // Mobile: tap or touch outside the player → collapse
-    if (GAME_MODE.mobileMode) {
+    if (GAME_MODE.mobileMode && !GAME_MODE.isPhoneMode) {
+      // Tablet-only: original outside-tap handler (phones use phoneBackdrop instead)
       document.addEventListener('pointerdown', (e) => {
         if (!this.mobileExpanded) return;
         if (this.container.contains(e.target as Node)) return;
@@ -505,6 +535,14 @@ export class MusicPlayer {
     // Semi-transparent background panel (Phaser, rendered through CRT behind all content)
     this.bgPanel = this.scene.add.rectangle(0, 0, 1, 1, 0x000000, 0.55)
       .setDepth(999).setScrollFactor(0).setOrigin(0, 0).setVisible(false);
+
+    // Phone popup fullscreen backdrop (Phaser, rendered through CRT)
+    if (GAME_MODE.isPhoneMode) {
+      this.phoneBackdropP = this.scene.add.rectangle(
+        0, 0, GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT,
+        0x000000, TUNING.MUSIC_UI_PHONE_BACKDROP_ALPHA,
+      ).setDepth(998).setScrollFactor(0).setOrigin(0, 0).setVisible(false);
+    }
 
     // Thumbnail CRT sprite (mirrors HTML thumbnail through CRT shader)
     this.thumbSprite = this.scene.add.image(0, 0, '__DEFAULT')
@@ -1459,6 +1497,11 @@ export class MusicPlayer {
 
   setCompact(value: boolean): void {
     this.compact = value;
+    if (GAME_MODE.isPhoneMode) {
+      // Phone mode: always stay collapsed (thumbnail-only) unless in popup mode
+      if (!this.phonePopupMode) this.collapseUI();
+      return;
+    }
     if (value && !this.hovered) {
       this.collapseUI();
     } else {
@@ -1467,6 +1510,12 @@ export class MusicPlayer {
   }
 
   private collapseUI(animate: boolean = true): void {
+    // Phone mode delegates to mobileCollapse for the popup behavior
+    if (GAME_MODE.isPhoneMode && this.phonePopupMode) {
+      this.mobileCollapse();
+      return;
+    }
+
     if (!animate) {
       this.container.style.transition = 'none';
       this.rightColumnEl.style.transition = 'none';
@@ -1496,6 +1545,12 @@ export class MusicPlayer {
   }
 
   private expandUI(): void {
+    // Phone mode delegates to mobileExpand for the popup behavior
+    if (GAME_MODE.isPhoneMode) {
+      this.mobileExpand();
+      return;
+    }
+
     const uiWidth = GAME_MODE.mobileMode ? TUNING.MUSIC_UI_MOBILE_WIDTH : TUNING.MUSIC_UI_WIDTH;
     const widthPct = (uiWidth / GAME_MODE.canvasWidth) * 100;
     this.container.style.width = `calc(${widthPct}% + ${2 * 20}px)`;
@@ -1513,14 +1568,114 @@ export class MusicPlayer {
   private mobileExpand(): void {
     this.mobileExpanded = true;
     this.hovered = true;
-    this.expandUI();
+
+    if (GAME_MODE.isPhoneMode) {
+      // ── Phone popup mode: center on screen with backdrop ──
+      this.phonePopupMode = true;
+      const animMs = TUNING.MUSIC_UI_PHONE_ANIM_MS;
+      const scale = DEVICE_PROFILE.musicUIScale;
+      const pad = TUNING.MUSIC_UI_PHONE_PAD;
+
+      // Show + fade in HTML backdrop
+      if (this.phoneBackdrop) {
+        this.phoneBackdrop.style.display = 'block';
+        void this.phoneBackdrop.offsetHeight; // force reflow before transition
+        this.phoneBackdrop.style.opacity = '1';
+      }
+
+      // Show Phaser backdrop
+      if (this.phoneBackdropP) this.phoneBackdropP.setVisible(true).setAlpha(0);
+      if (this.phoneBackdropP) {
+        this.scene.tweens.killTweensOf(this.phoneBackdropP);
+        this.scene.tweens.add({
+          targets: this.phoneBackdropP,
+          alpha: TUNING.MUSIC_UI_PHONE_BACKDROP_ALPHA,
+          duration: animMs,
+          ease: 'Sine.easeInOut',
+        });
+      }
+
+      // Reposition container: centered popup
+      Object.assign(this.container.style, {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        right: 'auto',
+        width: `calc(100% - ${pad * 2}px)`,
+        transform: `translate(-50%, -50%) scale(${scale})`,
+        transformOrigin: 'center center',
+        transition: `transform ${animMs}ms ease, width ${animMs}ms ease, top ${animMs}ms ease, left ${animMs}ms ease`,
+        gap: '40px',
+      });
+      this.rightColumnEl.style.opacity = '1';
+
+      // Fade in Phaser button sprites, title text, and heart
+      for (const s of [...this.btnSprites, this.titleText, this.heartTextP]) {
+        this.scene.tweens.killTweensOf(s);
+        this.scene.tweens.add({ targets: s, alpha: 1, duration: animMs, ease: 'Sine.easeInOut' });
+      }
+    } else {
+      // Tablet: just expand inline
+      this.expandUI();
+    }
   }
 
   /** Mobile: collapse the music player via tap or outside touch */
   private mobileCollapse(): void {
     this.mobileExpanded = false;
     this.hovered = false;
-    this.collapseUI();
+
+    if (GAME_MODE.isPhoneMode) {
+      // ── Phone popup mode: restore to collapsed thumbnail in corner ──
+      this.phonePopupMode = false;
+      const animMs = TUNING.MUSIC_UI_PHONE_ANIM_MS;
+
+      // Fade out HTML backdrop
+      if (this.phoneBackdrop) {
+        this.phoneBackdrop.style.opacity = '0';
+        setTimeout(() => {
+          if (this.phoneBackdrop && !this.phonePopupMode) {
+            this.phoneBackdrop.style.display = 'none';
+          }
+        }, animMs);
+      }
+
+      // Fade out Phaser backdrop
+      if (this.phoneBackdropP) {
+        this.scene.tweens.killTweensOf(this.phoneBackdropP);
+        this.scene.tweens.add({
+          targets: this.phoneBackdropP,
+          alpha: 0,
+          duration: animMs,
+          ease: 'Sine.easeInOut',
+          onComplete: () => { this.phoneBackdropP?.setVisible(false); },
+        });
+      }
+
+      // Restore container to collapsed position in corner
+      const thumbW = parseFloat(this.thumbnailImg.style.width) || (YT_THUMB_HEIGHT * TUNING.MUSIC_UI_THUMB_SCALE);
+      Object.assign(this.container.style, {
+        position: 'absolute',
+        top: this.phoneCollapsedTopPct,
+        left: 'auto',
+        right: this.phoneCollapsedRightPct,
+        width: `${thumbW + 2 * 20}px`,
+        transform: 'scale(1)',
+        transformOrigin: 'top right',
+        transition: `transform ${animMs}ms ease, width ${animMs}ms ease, top ${animMs}ms ease, right ${animMs}ms ease`,
+        gap: '0px',
+      });
+      this.rightColumnEl.style.opacity = '0';
+
+      // Fade out Phaser button sprites, title text, and heart
+      for (const s of [...this.btnSprites, this.titleText, this.heartTextP]) {
+        this.scene.tweens.killTweensOf(s);
+        this.scene.tweens.add({ targets: s, alpha: 0, duration: animMs, ease: 'Sine.easeInOut' });
+      }
+    } else {
+      // Tablet: collapse inline
+      this.collapseUI();
+    }
   }
 
   /** Reveal music player during gameplay: fade in thumbnail, wait 1.5s, then expand */
@@ -1544,6 +1699,9 @@ export class MusicPlayer {
       ease: 'Sine.easeInOut',
     });
 
+    // Phone mode: stay collapsed (thumbnail only), no auto-expand
+    if (GAME_MODE.isPhoneMode) return;
+
     // After 1.5s, expand to show full UI
     this.revealTimer = this.scene.time.delayedCall(1500, () => {
       this.revealTimer = null;
@@ -1555,6 +1713,30 @@ export class MusicPlayer {
   setVisible(visible: boolean): void {
     this.container.style.display = visible ? 'flex' : 'none';
     if (!visible) {
+      // If phone popup is open, close it instantly
+      if (this.phonePopupMode) {
+        this.phonePopupMode = false;
+        this.mobileExpanded = false;
+        this.hovered = false;
+        if (this.phoneBackdrop) {
+          this.phoneBackdrop.style.display = 'none';
+          this.phoneBackdrop.style.opacity = '0';
+        }
+        if (this.phoneBackdropP) this.phoneBackdropP.setVisible(false);
+        // Restore collapsed position for next show
+        const thumbW = parseFloat(this.thumbnailImg.style.width) || (YT_THUMB_HEIGHT * TUNING.MUSIC_UI_THUMB_SCALE);
+        Object.assign(this.container.style, {
+          position: 'absolute',
+          top: this.phoneCollapsedTopPct,
+          left: 'auto',
+          right: this.phoneCollapsedRightPct,
+          width: `${thumbW + 2 * 20}px`,
+          transform: 'scale(1)',
+          transformOrigin: 'top right',
+          gap: '0px',
+        });
+        this.rightColumnEl.style.opacity = '0';
+      }
       if (this.revealTimer) {
         this.revealTimer.destroy();
         this.revealTimer = null;
@@ -1728,6 +1910,8 @@ export class MusicPlayer {
     for (const s of this.btnSprites) s.destroy();
     this.btnSprites.length = 0;
     this.bgPanel.destroy();
+    if (this.phoneBackdropP) this.phoneBackdropP.destroy();
+    if (this.phoneBackdrop) this.phoneBackdrop.remove();
     this.thumbSprite.destroy();
     this.thumbHoverOverlay.destroy();
     this.titleText.destroy();

@@ -19,6 +19,19 @@ export function isiOS(): boolean {
   return false;
 }
 
+/** Returns true if the active device profile is a phone tier (not tablet/desktop). */
+export function isPhoneTier(tier: string): boolean {
+  return tier === 'phone-high' || tier === 'gen-mobile' || tier === 'phone-low';
+}
+
+/** Auto-compute musicUIScale for unknown devices based on screen dimensions.
+ *  Smaller screens get higher scale so the popup content is readable. */
+function autoMusicUIScale(): number {
+  const shortest = Math.min(screen.width, screen.height);
+  // ~360px (iPhone Mini) → 1.5, ~414px (iPhone Plus) → 1.3, ~430px → 1.26
+  return Math.max(1.0, Math.min(2.0, 540 / shortest));
+}
+
 // ── Device Profiles ─────────────────────────────────────────────
 
 export type DeviceTier = 'desktop' | 'tablet' | 'phone-high' | 'gen-mobile' | 'phone-low';
@@ -31,6 +44,7 @@ export interface DeviceProfile {
   carCount: number;           // Oncoming traffic count (0 = disabled)
   parallaxLayers: number;     // Number of parallax background layers
   maxParallelLoads: number;   // Loader concurrency
+  musicUIScale: number;       // Music player popup scale on phones (1.0 = no extra scaling)
 }
 
 /** Default profiles per tier. */
@@ -43,6 +57,7 @@ const PROFILES: Record<DeviceTier, DeviceProfile> = {
     carCount: 5,
     parallaxLayers: 8,
     maxParallelLoads: 32,
+    musicUIScale: 1.0,
   },
   'tablet': {
     tier: 'tablet',
@@ -52,6 +67,7 @@ const PROFILES: Record<DeviceTier, DeviceProfile> = {
     carCount: 5,
     parallaxLayers: 8,
     maxParallelLoads: 4,
+    musicUIScale: 1.0,
   },
   'phone-high': {
     tier: 'phone-high',
@@ -61,6 +77,7 @@ const PROFILES: Record<DeviceTier, DeviceProfile> = {
     carCount: 2,           // was 3 — each car skin ~1.8 MB mobile texture
     parallaxLayers: 6,     // was 8 — drops 2 least-visible building layers
     maxParallelLoads: 2,
+    musicUIScale: 1.4,
   },
   'gen-mobile': {
     tier: 'gen-mobile',
@@ -70,6 +87,7 @@ const PROFILES: Record<DeviceTier, DeviceProfile> = {
     carCount: 2,          // Some traffic (not 0 like phone-low, not 5 like desktop)
     parallaxLayers: 6,    // Reduced from 8 but not gutted
     maxParallelLoads: 2,
+    musicUIScale: 1.3,
   },
   'phone-low': {
     tier: 'phone-low',
@@ -79,6 +97,7 @@ const PROFILES: Record<DeviceTier, DeviceProfile> = {
     carCount: 0,
     parallaxLayers: 8,
     maxParallelLoads: 2,
+    musicUIScale: 1.2,
   },
 };
 
@@ -168,6 +187,7 @@ export function detectDeviceProfile(): DeviceProfile {
       // Phone-sized — default to gen-mobile (safe but not crippled)
       const p = { ...PROFILES['gen-mobile'] };
       p.label = `Unknown iPhone (${w}×${h} @${dpr}x)`;
+      p.musicUIScale = autoMusicUIScale();
       return p;
     }
   }
@@ -182,6 +202,7 @@ export function detectDeviceProfile(): DeviceProfile {
     }
     const p = { ...PROFILES['gen-mobile'] };
     p.label = `Android Phone (${w}×${screen.height})`;
+    p.musicUIScale = autoMusicUIScale();
     return p;
   }
 

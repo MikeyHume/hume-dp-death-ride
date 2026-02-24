@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Boot Isolation Test</title>
+<style>*{margin:0;padding:0}html,body{background:#000;overflow:hidden}</style>
+</head>
+<body>
+<div id="game-container" style="width:100%;height:100%"></div>
+<div id="log" style="position:fixed;top:0;left:0;z-index:99999;background:rgba(0,0,0,0.95);color:#0f0;padding:8px;font:10px monospace;max-height:100vh;overflow-y:auto;width:100%"></div>
+<script>
+var log = document.getElementById('log');
+var startTime = Date.now();
+function L(msg) {
+  var t = ((Date.now()-startTime)/1000).toFixed(2);
+  log.innerHTML += '['+t+'s] '+msg+'<br>';
+  log.scrollTop = log.scrollHeight;
+}
+window.onerror = function(m,s,l,c,e) {
+  L('<b style="color:red">JS ERROR: '+m+'</b> at '+(s||'').split('/').pop()+':'+l);
+};
+window.onunhandledrejection = function(e) {
+  L('<b style="color:red">PROMISE REJECT: '+(e.reason?e.reason.message||String(e.reason):'?')+'</b>');
+};
+
+// Performance observer for resource loading
+if (window.PerformanceObserver) {
+  var po = new PerformanceObserver(function(list) {
+    list.getEntries().forEach(function(e) {
+      if (e.entryType === 'resource') {
+        var name = e.name.split('/').pop().substring(0, 30);
+        var size = e.transferSize ? Math.round(e.transferSize/1024)+'KB' : '?';
+        L('RES: '+name+' ('+size+', '+Math.round(e.duration)+'ms)');
+      }
+    });
+  });
+  po.observe({entryTypes: ['resource']});
+}
+
+// Heartbeat
+setInterval(function() { L('alive'); }, 2000);
+L('Starting boot isolation test...');
+L('iPhone screen: '+screen.width+'x'+screen.height+' @'+devicePixelRatio+'x');
+</script>
+<script type="module">
+// Import Phaser first, then try the game config step by step
+import('/src/main.ts').then(function() {
+  document.getElementById('log').innerHTML += '[loaded] main.ts executed<br>';
+}).catch(function(e) {
+  document.getElementById('log').innerHTML += '[FAIL] main.ts: '+e.message+'<br>';
+});
+</script>
+</body></html>

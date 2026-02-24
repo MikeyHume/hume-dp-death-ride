@@ -84,8 +84,8 @@ export class BootScene extends Phaser.Scene {
     } else {
       // Mobile: load only first frame of title loop for static title background
       this.load.image('start-loop-00', 'assets/start/start_loop/DP_Death_Ride_Title_Loop00.jpg');
-      // Mobile: load only first frame of intro-to-tutorial (saves ~216MB VRAM)
-      this.load.image('intro-tut-00000', 'assets/cutscenes/intro_to_tut/v3/intro_to_tut_v03__00000.jpg');
+      // Mobile: load compressed half-res first frame of intro-to-tutorial (745KB → 89KB)
+      this.load.image('intro-tut-00000', 'assets/cutscenes/intro_to_tut/v3_mobile/intro_to_tut_v03__00000.jpg');
     }
     // Mobile: load half-res nearest-neighbor sprite sheets (_mobile suffix)
     // Same texture keys, same animations, just smaller textures + frame dims
@@ -210,9 +210,9 @@ export class BootScene extends Phaser.Scene {
 
     // Tutorial assets
     this.load.image('tutorial-skip', 'assets/tutorial/skip_v02.png');
-    this.load.image('tutorial-blank', 'assets/tutorial/how_to_play_v2.jpg');
-    this.load.image('tutorial-obstacles', 'assets/tutorial/tut_v2/rules_v2.jpg');
     if (!GAME_MODE.mobileMode) {
+      this.load.image('tutorial-blank', 'assets/tutorial/how_to_play_v2.jpg');
+      this.load.image('tutorial-obstacles', 'assets/tutorial/tut_v2/rules_v2.jpg');
       for (let i = 0; i < TUNING.TUTORIAL_CONTROLS_FRAMES; i++) {
         const idx = String(i).padStart(2, '0');
         const fileIdx = String(i).padStart(5, '0');
@@ -222,9 +222,11 @@ export class BootScene extends Phaser.Scene {
         this.load.image(`tutorial-rage-${i}`, `assets/tutorial/tut_v2/rage_v2/rage_v2_${i}.jpg`);
       }
     } else {
-      // Mobile: load only first frame of each for static display
-      this.load.image('tutorial-controls-00', 'assets/tutorial/controls_v4/controls_v4__00000.jpg');
-      this.load.image('tutorial-rage-0', 'assets/tutorial/tut_v2/rage_v2/rage_v2_0.jpg');
+      // Mobile: load compressed half-res variants (87-97% smaller)
+      this.load.image('tutorial-blank', 'assets/tutorial/how_to_play_v2_mobile.jpg');
+      this.load.image('tutorial-obstacles', 'assets/tutorial/tut_v2/rules_v2_mobile.jpg');
+      this.load.image('tutorial-controls-00', 'assets/tutorial/controls_v4_mobile/controls_v4__00000.jpg');
+      this.load.image('tutorial-rage-0', 'assets/tutorial/tut_v2/rage_v2_mobile/rage_v2_0.jpg');
     }
   }
 

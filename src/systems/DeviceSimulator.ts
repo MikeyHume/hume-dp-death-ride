@@ -64,6 +64,7 @@ export function initSimulation(): DeviceProfile | null {
       carCount: 2,
       parallaxLayers: 6,
       maxParallelLoads: 2,
+      musicUIScale: 1.3,
     };
     // Create a synthetic device for the info bar
     activeSimulation = {
@@ -164,31 +165,31 @@ function buildProfileFromSpec(spec: DeviceSpec): DeviceProfile {
       return {
         tier: 'phone-high', label: `${spec.name} (sim)`,
         crt: true, reflections: true, carCount: 3,
-        parallaxLayers: 8, maxParallelLoads: 2,
+        parallaxLayers: 8, maxParallelLoads: 2, musicUIScale: 1.4,
       };
     case 'gen-mobile':
       return {
         tier: 'gen-mobile', label: `${spec.name} (sim)`,
         crt: false, reflections: false, carCount: 2,
-        parallaxLayers: 6, maxParallelLoads: 2,
+        parallaxLayers: 6, maxParallelLoads: 2, musicUIScale: 1.3,
       };
     case 'phone-low':
       return {
         tier: 'phone-low', label: `${spec.name} (sim)`,
         crt: false, reflections: false, carCount: 0,
-        parallaxLayers: 8, maxParallelLoads: 2,
+        parallaxLayers: 8, maxParallelLoads: 2, musicUIScale: 1.2,
       };
     case 'tablet':
       return {
         tier: 'tablet', label: `${spec.name} (sim)`,
         crt: true, reflections: true, carCount: 5,
-        parallaxLayers: 8, maxParallelLoads: 4,
+        parallaxLayers: 8, maxParallelLoads: 4, musicUIScale: 1.0,
       };
     default:
       return {
         tier: 'desktop', label: `${spec.name} (sim)`,
         crt: true, reflections: true, carCount: 5,
-        parallaxLayers: 8, maxParallelLoads: 32,
+        parallaxLayers: 8, maxParallelLoads: 32, musicUIScale: 1.0,
       };
   }
 }
@@ -390,4 +391,64 @@ function updateFpsDisplay(actual: number, target: number): void {
   const color = actual >= target * 0.9 ? '#22c55e' : actual >= target * 0.6 ? '#eab308' : '#ef4444';
   liveFps.style.color = color;
   liveFps.textContent = `(${actual} actual)`;
+}
+
+// ── Device Cycler (desktop dev tool) ────────────────────────────
+
+const CYCLE_DEVICES = [
+  { slug: '', label: 'Desktop' },
+  { slug: 'iphone-xs', label: 'iPhone Xs' },
+  { slug: 'iphone-12-mini', label: 'iPhone 12 Mini' },
+  { slug: 'iphone-16-pro-max', label: 'iPhone 16 Pro Max' },
+];
+
+/**
+ * Creates a floating button that cycles through device simulations.
+ * Each click updates the URL ?simulate= param and reloads.
+ */
+export function createDeviceCycler(): void {
+  // Only show on desktop browsers — not on real phones/tablets
+  if (/iPhone|iPod|iPad|Android/i.test(navigator.userAgent)) return;
+  if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return; // iPad as Mac
+
+  const params = new URLSearchParams(location.search);
+  const currentSlug = params.get('simulate') || '';
+  const currentIdx = CYCLE_DEVICES.findIndex(d => d.slug === currentSlug);
+  const current = CYCLE_DEVICES[Math.max(0, currentIdx)];
+
+  const btn = document.createElement('button');
+  btn.id = 'device-cycler-btn';
+  btn.textContent = current.label;
+  btn.style.cssText = `
+    position: fixed; bottom: 12px; left: 12px; z-index: 99999;
+    padding: 8px 18px; border: 2px solid #a855f7; border-radius: 8px;
+    background: rgba(15, 15, 35, 0.9); color: #e0e0e0;
+    font-family: 'Courier New', monospace; font-size: 14px; font-weight: bold;
+    cursor: pointer; backdrop-filter: blur(4px);
+    transition: border-color 0.2s, background 0.2s;
+  `;
+  btn.addEventListener('mouseenter', () => {
+    btn.style.borderColor = '#c084fc';
+    btn.style.background = 'rgba(30, 30, 60, 0.95)';
+  });
+  btn.addEventListener('mouseleave', () => {
+    btn.style.borderColor = '#a855f7';
+    btn.style.background = 'rgba(15, 15, 35, 0.9)';
+  });
+
+  btn.addEventListener('click', () => {
+    const nextIdx = ((currentIdx < 0 ? 0 : currentIdx) + 1) % CYCLE_DEVICES.length;
+    const next = CYCLE_DEVICES[nextIdx];
+    const newParams = new URLSearchParams(location.search);
+    if (next.slug) {
+      newParams.set('simulate', next.slug);
+    } else {
+      newParams.delete('simulate');
+    }
+    // Preserve other params (test, hud, etc.), reload with new simulate value
+    const qs = newParams.toString();
+    location.href = location.pathname + (qs ? '?' + qs : '');
+  });
+
+  document.body.appendChild(btn);
 }

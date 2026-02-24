@@ -1,4 +1,4 @@
-import { detectMobileLike, detectDeviceProfile } from '../util/device';
+import { detectMobileLike, detectDeviceProfile, isPhoneTier } from '../util/device';
 import type { DeviceProfile } from '../util/device';
 
 export type QualityTier = 'high' | 'medium' | 'low';
@@ -16,6 +16,8 @@ export const GAME_MODE = {
   canvasWidth: 1920,
   /** X offset to center 1920px content in the wider canvas. = (canvasWidth - 1920) / 2 */
   contentOffsetX: 0,
+  /** True on phone tiers (phone-high, gen-mobile, phone-low) — NOT tablet or desktop. */
+  isPhoneMode: false as boolean,  // set after DEVICE_PROFILE is finalized in main.ts
 };
 
 // Log detected device on boot (visible in Safari console + WebDriver)

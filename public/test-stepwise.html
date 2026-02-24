@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stepwise Boot Test</title>
+<style>*{margin:0;padding:0}html,body{background:#000;color:#0f0;font:10px monospace;padding:6px;overflow:auto}</style>
+</head>
+<body>
+<div id="game-container"></div>
+<pre id="log" style="position:relative;z-index:99999"></pre>
+<script>
+var T0 = Date.now(), logEl = document.getElementById('log');
+function L(msg) {
+  var t = ((Date.now()-T0)/1000).toFixed(3);
+  logEl.textContent += '['+t+'s] '+msg+'\n';
+}
+window.onerror = function(m,s,l) { L('ERROR: '+m+' @'+(s||'').split('/').pop()+':'+l); };
+window.onunhandledrejection = function(e) { L('REJECT: '+(e.reason?e.reason.message||String(e.reason):'?')); };
+L('UA: '+navigator.userAgent.substring(0,50));
+L('Screen: '+screen.width+'x'+screen.height+' @'+devicePixelRatio+'x Touch:'+navigator.maxTouchPoints);
+L('Loading Phaser 3.90 from CDN...');
+</script>
+<!-- Load Phaser from CDN (proven to work on iPhone at 60fps) -->
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+<script>
+L('Phaser loaded: v' + Phaser.VERSION);
+// Make Phaser available globally for module imports that reference it
+window.__Phaser = Phaser;
+</script>
+<script type="module">
+var T0 = Date.now(), logEl = document.getElementById('log');
+function L(msg) {
+  var t = ((Date.now()-T0)/1000).toFixed(3);
+  logEl.textContent += '['+t+'s] '+msg+'\n';
+}
+
+var Phaser = window.__Phaser;
+
+async function runSteps() {
+  try {
+    // Step 1: Import tuning
+    L('STEP 1: Importing tuning...');
+    var { TUNING } = await import('/src/config/tuning.ts');
+    L('STEP 1 OK: W=' + TUNING.GAME_WIDTH + ' H=' + TUNING.GAME_HEIGHT);
+
+    // Step 2: Import device + gameMode
+    L('STEP 2: Importing device + gameMode...');
+    var { isiOS } = await import('/src/util/device.ts');
+    var { GAME_MODE } = await import('/src/config/gameMode.ts');
+    L('STEP 2 OK: isiOS=' + isiOS() + ' mobileMode=' + GAME_MODE.mobileMode);
+
+    // Step 3: Create Phaser game (NO scenes)
+    L('STEP 3: Creating Phaser.Game (1920x1080, no scenes)...');
+    var config = {
+      type: Phaser.WEBGL,
+      width: TUNING.GAME_WIDTH,
+      height: TUNING.GAME_HEIGHT,
+      parent: 'game-container',
+      backgroundColor: '#000000',
+      scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+      dom: { createContainer: true },
+      render: { powerPreference: 'low-power' },
+      loader: { maxParallelDownloads: 2 },
+    };
+    var game = new Phaser.Game(config);
+    L('STEP 3 OK: Game created');
+    await new Promise(r => setTimeout(r, 500));
+    L('STEP 3b: FPS=' + Math.round(game.loop.actualFps) + ' canvas=' + game.canvas.width + 'x' + game.canvas.height);
+
+    // Step 4: Import and register CRT pipeline
+    L('STEP 4: Importing CRTPipeline...');
+    var { CRTPipeline } = await import('/src/fx/CRTPipeline.ts');
+    game.renderer.pipelines.addPostPipeline('CRTPipeline', CRTPipeline);
+    L('STEP 4 OK: CRT registered');
+
+    // Step 5: Import BootScene (loads assets)
+    L('STEP 5: Importing BootScene...');
+    var { BootScene } = await import('/src/scenes/BootScene.ts');
+    L('STEP 5 OK: BootScene class imported');
+
+    // Step 6: Import GameScene (THE BIG ONE)
+    L('STEP 6: Importing GameScene...');
+    var tBefore = Date.now();
+    var { GameScene } = await import('/src/scenes/GameScene.ts');
+    L('STEP 6 OK: GameScene imported in ' + (Date.now() - tBefore) + 'ms');
+
+    // Step 7: Start BootScene
+    L('STEP 7: Starting BootScene...');
+    game.scene.add('BootScene', BootScene, true);
+    L('STEP 7 OK: BootScene started');
+
+    // Step 8: Wait for boot loading
+    L('STEP 8: Waiting for BootScene to load (5s)...');
+    await new Promise(r => setTimeout(r, 5000));
+    var scenes = game.scene.getScenes(true).map(function(s) { return s.sys.settings.key; });
+    var texCount = Object.keys(game.textures.list).length;
+    L('STEP 8: Active=' + scenes.join(',') + ' textures=' + texCount + ' FPS=' + Math.round(game.loop.actualFps));
+
+    // Step 9: Add GameScene
+    L('STEP 9: Adding GameScene...');
+    game.scene.add('GameScene', GameScene, false);
+    L('STEP 9 OK');
+
+    L('=== ALL STEPS COMPLETE ===');
+
+    // Monitor
+    setInterval(function() {
+      var sc = game.scene.getScenes(true).map(function(s) { return s.sys.settings.key; });
+      L('ALIVE: FPS=' + Math.round(game.loop.actualFps) + ' scenes=' + sc.join(',') + ' tex=' + Object.keys(game.textures.list).length);
+    }, 3000);
+
+  } catch(e) {
+    L('STEP FAILED: ' + e.message);
+    L('Stack: ' + (e.stack || '').substring(0, 500));
+  }
+}
+
+runSteps();
+</script>
+</body></html>

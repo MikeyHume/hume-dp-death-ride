@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DP Moto - Progressive Load Test</title></head>
+<body style="background:#000;color:#0f0;font-family:monospace;padding:10px;font-size:12px">
+<div id="log" style="max-height:90vh;overflow-y:auto"></div>
+<script>
+var log = document.getElementById('log');
+function L(msg) { log.innerHTML += msg + '<br>'; log.scrollTop = log.scrollHeight; }
+
+// Get test level from URL: ?level=1 through ?level=10
+var params = new URLSearchParams(location.search);
+var level = parseInt(params.get('level') || '1');
+L('=== Progressive Test Level ' + level + ' ===');
+L('UA: ' + navigator.userAgent.substring(0, 50) + '...');
+L('Screen: ' + screen.width + 'x' + screen.height + ' @' + window.devicePixelRatio + 'x');
+</script>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.88.2/dist/phaser.min.js"></script>
+<script>
+L('Phaser ' + Phaser.VERSION + ' loaded');
+
+var GAME_W = level >= 5 ? 1920 : 960;
+var GAME_H = level >= 5 ? 1080 : 540;
+
+var config = {
+  type: Phaser.WEBGL,
+  width: GAME_W,
+  height: GAME_H,
+  backgroundColor: '#1a0020',
+  parent: document.body,
+  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+  scene: {
+    preload: preload,
+    create: create,
+    update: update
+  }
+};
+
+var _frameCount = 0;
+var _startTime = Date.now();
+var _texturesLoaded = 0;
+
+function preload() {
+  L('Preload starting (level ' + level + ')...');
+
+  // Level 2+: Load a few small textures (generated)
+  if (level >= 2) {
+    for (var i = 0; i < 10; i++) {
+      var g = this.make.graphics({ add: false });
+      g.fillStyle(0xff0000 + i * 0x111100, 1);
+      g.fillRect(0, 0, 64, 64);
+      g.generateTexture('test_tex_' + i, 64, 64);
+      g.destroy();
+      _texturesLoaded++;
+    }
+    L('Level 2: 10 generated textures (64x64)');
+  }
+
+  // Level 3+: Load actual game images from the server
+  if (level >= 3) {
+    var assets = [
+      'assets/road.png',
+      'assets/sky_gradient.png',
+      'assets/player_idle.png'
+    ];
+    for (var a = 0; a < assets.length; a++) {
+      this.load.image('real_' + a, assets[a]);
+    }
+    L('Level 3: Loading ' + assets.length + ' real images...');
+
+    this.load.on('filecomplete', function(key) {
+      _texturesLoaded++;
+      L('  Loaded: ' + key);
+    });
+    this.load.on('loaderror', function(file) {
+      L('  FAILED: ' + file.key + ' (' + file.url + ')');
+    });
+  }
+
+  // Level 4+: Load spritesheets
+  if (level >= 4) {
+    var sheets = [
+      { key: 'player_run', path: 'assets/player_run.png', fw: 128, fh: 128 },
+      { key: 'player_idle_sheet', path: 'assets/player_idle.png', fw: 128, fh: 128 }
+    ];
+    for (var s = 0; s < sheets.length; s++) {
+      this.load.spritesheet(sheets[s].key, sheets[s].path, { frameWidth: sheets[s].fw, frameHeight: sheets[s].fh });
+    }
+    L('Level 4: Loading ' + sheets.length + ' spritesheets...');
+  }
+
+  // Level 6+: Load parallax layers
+  if (level >= 6) {
+    var layers = [
+      'assets/parallax/sky.png',
+      'assets/parallax/far_buildings.png',
+      'assets/parallax/close_buildings.png',
+      'assets/parallax/railing.png'
+    ];
+    for (var l = 0; l < layers.length; l++) {
+      this.load.image('parallax_' + l, layers[l]);
+    }
+    L('Level 6: Loading ' + layers.length + ' parallax layers...');
+  }
+
+  // Level 7+: Load ALL game textures
+  if (level >= 7) {
+    L('Level 7: Loading heavy assets...');
+    var heavyAssets = [
+      'assets/car1.png', 'assets/car2.png', 'assets/car3.png',
+      'assets/obstacle_barrier.png', 'assets/obstacle_cone.png',
+      'assets/slash_sheet.png', 'assets/rocket_sheet.png',
+      'assets/shield.png', 'assets/pickup_ammo.png', 'assets/pickup_shield.png'
+    ];
+    for (var h = 0; h < heavyAssets.length; h++) {
+      this.load.image('heavy_' + h, heavyAssets[h]);
+    }
+    L('Level 7: Loading ' + heavyAssets.length + ' game assets...');
+  }
+}
+
+function create() {
+  L('Create phase started');
+  L('Canvas: ' + GAME_W + 'x' + GAME_H);
+  L('Textures loaded: ' + _texturesLoaded);
+
+  // Level 1: Just text
+  this.add.text(GAME_W/2, GAME_H/2, 'Level ' + level + ' OK!', { fontSize: '32px', color: '#0f0' }).setOrigin(0.5);
+
+  // Level 2+: Render some sprites
+  if (level >= 2) {
+    for (var i = 0; i < 10; i++) {
+      this.add.image(100 + i * 80, 100, 'test_tex_' + i);
+    }
+    L('Level 2: 10 sprites rendered');
+  }
+
+  // Level 5: Full resolution test
+  if (level >= 5) {
+    L('Level 5: Running at full 1920x1080');
+  }
+
+  // Level 8+: Post-processing pipeline (like CRT)
+  if (level >= 8) {
+    try {
+      var cam = this.cameras.main;
+      cam.setPostPipeline && cam.setPostPipeline('BarrelFX'); // Won't exist, just testing the call
+      L('Level 8: Post-processing attempt (expected to fail gracefully)');
+    } catch(e) {
+      L('Level 8: Post-processing error: ' + e.message);
+    }
+  }
+
+  // Level 9: Many game objects
+  if (level >= 9) {
+    for (var j = 0; j < 200; j++) {
+      this.add.rectangle(
+        Math.random() * GAME_W,
+        Math.random() * GAME_H,
+        20 + Math.random() * 40,
+        20 + Math.random() * 40,
+        Math.random() * 0xffffff
+      );
+    }
+    L('Level 9: 200 random rectangles added');
+  }
+
+  // Level 10: Stress test — tileSprites, masks, render textures
+  if (level >= 10) {
+    try {
+      var rt = this.add.renderTexture(0, 0, GAME_W, GAME_H);
+      rt.fill(0x330033, 0.5);
+      L('Level 10: RenderTexture created');
+    } catch(e) {
+      L('Level 10: RenderTexture FAILED: ' + e.message);
+    }
+  }
+
+  L('=== CREATE COMPLETE ===');
+}
+
+function update() {
+  _frameCount++;
+  if (_frameCount % 60 === 0) {
+    var elapsed = ((Date.now() - _startTime) / 1000).toFixed(1);
+    var fps = Math.round(this.game.loop.actualFps);
+    var texCount = Object.keys(this.textures.list).length;
+    L('[' + elapsed + 's] Frame ' + _frameCount + ' | FPS: ' + fps + ' | Textures: ' + texCount);
+  }
+}
+
+try {
+  var game = new Phaser.Game(config);
+  L('Game created');
+} catch(e) {
+  L('GAME CREATION FAILED: ' + e.message);
+}
+</script>
+</body></html>

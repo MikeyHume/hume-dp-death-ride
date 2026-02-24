@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Test - Game JS Only</title></head>
+<body style="background:#000;color:#0f0;font-family:monospace;padding:10px;font-size:12px">
+<div id="game-container"></div>
+<div id="log" style="position:fixed;top:0;left:0;z-index:9999;background:rgba(0,0,0,0.9);padding:10px;max-height:50vh;overflow-y:auto;font-size:10px;pointer-events:none"></div>
+<script>
+var log = document.getElementById('log');
+function L(msg) { log.innerHTML += msg + '<br>'; }
+
+// Capture all errors
+window.onerror = function(msg, src, line, col, err) {
+  L('<span style="color:red">ERROR: ' + msg + ' at ' + (src||'').split('/').pop() + ':' + line + '</span>');
+  return false;
+};
+window.onunhandledrejection = function(e) {
+  L('<span style="color:red">PROMISE: ' + (e.reason ? e.reason.message || e.reason : 'unknown') + '</span>');
+};
+
+L('Page loaded. Loading game JS...');
+var startTime = Date.now();
+
+// Heartbeat to detect if page is still alive
+var hbCount = 0;
+var hbInterval = setInterval(function() {
+  hbCount++;
+  L('[' + ((Date.now() - startTime)/1000).toFixed(1) + 's] heartbeat #' + hbCount);
+}, 1000);
+</script>
+<!-- Load the game's production JS bundle -->
+<script type="module" crossorigin src="/assets/index-CAdpa53U.js" onerror="L('SCRIPT LOAD FAILED')"></script>
+<script>
+// This runs after the module script tag is parsed (but module loads async)
+L('Module script tag parsed. Waiting for async load...');
+</script>
+</body></html>

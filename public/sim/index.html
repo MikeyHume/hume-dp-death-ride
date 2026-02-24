@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DP MOTO — Device Simulation Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f23;
+    color: #e0e0e0;
+    font-family: 'Courier New', monospace;
+    min-height: 100vh;
+  }
+
+  /* ── Header ─────────────────────────────────────── */
+  .header {
+    background: #1a1a2e;
+    border-bottom: 2px solid #a855f7;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header h1 {
+    font-size: 20px;
+    color: #a855f7;
+    letter-spacing: 2px;
+  }
+  .header .subtitle {
+    color: #666;
+    font-size: 12px;
+  }
+
+  /* ── Filters ────────────────────────────────────── */
+  .filters {
+    padding: 12px 24px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid #1a1a2e;
+    background: #12122a;
+  }
+  .filter-btn {
+    background: #1a1a3e;
+    border: 1px solid #333;
+    color: #aaa;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    transition: all 0.15s;
+  }
+  .filter-btn:hover { border-color: #666; color: #fff; }
+  .filter-btn.active { border-color: #a855f7; color: #a855f7; background: #a855f722; }
+  .filter-sep { width: 1px; background: #333; margin: 0 4px; }
+
+  /* ── Grid ────────────────────────────────────────── */
+  .section-label {
+    padding: 16px 24px 8px;
+    color: #555;
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    padding: 8px 24px 24px;
+  }
+
+  /* ── Device Cards ───────────────────────────────── */
+  .card {
+    background: #1a1a2e;
+    border: 1px solid #2a2a4e;
+    border-radius: 8px;
+    padding: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .card:hover {
+    border-color: #a855f7;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(168, 85, 247, 0.15);
+  }
+  .card .name {
+    font-size: 13px;
+    font-weight: bold;
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .card .viewport {
+    color: #888;
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+  .card .specs {
+    color: #555;
+    font-size: 10px;
+    margin-bottom: 8px;
+  }
+  .card .tier-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+  }
+  .card .status-dot {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  /* ── Screen preview (proportional rectangle) ────── */
+  .card .screen-preview {
+    width: 100%;
+    margin-top: 8px;
+    border-radius: 4px;
+    background: #0f0f23;
+    border: 1px solid #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #444;
+    font-size: 9px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card .screen-preview .label {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-size: 8px;
+    color: #333;
+  }
+
+  /* ── Tier colors ────────────────────────────────── */
+  .tier-phone-high  { background: #22c55e22; color: #22c55e; border: 1px solid #22c55e; }
+  .tier-gen-mobile  { background: #eab30822; color: #eab308; border: 1px solid #eab308; }
+  .tier-phone-low   { background: #ef444422; color: #ef4444; border: 1px solid #ef4444; }
+  .tier-tablet      { background: #3b82f622; color: #3b82f6; border: 1px solid #3b82f6; }
+  .tier-desktop     { background: #a855f722; color: #a855f7; border: 1px solid #a855f7; }
+
+  .status-verified   { background: #22c55e; }
+  .status-simulated  { background: #eab308; }
+  .status-unverified { background: #ef4444; }
+
+  /* ── Legend ──────────────────────────────────────── */
+  .legend {
+    padding: 12px 24px;
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    color: #555;
+    border-top: 1px solid #1a1a2e;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  /* ── Stats bar ──────────────────────────────────── */
+  .stats {
+    padding: 8px 24px;
+    font-size: 11px;
+    color: #444;
+    display: flex;
+    gap: 16px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>DP MOTO DEVICE SIM</h1>
+    <div class="subtitle">Click a device to launch simulation — game renders at device viewport with FPS cap</div>
+  </div>
+  <div class="stats" id="stats"></div>
+</div>
+
+<div class="filters" id="filters"></div>
+<div id="content"></div>
+
+<div class="legend">
+  <div class="legend-item"><span class="legend-dot status-verified"></span> Verified (real device)</div>
+  <div class="legend-item"><span class="legend-dot status-simulated"></span> Simulated (specs only)</div>
+  <div class="legend-item"><span class="legend-dot status-unverified"></span> Unverified (placeholder)</div>
+</div>
+
+<script type="module">
+// ── Device data (duplicated from deviceLibrary.ts to avoid build step) ──
+// This is a static snapshot. When deviceLibrary.ts changes, update this too.
+
+const DEVICES = [
+  // iPhone 16 series
+  { slug:'iphone-16-pro-max', name:'iPhone 16 Pro Max', brand:'apple', year:2024, cssW:440, cssH:956, dpr:3, physW:1320, physH:2868, screen:6.9, chip:'A18 Pro', ram:8, gpu:6, tier:'phone-high', status:'simulated', fps:60 },
+  { slug:'iphone-16-pro', name:'iPhone 16 Pro', brand:'apple', year:2024, cssW:402, cssH:874, dpr:3, physW:1206, physH:2622, screen:6.3, chip:'A18 Pro', ram:8, gpu:6, tier:'phone-high', status:'simulated', fps:60 },
+  { slug:'iphone-16-plus', name:'iPhone 16 Plus', brand:'apple', year:2024, cssW:430, cssH:932, dpr:3, physW:1290, physH:2796, screen:6.7, chip:'A18', ram:8, gpu:5, tier:'phone-high', status:'simulated', fps:60 },
+  { slug:'iphone-16', name:'iPhone 16', brand:'apple', year:2024, cssW:393, cssH:852, dpr:3, physW:1179, physH:2556, screen:6.1, chip:'A18', ram:8, gpu:5, tier:'phone-high', status:'simulated', fps:60 },
+  { slug:'iphone-16e', name:'iPhone 16e', brand:'apple', year:2025, cssW:390, cssH:844, dpr:3, physW:1170, physH:2532, screen:6.1, chip:'A16', ram:8, gpu:5, tier:'phone-high', status:'simulated', fps:55 },
+
+  // iPhone 15 series
+  { slug:'iphone-15-pro-max', name:'iPhone 15 Pro Max', brand:'apple', year:2023, cssW:430, cssH:932, dpr:3, physW:1290, physH:2796, screen:6.7, chip:'A17 Pro', ram:8, gpu:6, tier:'phone-high', status:'simulated', fps:60 },
+  { slug:'iphone-15-pro', name:'iPhone 15 Pro', brand:'apple', year:2023, cssW:393, cssH:852, dpr:3, physW:1179, physH:2556, screen:6.1, chip:'A17 Pro', ram:8, gpu:6, tier:'phone-high', status:'simulated', fps:60 },
+  { slug:'iphone-15-plus', name:'iPhone 15 Plus', brand:'apple', year:2023, cssW:430, cssH:932, dpr:3, physW:1290, physH:2796, screen:6.7, chip:'A16', ram:6, gpu:5, tier:'phone-high', status:'simulated', fps:55 },
+  { slug:'iphone-15', name:'iPhone 15', brand:'apple', year:2023, cssW:393, cssH:852, dpr:3, physW:1179, physH:2556, screen:6.1, chip:'A16', ram:6, gpu:5, tier:'phone-high', status:'simulated', fps:55 },
+
+  // iPhone 14 series
+  { slug:'iphone-14-pro-max', name:'iPhone 14 Pro Max', brand:'apple', year:2022, cssW:430, cssH:932, dpr:3, physW:1290, physH:2796, screen:6.7, chip:'A16', ram:6, gpu:5, tier:'phone-high', status:'simulated', fps:55 },
+  { slug:'iphone-14-pro', name:'iPhone 14 Pro', brand:'apple', year:2022, cssW:393, cssH:852, dpr:3, physW:1179, physH:2556, screen:6.1, chip:'A16', ram:6, gpu:5, tier:'phone-high', status:'simulated', fps:55 },
+  { slug:'iphone-14-plus', name:'iPhone 14 Plus', brand:'apple', year:2022, cssW:428, cssH:926, dpr:3, physW:1284, physH:2778, screen:6.7, chip:'A15', ram:6, gpu:5, tier:'phone-high', status:'simulated', fps:50 },
+  { slug:'iphone-14', name:'iPhone 14', brand:'apple', year:2022, cssW:390, cssH:844, dpr:3, physW:1170, physH:2532, screen:6.1, chip:'A15', ram:6, gpu:5, tier:'phone-high', status:'simulated', fps:50 },
+
+  // iPhone SE 3
+  { slug:'iphone-se-3', name:'iPhone SE 3', brand:'apple', year:2022, cssW:375, cssH:667, dpr:2, physW:750, physH:1334, screen:4.7, chip:'A15', ram:4, gpu:4, tier:'phone-low', status:'simulated', fps:40 },
+
+  // iPhone 13 series
+  { slug:'iphone-13-pro-max', name:'iPhone 13 Pro Max', brand:'apple', year:2021, cssW:428, cssH:926, dpr:3, physW:1284, physH:2778, screen:6.7, chip:'A15', ram:6, gpu:5, tier:'phone-high', status:'simulated', fps:50 },
+  { slug:'iphone-13-pro', name:'iPhone 13 Pro', brand:'apple', year:2021, cssW:390, cssH:844, dpr:3, physW:1170, physH:2532, screen:6.1, chip:'A15', ram:6, gpu:5, tier:'phone-high', status:'simulated', fps:50 },
+  { slug:'iphone-13', name:'iPhone 13', brand:'apple', year:2021, cssW:390, cssH:844, dpr:3, physW:1170, physH:2532, screen:6.1, chip:'A15', ram:4, gpu:4, tier:'phone-high', status:'simulated', fps:45 },
+  { slug:'iphone-13-mini', name:'iPhone 13 Mini', brand:'apple', year:2021, cssW:360, cssH:780, dpr:3, physW:1080, physH:2340, screen:5.4, chip:'A15', ram:4, gpu:4, tier:'phone-high', status:'simulated', fps:45 },
+
+  // iPhone 12 series
+  { slug:'iphone-12-pro-max', name:'iPhone 12 Pro Max', brand:'apple', year:2020, cssW:428, cssH:926, dpr:3, physW:1284, physH:2778, screen:6.7, chip:'A14', ram:6, gpu:4, tier:'phone-high', status:'simulated', fps:45 },
+  { slug:'iphone-12-pro', name:'iPhone 12 Pro', brand:'apple', year:2020, cssW:390, cssH:844, dpr:3, physW:1170, physH:2532, screen:6.1, chip:'A14', ram:6, gpu:4, tier:'phone-high', status:'simulated', fps:45 },
+  { slug:'iphone-12', name:'iPhone 12', brand:'apple', year:2020, cssW:390, cssH:844, dpr:3, physW:1170, physH:2532, screen:6.1, chip:'A14', ram:4, gpu:4, tier:'phone-high', status:'simulated', fps:40 },
+  { slug:'iphone-12-mini', name:'iPhone 12 Mini', brand:'apple', year:2020, cssW:360, cssH:780, dpr:3, physW:1080, physH:2340, screen:5.4, chip:'A14', ram:4, gpu:4, tier:'phone-high', status:'simulated', fps:40, notes:'CRASHES DURING BIOS' },
+
+  // iPhone 11 series
+  { slug:'iphone-11-pro-max', name:'iPhone 11 Pro Max', brand:'apple', year:2019, cssW:414, cssH:896, dpr:3, physW:1242, physH:2688, screen:6.5, chip:'A13', ram:4, gpu:4, tier:'phone-low', status:'simulated', fps:30 },
+  { slug:'iphone-11-pro', name:'iPhone 11 Pro', brand:'apple', year:2019, cssW:375, cssH:812, dpr:3, physW:1125, physH:2436, screen:5.8, chip:'A13', ram:4, gpu:4, tier:'phone-low', status:'simulated', fps:30 },
+  { slug:'iphone-11', name:'iPhone 11', brand:'apple', year:2019, cssW:414, cssH:896, dpr:2, physW:828, physH:1792, screen:6.1, chip:'A13', ram:4, gpu:4, tier:'phone-low', status:'simulated', fps:30 },
+
+  // iPhone XS/XR/X
+  { slug:'iphone-xs-max', name:'iPhone XS Max', brand:'apple', year:2018, cssW:414, cssH:896, dpr:3, physW:1242, physH:2688, screen:6.5, chip:'A12', ram:4, gpu:4, tier:'phone-low', status:'simulated', fps:25 },
+  { slug:'iphone-xs', name:'iPhone XS', brand:'apple', year:2018, cssW:375, cssH:812, dpr:3, physW:1125, physH:2436, screen:5.8, chip:'A12', ram:4, gpu:4, tier:'phone-low', status:'verified', fps:25 },
+  { slug:'iphone-xr', name:'iPhone XR', brand:'apple', year:2018, cssW:414, cssH:896, dpr:2, physW:828, physH:1792, screen:6.1, chip:'A12', ram:3, gpu:4, tier:'phone-low', status:'simulated', fps:25 },
+  { slug:'iphone-x', name:'iPhone X', brand:'apple', year:2017, cssW:375, cssH:812, dpr:3, physW:1125, physH:2436, screen:5.8, chip:'A11', ram:3, gpu:3, tier:'phone-low', status:'simulated', fps:20 },
+
+  // iPhone SE 2
+  { slug:'iphone-se-2', name:'iPhone SE 2', brand:'apple', year:2020, cssW:375, cssH:667, dpr:2, physW:750, physH:1334, screen:4.7, chip:'A13', ram:3, gpu:4, tier:'phone-low', status:'simulated', fps:30 },
+
+  // iPhone 8 series
+  { slug:'iphone-8-plus', name:'iPhone 8 Plus', brand:'apple', year:2017, cssW:414, cssH:736, dpr:3, physW:1242, physH:2208, screen:5.5, chip:'A11', ram:3, gpu:3, tier:'phone-low', status:'simulated', fps:20 },
+  { slug:'iphone-8', name:'iPhone 8', brand:'apple', year:2017, cssW:375, cssH:667, dpr:2, physW:750, physH:1334, screen:4.7, chip:'A11', ram:2, gpu:3, tier:'phone-low', status:'simulated', fps:18 },
+
+  // ── Top 5 Android (stress testing) ──
+  { slug:'galaxy-s25-ultra', name:'Galaxy S25 Ultra', brand:'samsung', year:2025, cssW:412, cssH:891, dpr:3.5, physW:1440, physH:3120, screen:6.9, chip:'SD 8 Elite', ram:12, gpu:6, tier:'phone-high', status:'simulated', fps:60 },
+  { slug:'galaxy-s25-plus', name:'Galaxy S25+', brand:'samsung', year:2025, cssW:412, cssH:891, dpr:3.5, physW:1440, physH:3120, screen:6.7, chip:'SD 8 Elite', ram:12, gpu:6, tier:'phone-high', status:'simulated', fps:60 },
+  { slug:'galaxy-s25', name:'Galaxy S25', brand:'samsung', year:2025, cssW:360, cssH:780, dpr:3, physW:1080, physH:2340, screen:6.2, chip:'SD 8 Elite', ram:12, gpu:6, tier:'phone-high', status:'simulated', fps:60 },
+  { slug:'pixel-9-pro', name:'Pixel 9 Pro', brand:'google', year:2024, cssW:410, cssH:914, dpr:3.125, physW:1280, physH:2856, screen:6.3, chip:'Tensor G4', ram:16, gpu:7, tier:'phone-high', status:'simulated', fps:55 },
+  { slug:'galaxy-a55', name:'Galaxy A55', brand:'samsung', year:2024, cssW:360, cssH:780, dpr:3, physW:1080, physH:2340, screen:6.6, chip:'Exynos 1480', ram:8, gpu:6, tier:'gen-mobile', status:'simulated', fps:35 },
+];
+
+// ── State ──
+let activeFilter = 'all';
+let activeBrand = 'all';
+
+// ── Render ──
+function render() {
+  const filtered = DEVICES.filter(d => {
+    if (activeFilter !== 'all' && d.tier !== activeFilter) return false;
+    if (activeBrand !== 'all' && d.brand !== activeBrand) return false;
+    return true;
+  });
+
+  // Group by brand then year
+  const appleDevices = filtered.filter(d => d.brand === 'apple');
+  const androidDevices = filtered.filter(d => d.brand !== 'apple');
+
+  let html = '';
+
+  if (appleDevices.length) {
+    html += `<div class="section-label">iPHONES (${appleDevices.length})</div>`;
+    html += '<div class="grid">';
+    appleDevices.forEach(d => { html += renderCard(d); });
+    html += '</div>';
+  }
+
+  if (androidDevices.length) {
+    html += `<div class="section-label">ANDROID (${androidDevices.length})</div>`;
+    html += '<div class="grid">';
+    androidDevices.forEach(d => { html += renderCard(d); });
+    html += '</div>';
+  }
+
+  if (!filtered.length) {
+    html = '<div style="padding:48px;text-align:center;color:#555">No devices match filter</div>';
+  }
+
+  document.getElementById('content').innerHTML = html;
+
+  // Stats
+  const verified = DEVICES.filter(d => d.status === 'verified').length;
+  const simulated = DEVICES.filter(d => d.status === 'simulated').length;
+  document.getElementById('stats').innerHTML =
+    `<span>${DEVICES.length} devices</span>` +
+    `<span style="color:#22c55e">${verified} verified</span>` +
+    `<span style="color:#eab308">${simulated} simulated</span>`;
+
+  // Attach click handlers
+  document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('click', () => {
+      const slug = card.dataset.slug;
+      const d = DEVICES.find(x => x.slug === slug);
+      if (!d) return;
+      // Open simulation: landscape viewport
+      const lw = d.cssH; // portrait H → landscape W
+      const lh = d.cssW; // portrait W → landscape H
+      const url = `/?simulate=${slug}`;
+      // Open in a window sized to match device landscape viewport + info bar
+      const winW = Math.min(lw, screen.availWidth - 40);
+      const winH = Math.min(lh + 48, screen.availHeight - 80);
+      window.open(url, `sim-${slug}`, `width=${winW},height=${winH},menubar=no,toolbar=no`);
+    });
+  });
+}
+
+function renderCard(d) {
+  const tierClass = `tier-${d.tier}`;
+  const statusClass = `status-${d.status}`;
+
+  // Screen preview: proportional to actual screen size
+  // Use landscape dimensions, scale to fit card width (160px max)
+  const lw = d.cssH;
+  const lh = d.cssW;
+  const maxPreviewW = 152;
+  const scale = maxPreviewW / lw;
+  const previewW = Math.round(lw * scale);
+  const previewH = Math.round(lh * scale);
+
+  const fpsColor = d.fps >= 50 ? '#22c55e' : d.fps >= 30 ? '#eab308' : '#ef4444';
+  const warning = d.notes && d.notes.includes('CRASH') ? ' style="color:#ef4444;font-weight:bold"' : '';
+
+  return `
+    <div class="card" data-slug="${d.slug}">
+      <div class="status-dot ${statusClass}"></div>
+      <div class="name"${warning}>${d.name}</div>
+      <div class="viewport">${lw}×${lh} landscape · @${d.dpr}x</div>
+      <div class="specs">${d.chip} · ${d.ram}GB · ${d.screen}"</div>
+      <span class="tier-badge ${tierClass}">${d.tier.toUpperCase()}</span>
+      <span style="color:${fpsColor};font-size:10px;margin-left:6px">${d.fps} FPS</span>
+      <div class="screen-preview" style="height:${previewH}px">
+        <div style="width:${previewW}px;height:${previewH}px;background:#16162e;border:1px solid #2a2a4e;border-radius:2px;display:flex;align-items:center;justify-content:center">
+          <span style="color:#333;font-size:8px">${d.physH}×${d.physW}</span>
+        </div>
+        <div class="label">${d.screen}"</div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Filters ──
+function renderFilters() {
+  const tiers = ['all', 'phone-high', 'gen-mobile', 'phone-low'];
+  const brands = ['all', 'apple', 'samsung', 'google'];
+
+  let html = '';
+
+  // Tier filters
+  tiers.forEach(t => {
+    const label = t === 'all' ? 'All Tiers' : t.toUpperCase();
+    const active = activeFilter === t ? 'active' : '';
+    html += `<button class="filter-btn ${active}" data-tier="${t}">${label}</button>`;
+  });
+
+  html += '<div class="filter-sep"></div>';
+
+  // Brand filters
+  brands.forEach(b => {
+    const label = b === 'all' ? 'All Brands' : b.charAt(0).toUpperCase() + b.slice(1);
+    const active = activeBrand === b ? 'active' : '';
+    html += `<button class="filter-btn ${active}" data-brand="${b}">${label}</button>`;
+  });
+
+  document.getElementById('filters').innerHTML = html;
+
+  // Attach handlers
+  document.querySelectorAll('[data-tier]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeFilter = btn.dataset.tier;
+      renderFilters();
+      render();
+    });
+  });
+  document.querySelectorAll('[data-brand]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeBrand = btn.dataset.brand;
+      renderFilters();
+      render();
+    });
+  });
+}
+
+// ── Init ──
+renderFilters();
+render();
+</script>
+</body>
+</html>

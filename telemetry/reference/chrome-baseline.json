@@ -1,0 +1,736 @@
+[
+  {
+    "device": "desktop",
+    "name": "Desktop",
+    "result": "PASS",
+    "bootTimeMs": 21910,
+    "duration": 15,
+    "finalState": "PLAYING",
+    "fps": {
+      "samples": [
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "avg": 4.3,
+      "min": 4,
+      "max": 5,
+      "count": 18
+    },
+    "quality": {
+      "initial": "high",
+      "final": "high",
+      "changes": []
+    },
+    "features": {
+      "crt": true,
+      "reflections": true,
+      "carCount": 5,
+      "parallaxLayers": 8,
+      "mobileMode": false,
+      "simulatedDevice": "Desktop"
+    },
+    "score": 0,
+    "errors": [],
+    "metrics": {
+      "jsHeapUsed": 94000646,
+      "jsHeapTotal": 95924658,
+      "jsHeapLimit": 4294967296,
+      "layout": {
+        "innerW": 1920,
+        "innerH": 1080,
+        "outerW": 800,
+        "outerH": 600,
+        "dpr": 1,
+        "scrollY": 0,
+        "bodyH": 1080,
+        "canvasW": 1920,
+        "canvasH": 1080
+      }
+    },
+    "consoleLogs": [
+      {
+        "type": "debug",
+        "text": "[vite] connecting...",
+        "ts": 1771965529419
+      },
+      {
+        "type": "debug",
+        "text": "[vite] connected.",
+        "ts": 1771965529423
+      },
+      {
+        "type": "log",
+        "text": "[device] Desktop | tier=desktop | crt=true refl=true cars=5 parallel=32",
+        "ts": 1771965529426
+      },
+      {
+        "type": "log",
+        "text": "[test-mode] Active — runId=1771965529427-29fq0t, state exposed on window.__dpMotoTest",
+        "ts": 1771965529427
+      },
+      {
+        "type": "log",
+        "text": "SPOTIFY CLIENT ID: e20013b88ebc46018a93ab9c0489edd8",
+        "ts": 1771965529428
+      },
+      {
+        "type": "log",
+        "text": "[main] adaptive canvas: 1920x1080 (offset=0, viewport=1920x1080)",
+        "ts": 1771965529428
+      },
+      {
+        "type": "log",
+        "text": "%c %c %c %c %c Phaser v3.90.0 (WebGL | Web Audio) %c https://phaser.io/v390 background: #ff0000 background: #ffff00 background: #00ff00 background: #00ffff color: #ffffff; background: #000000 background: transparent",
+        "ts": 1771965529449
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x4d8c00117800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+        "ts": 1771965529529
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x4d8c00117800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+        "ts": 1771965529542
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x4d8c00117800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+        "ts": 1771965529867
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x4d8c00117800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+        "ts": 1771965529872
+      },
+      {
+        "type": "log",
+        "text": "[main] GameScene + pipelines loaded and registered",
+        "ts": 1771965531400
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965534315
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965534352
+      },
+      {
+        "type": "log",
+        "text": "Anonymous user created: 7816fb4e-3908-4ff5-9185-dd0b61f9f042",
+        "ts": 1771965537796
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965538090
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965538279
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965538341
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965538534
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965538774
+      },
+      {
+        "type": "log",
+        "text": "[test-mode] State: INIT → TITLE",
+        "ts": 1771965538949
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x4d8c00117800] GL_INVALID_OPERATION: glGenerateMipmap: Texture format does not support mipmap generation.",
+        "ts": 1771965539830
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x4d8c00117800] GL_INVALID_OPERATION: glGenerateMipmap: Texture format does not support mipmap generation.",
+        "ts": 1771965539831
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x4d8c00117800] GL_INVALID_OPERATION: glGenerateMipmap: Texture format does not support mipmap generation.",
+        "ts": 1771965539831
+      },
+      {
+        "type": "log",
+        "text": "[test-mode] Boot complete — starting poll loop",
+        "ts": 1771965539831
+      },
+      {
+        "type": "log",
+        "text": "[PlaybackCtrl] catalog warmed up",
+        "ts": 1771965541455
+      },
+      {
+        "type": "log",
+        "text": "[test-mode] State: TITLE → STARTING",
+        "ts": 1771965544397
+      },
+      {
+        "type": "log",
+        "text": "[test-mode] State: STARTING → PLAYING",
+        "ts": 1771965546098
+      }
+    ],
+    "screenshots": [
+      {
+        "idx": "01",
+        "label": "loaded",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\desktop_2026-02-24T20-38-49_01_loaded.png"
+      },
+      {
+        "idx": "02",
+        "label": "init",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\desktop_2026-02-24T20-38-49_02_init.png"
+      },
+      {
+        "idx": "03",
+        "label": "title",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\desktop_2026-02-24T20-38-49_03_title.png"
+      },
+      {
+        "idx": "04",
+        "label": "starting",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\desktop_2026-02-24T20-38-49_04_starting.png"
+      },
+      {
+        "idx": "05",
+        "label": "playing",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\desktop_2026-02-24T20-38-49_05_playing.png"
+      },
+      {
+        "idx": "06",
+        "label": "playing_5s",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\desktop_2026-02-24T20-38-49_06_playing_5s.png"
+      },
+      {
+        "idx": "07",
+        "label": "playing_10s",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\desktop_2026-02-24T20-38-49_07_playing_10s.png"
+      },
+      {
+        "idx": "08",
+        "label": "playing_15s",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\desktop_2026-02-24T20-38-49_08_playing_15s.png"
+      },
+      {
+        "idx": "09",
+        "label": "final",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\desktop_2026-02-24T20-38-49_09_final.png"
+      }
+    ]
+  },
+  {
+    "device": "iphone-xs",
+    "name": "iPhone XS",
+    "result": "PASS",
+    "bootTimeMs": 11201,
+    "duration": 15,
+    "finalState": "PLAYING",
+    "fps": {
+      "samples": [
+        11,
+        10,
+        10,
+        9,
+        9,
+        9,
+        8,
+        8,
+        8,
+        8,
+        8,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7
+      ],
+      "avg": 8.1,
+      "min": 7,
+      "max": 11,
+      "count": 20
+    },
+    "quality": {
+      "initial": "low",
+      "final": "low",
+      "changes": []
+    },
+    "features": {
+      "crt": false,
+      "reflections": false,
+      "carCount": 0,
+      "parallaxLayers": 8,
+      "mobileMode": true,
+      "simulatedDevice": "iPhone XS (sim)"
+    },
+    "score": 0,
+    "errors": [],
+    "metrics": {
+      "jsHeapUsed": 73590254,
+      "jsHeapTotal": 76199670,
+      "jsHeapLimit": 4294967296,
+      "layout": {
+        "innerW": 812,
+        "innerH": 423,
+        "outerW": 812,
+        "outerH": 423,
+        "dpr": 3,
+        "scrollY": 0,
+        "bodyH": 423,
+        "canvasW": 2073,
+        "canvasH": 1080
+      }
+    },
+    "consoleLogs": [
+      {
+        "type": "debug",
+        "text": "[vite] connecting...",
+        "ts": 1771965573188
+      },
+      {
+        "type": "debug",
+        "text": "[vite] connected.",
+        "ts": 1771965573196
+      },
+      {
+        "type": "log",
+        "text": "[device] Unknown iPhone (423×812 @3x) | tier=gen-mobile | crt=false refl=false cars=2 parallel=2",
+        "ts": 1771965573197
+      },
+      {
+        "type": "log",
+        "text": "[sim] Simulating iPhone XS | 812×375 landscape | FPS cap: 25 | tier: phone-low",
+        "ts": 1771965573202
+      },
+      {
+        "type": "log",
+        "text": "[test-mode] Active — runId=1771965573203-yep18z, state exposed on window.__dpMotoTest",
+        "ts": 1771965573203
+      },
+      {
+        "type": "warning",
+        "text": "[main] ?hud=1 blocked on mobile tier: phone-low — causes OOM crash on low-memory devices. Use desktop/tablet only.",
+        "ts": 1771965573203
+      },
+      {
+        "type": "log",
+        "text": "SPOTIFY CLIENT ID: e20013b88ebc46018a93ab9c0489edd8",
+        "ts": 1771965573203
+      },
+      {
+        "type": "log",
+        "text": "[main] adaptive canvas: 2073x1080 (offset=77, viewport=812x423)",
+        "ts": 1771965573203
+      },
+      {
+        "type": "log",
+        "text": "%c %c %c %c %c Phaser v3.90.0 (WebGL | Web Audio) %c https://phaser.io/v390 background: #ff0000 background: #ffff00 background: #00ff00 background: #00ffff color: #ffffff; background: #000000 background: transparent",
+        "ts": 1771965573236
+      },
+      {
+        "type": "log",
+        "text": "[main] GameScene + pipelines loaded and registered",
+        "ts": 1771965573455
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965573961
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965573991
+      },
+      {
+        "type": "log",
+        "text": "Anonymous user created: d19f2d4b-f1e6-46c4-b921-530fe2c3a7d6",
+        "ts": 1771965574702
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965574790
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965574869
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965574877
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965574904
+      },
+      {
+        "type": "log",
+        "text": "[test-mode] State: INIT → TITLE",
+        "ts": 1771965575058
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x55440276ce00] GL_INVALID_OPERATION: glGenerateMipmap: Texture format does not support mipmap generation.",
+        "ts": 1771965575408
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x55440276ce00] GL_INVALID_OPERATION: glGenerateMipmap: Texture format does not support mipmap generation.",
+        "ts": 1771965575408
+      },
+      {
+        "type": "log",
+        "text": "[test-mode] Boot complete — starting poll loop",
+        "ts": 1771965575569
+      },
+      {
+        "type": "log",
+        "text": "[PlaybackCtrl] catalog warmed up",
+        "ts": 1771965576340
+      },
+      {
+        "type": "log",
+        "text": "[test-mode] State: TITLE → STARTING",
+        "ts": 1771965579191
+      },
+      {
+        "type": "log",
+        "text": "[test-mode] State: STARTING → PLAYING",
+        "ts": 1771965580258
+      }
+    ],
+    "screenshots": [
+      {
+        "idx": "01",
+        "label": "loaded",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-xs_2026-02-24T20-39-33_01_loaded.png"
+      },
+      {
+        "idx": "02",
+        "label": "init",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-xs_2026-02-24T20-39-33_02_init.png"
+      },
+      {
+        "idx": "03",
+        "label": "title",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-xs_2026-02-24T20-39-33_03_title.png"
+      },
+      {
+        "idx": "04",
+        "label": "starting",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-xs_2026-02-24T20-39-33_04_starting.png"
+      },
+      {
+        "idx": "05",
+        "label": "playing",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-xs_2026-02-24T20-39-33_05_playing.png"
+      },
+      {
+        "idx": "06",
+        "label": "playing_5s",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-xs_2026-02-24T20-39-33_06_playing_5s.png"
+      },
+      {
+        "idx": "07",
+        "label": "playing_11s",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-xs_2026-02-24T20-39-33_07_playing_11s.png"
+      },
+      {
+        "idx": "08",
+        "label": "playing_15s",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-xs_2026-02-24T20-39-33_08_playing_15s.png"
+      },
+      {
+        "idx": "09",
+        "label": "final",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-xs_2026-02-24T20-39-33_09_final.png"
+      }
+    ]
+  },
+  {
+    "device": "iphone-12-mini",
+    "name": "iPhone 12 Mini",
+    "result": "PASS",
+    "bootTimeMs": 16129,
+    "duration": 15,
+    "finalState": "PLAYING",
+    "fps": {
+      "samples": [
+        6,
+        6,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "avg": 4.6,
+      "min": 4,
+      "max": 6,
+      "count": 18
+    },
+    "quality": {
+      "initial": "medium",
+      "final": "medium",
+      "changes": []
+    },
+    "features": {
+      "crt": true,
+      "reflections": true,
+      "carCount": 3,
+      "parallaxLayers": 8,
+      "mobileMode": true,
+      "simulatedDevice": "iPhone 12 Mini (sim)"
+    },
+    "score": 0,
+    "errors": [],
+    "metrics": {
+      "jsHeapUsed": 92926661,
+      "jsHeapTotal": 94597157,
+      "jsHeapLimit": 4294967296,
+      "layout": {
+        "innerW": 780,
+        "innerH": 408,
+        "outerW": 780,
+        "outerH": 408,
+        "dpr": 3,
+        "scrollY": 0,
+        "bodyH": 408,
+        "canvasW": 2065,
+        "canvasH": 1080
+      }
+    },
+    "consoleLogs": [
+      {
+        "type": "debug",
+        "text": "[vite] connecting...",
+        "ts": 1771965603245
+      },
+      {
+        "type": "debug",
+        "text": "[vite] connected.",
+        "ts": 1771965603251
+      },
+      {
+        "type": "log",
+        "text": "[device] Unknown iPhone (408×780 @3x) | tier=gen-mobile | crt=false refl=false cars=2 parallel=2",
+        "ts": 1771965603253
+      },
+      {
+        "type": "log",
+        "text": "[sim] Simulating iPhone 12 Mini | 780×360 landscape | FPS cap: 40 | tier: phone-high",
+        "ts": 1771965603259
+      },
+      {
+        "type": "log",
+        "text": "[test-mode] Active — runId=1771965603259-7531j0, state exposed on window.__dpMotoTest",
+        "ts": 1771965603259
+      },
+      {
+        "type": "warning",
+        "text": "[main] ?hud=1 blocked on mobile tier: phone-high — causes OOM crash on low-memory devices. Use desktop/tablet only.",
+        "ts": 1771965603259
+      },
+      {
+        "type": "log",
+        "text": "SPOTIFY CLIENT ID: e20013b88ebc46018a93ab9c0489edd8",
+        "ts": 1771965603259
+      },
+      {
+        "type": "log",
+        "text": "[main] adaptive canvas: 2065x1080 (offset=73, viewport=780x408)",
+        "ts": 1771965603259
+      },
+      {
+        "type": "log",
+        "text": "%c %c %c %c %c Phaser v3.90.0 (WebGL | Web Audio) %c https://phaser.io/v390 background: #ff0000 background: #ffff00 background: #00ff00 background: #00ffff color: #ffffff; background: #000000 background: transparent",
+        "ts": 1771965603278
+      },
+      {
+        "type": "log",
+        "text": "[main] GameScene + pipelines loaded and registered",
+        "ts": 1771965603538
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965603953
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965604015
+      },
+      {
+        "type": "log",
+        "text": "Anonymous user created: 522f9de3-a443-413d-bff5-04a405ee7636",
+        "ts": 1771965604836
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965604925
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965605006
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965605015
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965605042
+      },
+      {
+        "type": "warning",
+        "text": "WebGL: INVALID_VALUE: texImage2D: width or height out of range",
+        "ts": 1771965605095
+      },
+      {
+        "type": "log",
+        "text": "[test-mode] State: INIT → TITLE",
+        "ts": 1771965605253
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x3c1402be4e00] GL_INVALID_OPERATION: glGenerateMipmap: Texture format does not support mipmap generation.",
+        "ts": 1771965606098
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x3c1402be4e00] GL_INVALID_OPERATION: glGenerateMipmap: Texture format does not support mipmap generation.",
+        "ts": 1771965606098
+      },
+      {
+        "type": "warning",
+        "text": "[.WebGL-0x3c1402be4e00] GL_INVALID_OPERATION: glGenerateMipmap: Texture format does not support mipmap generation.",
+        "ts": 1771965606098
+      },
+      {
+        "type": "log",
+        "text": "[test-mode] Boot complete — starting poll loop",
+        "ts": 1771965606099
+      },
+      {
+        "type": "log",
+        "text": "[PlaybackCtrl] catalog warmed up",
+        "ts": 1771965607336
+      },
+      {
+        "type": "log",
+        "text": "[test-mode] State: TITLE → STARTING",
+        "ts": 1771965611607
+      },
+      {
+        "type": "log",
+        "text": "[test-mode] State: STARTING → PLAYING",
+        "ts": 1771965613309
+      }
+    ],
+    "screenshots": [
+      {
+        "idx": "01",
+        "label": "loaded",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-12-mini_2026-02-24T20-40-03_01_loaded.png"
+      },
+      {
+        "idx": "02",
+        "label": "init",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-12-mini_2026-02-24T20-40-03_02_init.png"
+      },
+      {
+        "idx": "03",
+        "label": "title",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-12-mini_2026-02-24T20-40-03_03_title.png"
+      },
+      {
+        "idx": "04",
+        "label": "starting",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-12-mini_2026-02-24T20-40-03_04_starting.png"
+      },
+      {
+        "idx": "05",
+        "label": "playing",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-12-mini_2026-02-24T20-40-03_05_playing.png"
+      },
+      {
+        "idx": "06",
+        "label": "playing_5s",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-12-mini_2026-02-24T20-40-03_06_playing_5s.png"
+      },
+      {
+        "idx": "07",
+        "label": "playing_10s",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-12-mini_2026-02-24T20-40-03_07_playing_10s.png"
+      },
+      {
+        "idx": "08",
+        "label": "playing_15s",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-12-mini_2026-02-24T20-40-03_08_playing_15s.png"
+      },
+      {
+        "idx": "09",
+        "label": "final",
+        "filename": "C:\\Claude_Playground\\dp_moto\\telemetry\\chrome-screenshots\\iphone-12-mini_2026-02-24T20-40-03_09_final.png"
+      }
+    ]
+  }
+]

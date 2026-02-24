@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>iOS Crash Diagnosis</title>
+<style>*{margin:0;padding:0}html,body{background:#000;color:#0f0;font:11px monospace;padding:8px;overflow:auto}
+.pass{color:#0f0}.fail{color:#f00}.warn{color:#ff0}.skip{color:#888}
+button{font:14px monospace;padding:8px 16px;margin:4px;background:#333;color:#0f0;border:1px solid #0f0;cursor:pointer}
+button:active{background:#0f0;color:#000}
+#controls{margin:8px 0;display:flex;flex-wrap:wrap;gap:4px}
+</style>
+</head>
+<body>
+<div id="controls">
+  <button onclick="runAll()">Run All Tests</button>
+  <button onclick="runTest(1)">Test 1</button>
+  <button onclick="runTest(2)">Test 2</button>
+  <button onclick="runTest(3)">Test 3</button>
+  <button onclick="runTest(4)">Test 4</button>
+  <button onclick="runTest(5)">Test 5</button>
+  <button onclick="runTest(6)">Test 6</button>
+  <button onclick="runTest(7)">Test 7</button>
+</div>
+<div id="game-container" style="width:1px;height:1px;overflow:hidden"></div>
+<pre id="log"></pre>
+<script>
+var T0 = Date.now(), logEl = document.getElementById('log');
+var results = {};
+
+function L(msg, cls) {
+  var t = ((Date.now()-T0)/1000).toFixed(2);
+  var span = cls ? '<span class="'+cls+'">' + msg + '</span>' : msg;
+  logEl.innerHTML += '['+t+'s] ' + span + '\n';
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+window.onerror = function(m,s,l) { L('JS ERROR: '+m+' @'+(s||'').split('/').pop()+':'+l, 'fail'); };
+window.onunhandledrejection = function(e) { L('PROMISE REJECT: '+(e.reason?e.reason.message||String(e.reason):'?'), 'fail'); };
+
+L('=== iOS Safari Crash Diagnosis ===');
+L('UA: ' + navigator.userAgent.substring(0, 60));
+L('Screen: ' + screen.width + 'x' + screen.height + ' @' + devicePixelRatio + 'x  Touch:' + navigator.maxTouchPoints);
+L('Memory: ' + (navigator.deviceMemory || '?') + 'GB  Cores: ' + (navigator.hardwareConcurrency || '?'));
+
+// Detect iOS
+var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+L('iOS detected: ' + isIOS);
+
+function cleanup() {
+  // Destroy any existing Phaser game
+  if (window._testGame) {
+    try { window._testGame.destroy(true); } catch(e) {}
+    window._testGame = null;
+  }
+  // Clear game container
+  var gc = document.getElementById('game-container');
+  gc.innerHTML = '';
+  gc.style.width = '1px';
+  gc.style.height = '1px';
+}
+
+function makeGame(opts) {
+  cleanup();
+  var gc = document.getElementById('game-container');
+  gc.style.width = '100%';
+  gc.style.height = '50vh';
+
+  var config = {
+    type: Phaser.WEBGL,
+    width: opts.width || 960,
+    height: opts.height || 540,
+    parent: 'game-container',
+    backgroundColor: '#1a0020',
+    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+    scene: opts.scene || { create: function(){} },
+  };
+  if (opts.dom) config.dom = { createContainer: true };
+  if (opts.lowPower) config.render = { powerPreference: 'low-power' };
+  if (opts.maxParallel) config.loader = { maxParallelDownloads: opts.maxParallel };
+
+  var game = new Phaser.Game(config);
+  window._testGame = game;
+  return game;
+}
+
+// Wait for N ms, then check if game is alive
+function waitAndCheck(game, ms) {
+  return new Promise(function(resolve) {
+    setTimeout(function() {
+      try {
+        var fps = Math.round(game.loop.actualFps);
+        var canvas = game.canvas;
+        resolve({
+          alive: true,
+          fps: fps,
+          canvas: canvas.width + 'x' + canvas.height,
+          gl: !!game.renderer.gl,
+        });
+      } catch(e) {
+        resolve({ alive: false, error: e.message });
+      }
+    }, ms);
+  });
+}
+
+// ─── TEST 1: Phaser 3.90 Minimal ───────────────────────────
+async function test1() {
+  L('\n--- TEST 1: Phaser 3.90 minimal (960x540) ---');
+  var game = makeGame({ width: 960, height: 540 });
+  var r = await waitAndCheck(game, 2000);
+  if (r.alive) {
+    L('PASS: alive, FPS=' + r.fps + ' canvas=' + r.canvas, 'pass');
+    results[1] = 'pass';
+  } else {
+    L('FAIL: ' + r.error, 'fail');
+    results[1] = 'fail';
+  }
+  cleanup();
+}
+
+// ─── TEST 2: Full Resolution (1920x1080) ────────────────────
+async function test2() {
+  L('\n--- TEST 2: Full resolution (1920x1080) ---');
+  var game = makeGame({ width: 1920, height: 1080 });
+  var r = await waitAndCheck(game, 2000);
+  if (r.alive) {
+    L('PASS: alive, FPS=' + r.fps + ' canvas=' + r.canvas, 'pass');
+    results[2] = 'pass';
+  } else {
+    L('FAIL: ' + r.error, 'fail');
+    results[2] = 'fail';
+  }
+  cleanup();
+}
+
+// ─── TEST 3: DOM Container (the game uses this) ────────────
+async function test3() {
+  L('\n--- TEST 3: 1920x1080 + dom:{createContainer:true} ---');
+  var game = makeGame({ width: 1920, height: 1080, dom: true });
+  var r = await waitAndCheck(game, 2000);
+  if (r.alive) {
+    L('PASS: alive, FPS=' + r.fps + ' canvas=' + r.canvas, 'pass');
+    results[3] = 'pass';
+  } else {
+    L('FAIL: dom container crash! ' + r.error, 'fail');
+    results[3] = 'fail';
+  }
+  cleanup();
+}
+
+// ─── TEST 4: Low-power render + loader concurrency=2 ───────
+async function test4() {
+  L('\n--- TEST 4: 1920x1080 + dom + lowPower + loader:2 ---');
+  var game = makeGame({
+    width: 1920, height: 1080, dom: true,
+    lowPower: true, maxParallel: 2,
+  });
+  var r = await waitAndCheck(game, 2000);
+  if (r.alive) {
+    L('PASS: alive, FPS=' + r.fps + ' canvas=' + r.canvas, 'pass');
+    results[4] = 'pass';
+  } else {
+    L('FAIL: config combo crash! ' + r.error, 'fail');
+    results[4] = 'fail';
+  }
+  cleanup();
+}
+
+// ─── TEST 5: Asset Loading (50 assets at parallel=2) ───────
+async function test5() {
+  L('\n--- TEST 5: Load 50+ assets (parallel=2) ---');
+
+  var assetsLoaded = 0, assetsFailed = 0;
+
+  var scene = {
+    preload: function() {
+      // Replicate the mobile BootScene asset list
+      this.load.on('filecomplete', function() { assetsLoaded++; });
+      this.load.on('loaderror', function(f) {
+        assetsFailed++;
+        L('  load fail: ' + f.key + ' (' + f.url + ')', 'warn');
+      });
+
+      // 2 title images
+      this.load.image('start-loop-00', 'assets/start/start_loop/DP_Death_Ride_Title_Loop00.jpg');
+      this.load.image('intro-tut-00000', 'assets/cutscenes/intro_to_tut/v3/intro_to_tut_v03__00000.jpg');
+
+      // 10 spritesheets (half-res mobile)
+      this.load.spritesheet('player-ride', 'assets/dp_player/dp_moto_v03_mobile.png', { frameWidth: 128, frameHeight: 128 });
+      this.load.spritesheet('player-start', 'assets/dp_player/dp_start_mobile.png', { frameWidth: 128, frameHeight: 128 });
+      this.load.spritesheet('player-attack', 'assets/dp_player/dp_attack_mobile.png', { frameWidth: 128, frameHeight: 128 });
+      this.load.spritesheet('player-powered', 'assets/dp_player/dp_powered_up_mobile.png', { frameWidth: 128, frameHeight: 128 });
+      this.load.spritesheet('player-speedup', 'assets/dp_player/dp_speed_up_mobile.png', { frameWidth: 128, frameHeight: 128 });
+      this.load.spritesheet('player-rocket-launch', 'assets/dp_player/dp_rocket_lancher_v2_mobile.png', { frameWidth: 128, frameHeight: 128 });
+      this.load.spritesheet('player-collect-rocket', 'assets/COL/COL_rocket_mobile.png', { frameWidth: 64, frameHeight: 64 });
+      this.load.spritesheet('player-collect-shield', 'assets/COL/COL_shield_mobile.png', { frameWidth: 64, frameHeight: 64 });
+      this.load.spritesheet('player-collect-hit', 'assets/COL/COL_hit_mobile.png', { frameWidth: 64, frameHeight: 64 });
+      this.load.spritesheet('rocket-projectile', 'assets/pickups/rocket_Projectile_mobile.png', { frameWidth: 32, frameHeight: 32 });
+
+      // 9 audio
+      this.load.audio('countdown-music', 'assets/audio/music/hell_girl_countdown.mp3');
+      this.load.audio('sfx-click', 'assets/audio/sfx/mouse click.mp3');
+      this.load.audio('sfx-hover', 'assets/audio/sfx/mouse hover.mp3');
+      this.load.audio('sfx-explode', 'assets/audio/sfx/explode.mp3');
+      this.load.audio('sfx-rocket-fire', 'assets/audio/sfx/rocket_fire.mp3');
+      this.load.audio('sfx-engine', 'assets/audio/sfx/motorcycle engine.mp3');
+      this.load.audio('sfx-ammo-pickup', 'assets/audio/sfx/ammo_pickup.mp3');
+      this.load.audio('sfx-obstacle-kill', 'assets/audio/sfx/obstacle_kill.mp3');
+      this.load.audio('sfx-potion-pickup', 'assets/audio/sfx/potion_pickup.mp3');
+
+      // More spritesheets
+      this.load.spritesheet('pickup-rocket', 'assets/pickups/rocket pickup_mobile.png', { frameWidth: 64, frameHeight: 64 });
+      this.load.spritesheet('pickup-shield', 'assets/pickups/shield_pickup_mobile.png', { frameWidth: 64, frameHeight: 64 });
+      this.load.spritesheet('explosion', 'assets/vfx/vfx_explosion_mobile.png', { frameWidth: 128, frameHeight: 128 });
+      this.load.spritesheet('slash-vfx', 'assets/vfx/slash_mobile.png', { frameWidth: 128, frameHeight: 128 });
+      this.load.spritesheet('countdown', 'assets/start/countdown_mobile.png', { frameWidth: 300, frameHeight: 300 });
+
+      // Background images
+      this.load.image('obstacle-crash', 'assets/obstacles/road_barrier_01.png');
+      this.load.image('puddle-tex', 'assets/background/puddle example.png');
+      this.load.image('road-img', 'assets/background/road.jpg');
+      this.load.image('sky-img', 'assets/background/sky.jpg');
+      this.load.image('buildings-back', 'assets/background/buildings_back_row_dark.png');
+      this.load.image('buildings-front', 'assets/background/buildings_Front_row_dark.png');
+      this.load.image('railing', 'assets/background/railing_dark.jpg');
+
+      // UI images
+      this.load.image('cursor', 'ui/cursor.png');
+      this.load.image('crosshair', 'ui/crosshair.png');
+      this.load.image('rocket-icon', 'assets/pickups/rocket_icon.png');
+      this.load.image('rocket-icon-empty', 'assets/pickups/rocket_empty_icon.png');
+      this.load.image('shield-icon', 'assets/pickups/shield_icon.png');
+      this.load.image('shield-icon-empty', 'assets/pickups/shield_empty_icon.png');
+      this.load.image('ui-music-menu', 'ui/music menu.png');
+      this.load.image('ui-skip', 'ui/skip.png');
+      this.load.image('ui-unmuted', 'ui/unmuted.png');
+      this.load.image('ui-muted', 'ui/muted.png');
+      this.load.image('ui-insta', 'ui/insta.png');
+      this.load.image('default-avatar', 'assets/profiles/dp_anon_pic.jpg');
+      this.load.image('add-pic-icon', 'ui/add_pic_icon.png');
+      this.load.image('tutorial-skip', 'assets/tutorial/skip_v02.png');
+      this.load.image('tutorial-blank', 'assets/tutorial/how_to_play_v2.jpg');
+      this.load.image('tutorial-obstacles', 'assets/tutorial/tut_v2/rules_v2.jpg');
+      this.load.image('tutorial-controls-00', 'assets/tutorial/controls_v4/controls_v4__00000.jpg');
+      this.load.image('tutorial-rage-0', 'assets/tutorial/tut_v2/rage_v2/rage_v2_0.jpg');
+    },
+    create: function() {
+      L('  Assets loaded: ' + assetsLoaded + ', failed: ' + assetsFailed);
+      this.add.text(400, 300, 'Asset test OK', { fontSize: '32px', color: '#0f0' }).setOrigin(0.5);
+    },
+  };
+
+  var game = makeGame({
+    width: 1920, height: 1080, dom: true,
+    lowPower: true, maxParallel: 2, scene: scene,
+  });
+
+  // Wait longer for assets to load
+  var r = await waitAndCheck(game, 8000);
+  if (r.alive) {
+    L('PASS: alive, FPS=' + r.fps + ' loaded=' + assetsLoaded + ' failed=' + assetsFailed, assetsFailed > 5 ? 'warn' : 'pass');
+    results[5] = assetsFailed > 5 ? 'warn' : 'pass';
+  } else {
+    L('FAIL: crash during asset loading! ' + (r.error || ''), 'fail');
+    results[5] = 'fail';
+  }
+  cleanup();
+}
+
+// ─── TEST 6: Import game modules (via Vite ESM) ────────────
+async function test6() {
+  L('\n--- TEST 6: Import game modules (tuning + device + gameMode) ---');
+  try {
+    var t0 = Date.now();
+    var tuning = await import('/src/config/tuning.ts');
+    L('  tuning imported (' + (Date.now()-t0) + 'ms): W=' + tuning.TUNING.GAME_WIDTH);
+
+    var device = await import('/src/util/device.ts');
+    L('  device imported: isiOS=' + device.isiOS());
+
+    var gm = await import('/src/config/gameMode.ts');
+    L('  gameMode imported: mobile=' + gm.GAME_MODE.mobileMode + ' profile=' + gm.DEVICE_PROFILE.label);
+
+    L('PASS: core modules imported OK', 'pass');
+    results[6] = 'pass';
+  } catch(e) {
+    L('FAIL: module import crash: ' + e.message, 'fail');
+    results[6] = 'fail';
+  }
+}
+
+// ─── TEST 7: Import GameScene (the 158KB beast) ────────────
+async function test7() {
+  L('\n--- TEST 7: Import GameScene (158KB) ---');
+  try {
+    var t0 = Date.now();
+    var gs = await import('/src/scenes/GameScene.ts');
+    L('  GameScene imported in ' + (Date.now()-t0) + 'ms');
+    L('  Class name: ' + gs.GameScene.name);
+
+    // Also import the shaders
+    var crt = await import('/src/fx/CRTPipeline.ts');
+    L('  CRTPipeline imported');
+    var water = await import('/src/fx/WaterDistortionPipeline.ts');
+    L('  WaterDistortionPipeline imported');
+    var dmg = await import('/src/fx/DamageFlashPipeline.ts');
+    L('  DamageFlashPipeline imported');
+
+    L('PASS: all heavy modules imported OK', 'pass');
+    results[7] = 'pass';
+  } catch(e) {
+    L('FAIL: heavy module import crash: ' + e.message, 'fail');
+    L('  Stack: ' + (e.stack || '').substring(0, 300), 'fail');
+    results[7] = 'fail';
+  }
+}
+
+// ─── Run All ────────────────────────────────────────────────
+async function runAll() {
+  L('\n========== RUNNING ALL TESTS ==========');
+  for (var i = 1; i <= 7; i++) {
+    await runTest(i);
+    // Brief pause between tests
+    await new Promise(function(r) { setTimeout(r, 500); });
+  }
+  L('\n========== RESULTS ==========');
+  for (var k in results) {
+    L('Test ' + k + ': ' + results[k], results[k]);
+  }
+  L('\nIf all pass, the crash is in the COMBINATION of modules + game.');
+  L('Next step: try test-stepwise.html to isolate the exact init step.');
+}
+
+async function runTest(n) {
+  switch(n) {
+    case 1: await test1(); break;
+    case 2: await test2(); break;
+    case 3: await test3(); break;
+    case 4: await test4(); break;
+    case 5: await test5(); break;
+    case 6: await test6(); break;
+    case 7: await test7(); break;
+  }
+}
+</script>
+<!-- Load Phaser 3.90 from CDN (same version as bundled) -->
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+<script>
+L('Phaser loaded: v' + Phaser.VERSION);
+L('');
+L('Tests isolate each potential crash cause:');
+L('  1. Phaser 3.90 minimal (960x540)');
+L('  2. Full resolution (1920x1080)');
+L('  3. + DOM container');
+L('  4. + low-power render + loader concurrency');
+L('  5. + 50 real game assets (mobile load)');
+L('  6. Import game modules (tuning, device, gameMode)');
+L('  7. Import GameScene + shaders (158KB+)');
+L('');
+L('Tap "Run All" or individual tests.');
+</script>
+</body></html>

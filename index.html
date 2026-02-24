@@ -231,6 +231,24 @@
       93%  { opacity: 1; }
       100% { opacity: 1; }
     }
+    /* "SWIPE UP" prompt — shown on phones instead of [ ENTER ] */
+    #boot-swipe-prompt {
+      display: none;
+      position: absolute;
+      top: var(--bios-enter-top);
+      right: 0;
+      text-align: right;
+      font-family: var(--bios-title-font);
+      font-size: clamp(16px, 3.5vw, 36px);
+      transform: scale(var(--bios-enter-scale));
+      transform-origin: right center;
+      color: var(--bios-color);
+      text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow),
+                   0 0 2px var(--bios-color);
+      z-index: 1;
+      animation: enter-blink 1350ms infinite, enter-jitter var(--bios-jitter-speed) infinite alternate;
+    }
+
     /* iPad Preview Mode (desktop debug: press I) */
     html.ipad-preview {
       background: #000 !important;
@@ -276,6 +294,7 @@
         <div id="boot-bar-fill" data-testid="bios-loading-fill"></div>
       </div>
       <div id="boot-enter-prompt" data-testid="bios-enter-prompt" aria-label="Press Enter">[ ENTER ]</div>
+      <div id="boot-swipe-prompt" data-testid="bios-swipe-prompt">SWIPE UP</div>
     </div>
   </div>
 
@@ -327,7 +346,7 @@
       var hh = String(now.getHours()).padStart(2, '0');
       var mi = String(now.getMinutes()).padStart(2, '0');
       var ss = String(now.getSeconds()).padStart(2, '0');
-      var verNum = '0.00.62';
+      var verNum = '0.00.65';
       var versionText = 'last saved [ ' + dd + ' : ' + monthName + ' : ' + yyyy + ' ]  [ ' + hh + ' : ' + mi + ' : ' + ss + ' ]';
       // Set title line version dynamically
       var titleLine = document.getElementById('bios-title-line');
@@ -383,6 +402,12 @@
     var bootLinesEl = document.getElementById('boot-lines');
     var enterPrompt = document.getElementById('boot-enter-prompt');
     var bootContent = document.getElementById('boot-content');
+    var swipePrompt = document.getElementById('boot-swipe-prompt');
+    // Phone detection — iPads keep ENTER (Fullscreen API works on iPad)
+    // Also triggers on ?simulate=iphone-* or ?simulate=android-* for desktop visual testing
+    var simParam = new URLSearchParams(location.search).get('simulate') || '';
+    var isMobileBIOS = (/iPhone|iPod|Android/i.test(navigator.userAgent) && !(/iPad/i.test(navigator.userAgent)))
+      || /^iphone|^android/i.test(simParam);
     var biosStarted = true;  // start BIOS immediately (no terminal phase)
     var readyForEnter = false;  // true once loading bar finishes
 
@@ -427,6 +452,7 @@
     function handleDismissUp() {
       if (guideMode) return;
       if (!readyForEnter) return;
+      if (isMobileBIOS) return; // phone: only swipe-up dismisses
       if (Date.now() - dismissPointerStart < BIOS_TAP_THRESHOLD) {
         dismissOverlay();
       }
@@ -434,6 +460,7 @@
     function handleDismissKey(e) {
       if (guideMode) return;
       if (!readyForEnter) return;
+      if (isMobileBIOS) return; // phone: only swipe-up dismisses
       if (e && e.key === 'g') return; // let G through to toggle guide
       dismissOverlay();
     }
@@ -567,10 +594,81 @@
 
     function tryDismiss() {
       if (readyForEnter || !typingDone || !loadingDone) return;
-      // Loading done — show [ENTER] prompt, wait for user input
       readyForEnter = true;
       biosCompleteAudio.play().catch(function() { onBeepFinished(); });
-      enterPrompt.style.display = 'block';
+
+      if (isMobileBIOS) {
+        // Phone: show "SWIPE UP" + unlock scrolling so Safari hides chrome
+        swipePrompt.style.display = 'block';
+        enableSwipeToEnter();
+      } else {
+        // Desktop/tablet: show [ENTER] prompt as before
+        enterPrompt.style.display = 'block';
+      }
+    }
+
+    // ---- SWIPE-UP-TO-ENTER (mobile pseudo-fullscreen) ----
+    var SWIPE_THRESHOLD = 60; // px of scroll before triggering dismiss
+
+    function enableSwipeToEnter() {
+      // Show spacer to make page taller than viewport → enables scrolling
+      var spacer = document.getElementById('scroll-spacer');
+      spacer.style.display = 'block';
+
+      // Temporarily unlock scrolling on html/body
+      // (game-container + boot-overlay stay position:fixed, unaffected by scroll)
+      document.documentElement.style.position = 'static';
+      document.documentElement.style.overflow = 'auto';
+      document.body.style.position = 'static';
+      document.body.style.overflow = 'auto';
+      document.body.style.height = 'auto';
+
+      // Pre-unlock iOS audio on the touch that starts the swipe gesture
+      // (scroll events don't count as "user gestures" for AudioContext)
+      document.addEventListener('touchstart', swipeTouchUnlock, { once: true, passive: true });
+
+      window.addEventListener('scroll', onSwipeScroll, { passive: true });
+    }
+
+    function swipeTouchUnlock() {
+      // iOS requires AudioContext.resume() inside a touch handler
+      try {
+        var ctx = new (window.AudioContext || window.webkitAudioContext)();
+        ctx.resume().then(function() { ctx.close(); });
+      } catch(e) {}
+      try {
+        var silent = new Audio();
+        silent.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+        silent.volume = 0;
+        silent.play().then(function() { silent.pause(); }).catch(function(){});
+      } catch(e) {}
+      // Activate Spotify SDK element if available
+      try {
+        if (window.__spotifyPlayer && window.__spotifyPlayer.activateElement) {
+          window.__spotifyPlayer.activateElement();
+        }
+      } catch(e) {}
+    }
+
+    function onSwipeScroll() {
+      if (dismissed) return;
+      if (window.scrollY >= SWIPE_THRESHOLD) {
+        window.removeEventListener('scroll', onSwipeScroll);
+
+        // Lock the page — restore fixed/hidden, Safari chrome stays hidden
+        document.documentElement.style.position = 'fixed';
+        document.documentElement.style.overflow = 'hidden';
+        document.body.style.position = 'fixed';
+        document.body.style.overflow = 'hidden';
+        document.body.style.height = '100dvh';
+
+        // Hide spacer
+        var spacer = document.getElementById('scroll-spacer');
+        spacer.style.display = 'none';
+
+        // Dismiss BIOS overlay (audio already unlocked via swipeTouchUnlock)
+        dismissOverlay();
+      }
     }
 
     function dismissOverlay() {
@@ -939,6 +1037,8 @@
   </script>
 
   <div id="game-container"></div>
+  <!-- Scroll spacer — extends page height so Safari hides chrome on swipe-up (mobile only) -->
+  <div id="scroll-spacer" style="display:none; height:200vh; width:1px; position:absolute; top:0; left:0;"></div>
   <!-- Phaser loaded via CDN to avoid Vite pre-bundling crash on iOS Safari -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
   <script type="module" src="/src/main.ts"></script>

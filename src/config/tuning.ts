@@ -370,6 +370,9 @@ export const TUNING = {
   MUSIC_UI_THUMB_SCALE: 1.3,       // thumbnail scale factor (1.0 = 96px base height)
   MUSIC_UI_WIDTH: 740,             // fixed container width in game units (desktop)
   MUSIC_UI_MOBILE_WIDTH: 1050,     // wider container for mobile (full-size buttons + thumbnail + gap)
+  MUSIC_UI_PHONE_PAD: 40,             // px padding on each side of phone popup (screen width - 2*pad = popup width)
+  MUSIC_UI_PHONE_BACKDROP_ALPHA: 0.6, // backdrop opacity behind phone popup
+  MUSIC_UI_PHONE_ANIM_MS: 350,        // phone popup expand/collapse animation duration (ms)
 
   // WMP popup window
   WMP_WIDTH_PCT: 80,                 // popup width as % of overlay

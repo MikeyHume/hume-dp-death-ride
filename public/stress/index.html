@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DP MOTO — Stress Test Runner</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a1a;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      min-height: 100vh;
+    }
+    header {
+      background: #0f0f23;
+      border-bottom: 2px solid #22c55e;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 {
+      font-size: 18px;
+      color: #22c55e;
+      letter-spacing: 2px;
+    }
+    header .subtitle {
+      color: #666;
+      font-size: 12px;
+    }
+
+    /* Config bar */
+    .config-bar {
+      background: #111128;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+      border-bottom: 1px solid #222;
+    }
+    .config-bar label {
+      color: #888;
+      font-size: 12px;
+    }
+    .config-bar select, .config-bar input[type="number"] {
+      background: #1a1a2e;
+      color: #e0e0e0;
+      border: 1px solid #333;
+      padding: 4px 8px;
+      font-family: inherit;
+      font-size: 12px;
+      border-radius: 4px;
+    }
+    .config-bar input[type="checkbox"] {
+      accent-color: #22c55e;
+    }
+    .config-bar .group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn {
+      padding: 6px 16px;
+      border: 1px solid #22c55e;
+      background: #22c55e22;
+      color: #22c55e;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: bold;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #22c55e44; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn.stop { border-color: #ef4444; background: #ef444422; color: #ef4444; }
+    .btn.stop:hover { background: #ef444444; }
+    .btn.export { border-color: #3b82f6; background: #3b82f622; color: #3b82f6; }
+    .btn.export:hover { background: #3b82f644; }
+
+    /* Progress bar */
+    .progress-section {
+      padding: 12px 24px;
+      background: #0d0d20;
+      border-bottom: 1px solid #222;
+    }
+    .progress-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: #1a1a2e;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: #22c55e;
+      border-radius: 3px;
+      transition: width 0.3s;
+      width: 0%;
+    }
+    .progress-text {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #888;
+    }
+
+    /* Results table */
+    .results-section {
+      padding: 16px 24px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    th {
+      text-align: left;
+      padding: 8px 12px;
+      background: #111128;
+      color: #888;
+      font-weight: normal;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid #333;
+      position: sticky;
+      top: 0;
+    }
+    td {
+      padding: 6px 12px;
+      border-bottom: 1px solid #1a1a2e;
+    }
+    tr:hover td { background: #111128; }
+    tr.active td { background: #22c55e11; }
+
+    /* Status badges */
+    .status { font-weight: bold; font-size: 11px; letter-spacing: 0.5px; }
+    .status-wait { color: #555; }
+    .status-run { color: #eab308; }
+    .status-pass { color: #22c55e; }
+    .status-fail { color: #ef4444; }
+    .status-timeout { color: #f97316; }
+    .status-error { color: #ef4444; }
+
+    /* Tier badges */
+    .tier { font-size: 11px; font-weight: bold; padding: 1px 6px; border-radius: 3px; }
+    .tier-phone-high { color: #22c55e; background: #22c55e18; }
+    .tier-phone-low { color: #ef4444; background: #ef444418; }
+    .tier-gen-mobile { color: #eab308; background: #eab30818; }
+    .tier-tablet { color: #3b82f6; background: #3b82f618; }
+    .tier-desktop { color: #a855f7; background: #a855f718; }
+
+    /* FPS coloring */
+    .fps-good { color: #22c55e; }
+    .fps-ok { color: #eab308; }
+    .fps-bad { color: #ef4444; }
+    .fps-na { color: #555; }
+
+    /* Detail panel */
+    .detail-panel {
+      display: none;
+      background: #111128;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 16px 24px;
+      margin: 16px 24px;
+    }
+    .detail-panel.visible { display: block; }
+    .detail-panel h3 { color: #22c55e; margin-bottom: 12px; }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .detail-card {
+      background: #0a0a1a;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #222;
+    }
+    .detail-card .label { color: #888; font-size: 11px; margin-bottom: 4px; }
+    .detail-card .value { font-size: 16px; font-weight: bold; }
+
+    /* Summary footer */
+    .summary {
+      padding: 16px 24px;
+      background: #0f0f23;
+      border-top: 1px solid #333;
+      display: flex;
+      gap: 32px;
+      font-size: 13px;
+    }
+    .summary .stat-label { color: #888; }
+    .summary .stat-value { font-weight: bold; margin-left: 6px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>DP MOTO — STRESS TEST RUNNER</h1>
+    <div class="subtitle">Automated device simulation + optimization profiling</div>
+  </div>
+  <div style="color:#666;font-size:11px">
+    Simulated FPS caps on desktop hardware — validates feature flags + PerfSystem adaptation
+  </div>
+</header>
+
+<div class="config-bar">
+  <div class="group">
+    <label>Duration:</label>
+    <input type="number" id="cfg-duration" value="30" min="10" max="120" step="5" style="width:60px"> s
+  </div>
+  <div class="group">
+    <label>Filter:</label>
+    <select id="cfg-filter">
+      <option value="all-iphones">All iPhones (31)</option>
+      <option value="phone-high">phone-high only</option>
+      <option value="phone-low">phone-low only</option>
+      <option value="all">All devices (36)</option>
+    </select>
+  </div>
+  <div class="group">
+    <label>Permutations:</label>
+    <input type="checkbox" id="cfg-perm-crt"> CRT
+    <input type="checkbox" id="cfg-perm-reflect"> Reflections
+  </div>
+  <div class="group">
+    <label>Poll interval:</label>
+    <input type="number" id="cfg-poll" value="500" min="200" max="2000" step="100" style="width:70px"> ms
+  </div>
+  <div style="flex:1"></div>
+  <button class="btn" id="btn-run-all" onclick="runAll()">Run All</button>
+  <button class="btn stop" id="btn-stop" onclick="stopTests()" disabled>Stop</button>
+  <button class="btn export" id="btn-export" onclick="exportJSON()" disabled>Export JSON</button>
+</div>
+
+<div class="progress-section">
+  <div class="progress-bar-bg">
+    <div class="progress-bar-fill" id="progress-fill"></div>
+  </div>
+  <div class="progress-text" id="progress-text">Ready — click Run All to start</div>
+</div>
+
+<div class="results-section">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:30px">#</th>
+        <th>Device</th>
+        <th>Tier</th>
+        <th>Config</th>
+        <th>Status</th>
+        <th>FPS Avg</th>
+        <th>FPS Min</th>
+        <th>FPS Max</th>
+        <th>Quality</th>
+        <th>Errors</th>
+        <th>Boot</th>
+        <th>Score</th>
+      </tr>
+    </thead>
+    <tbody id="results-body"></tbody>
+  </table>
+</div>
+
+<div class="detail-panel" id="detail-panel">
+  <h3 id="detail-title">Device Details</h3>
+  <div class="detail-grid" id="detail-grid"></div>
+</div>
+
+<!-- Hidden iframe for running tests (avoids popup blockers) -->
+<div id="iframe-container" style="position:fixed;bottom:0;right:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;z-index:-1">
+  <iframe id="test-frame" style="width:960px;height:540px;border:none" src="about:blank"></iframe>
+</div>
+
+<div class="summary" id="summary" style="display:none">
+  <div><span class="stat-label">Total:</span><span class="stat-value" id="sum-total">0</span></div>
+  <div><span class="stat-label">Passed:</span><span class="stat-value fps-good" id="sum-pass">0</span></div>
+  <div><span class="stat-label">Failed:</span><span class="stat-value fps-bad" id="sum-fail">0</span></div>
+  <div><span class="stat-label">Avg Boot:</span><span class="stat-value" id="sum-boot">--</span></div>
+  <div><span class="stat-label">Duration:</span><span class="stat-value" id="sum-duration">--</span></div>
+</div>
+
+<script>
+// ── Device Library (duplicated from deviceLibrary.ts for no-build access) ──
+
+const IPHONE_LIBRARY = [
+  { slug: 'iphone-16-pro-max', name: 'iPhone 16 Pro Max', tier: 'phone-high', targetFps: 60, year: 2024, chip: 'A18 Pro', ram: 8, cssW: 440, cssH: 956 },
+  { slug: 'iphone-16-pro', name: 'iPhone 16 Pro', tier: 'phone-high', targetFps: 60, year: 2024, chip: 'A18 Pro', ram: 8, cssW: 402, cssH: 874 },
+  { slug: 'iphone-16-plus', name: 'iPhone 16 Plus', tier: 'phone-high', targetFps: 60, year: 2024, chip: 'A18', ram: 8, cssW: 430, cssH: 932 },
+  { slug: 'iphone-16', name: 'iPhone 16', tier: 'phone-high', targetFps: 60, year: 2024, chip: 'A18', ram: 8, cssW: 393, cssH: 852 },
+  { slug: 'iphone-16e', name: 'iPhone 16e', tier: 'phone-high', targetFps: 55, year: 2025, chip: 'A16', ram: 8, cssW: 390, cssH: 844 },
+  { slug: 'iphone-15-pro-max', name: 'iPhone 15 Pro Max', tier: 'phone-high', targetFps: 60, year: 2023, chip: 'A17 Pro', ram: 8, cssW: 430, cssH: 932 },
+  { slug: 'iphone-15-pro', name: 'iPhone 15 Pro', tier: 'phone-high', targetFps: 60, year: 2023, chip: 'A17 Pro', ram: 8, cssW: 393, cssH: 852 },
+  { slug: 'iphone-15-plus', name: 'iPhone 15 Plus', tier: 'phone-high', targetFps: 55, year: 2023, chip: 'A16', ram: 6, cssW: 430, cssH: 932 },
+  { slug: 'iphone-15', name: 'iPhone 15', tier: 'phone-high', targetFps: 55, year: 2023, chip: 'A16', ram: 6, cssW: 393, cssH: 852 },
+  { slug: 'iphone-14-pro-max', name: 'iPhone 14 Pro Max', tier: 'phone-high', targetFps: 55, year: 2022, chip: 'A16', ram: 6, cssW: 430, cssH: 932 },
+  { slug: 'iphone-14-pro', name: 'iPhone 14 Pro', tier: 'phone-high', targetFps: 55, year: 2022, chip: 'A16', ram: 6, cssW: 393, cssH: 852 },
+  { slug: 'iphone-14-plus', name: 'iPhone 14 Plus', tier: 'phone-high', targetFps: 50, year: 2022, chip: 'A15', ram: 6, cssW: 428, cssH: 926 },
+  { slug: 'iphone-14', name: 'iPhone 14', tier: 'phone-high', targetFps: 50, year: 2022, chip: 'A15', ram: 6, cssW: 390, cssH: 844 },
+  { slug: 'iphone-se-3', name: 'iPhone SE 3rd Gen', tier: 'phone-low', targetFps: 40, year: 2022, chip: 'A15', ram: 4, cssW: 375, cssH: 667 },
+  { slug: 'iphone-13-pro-max', name: 'iPhone 13 Pro Max', tier: 'phone-high', targetFps: 50, year: 2021, chip: 'A15', ram: 6, cssW: 428, cssH: 926 },
+  { slug: 'iphone-13-pro', name: 'iPhone 13 Pro', tier: 'phone-high', targetFps: 50, year: 2021, chip: 'A15', ram: 6, cssW: 390, cssH: 844 },
+  { slug: 'iphone-13', name: 'iPhone 13', tier: 'phone-high', targetFps: 45, year: 2021, chip: 'A15', ram: 4, cssW: 390, cssH: 844 },
+  { slug: 'iphone-13-mini', name: 'iPhone 13 Mini', tier: 'phone-high', targetFps: 45, year: 2021, chip: 'A15', ram: 4, cssW: 360, cssH: 780 },
+  { slug: 'iphone-12-pro-max', name: 'iPhone 12 Pro Max', tier: 'phone-high', targetFps: 45, year: 2020, chip: 'A14', ram: 6, cssW: 428, cssH: 926 },
+  { slug: 'iphone-12-pro', name: 'iPhone 12 Pro', tier: 'phone-high', targetFps: 45, year: 2020, chip: 'A14', ram: 6, cssW: 390, cssH: 844 },
+  { slug: 'iphone-12', name: 'iPhone 12', tier: 'phone-high', targetFps: 40, year: 2020, chip: 'A14', ram: 4, cssW: 390, cssH: 844 },
+  { slug: 'iphone-12-mini', name: 'iPhone 12 Mini', tier: 'phone-high', targetFps: 40, year: 2020, chip: 'A14', ram: 4, cssW: 360, cssH: 780 },
+  { slug: 'iphone-11-pro-max', name: 'iPhone 11 Pro Max', tier: 'phone-low', targetFps: 30, year: 2019, chip: 'A13', ram: 4, cssW: 414, cssH: 896 },
+  { slug: 'iphone-11-pro', name: 'iPhone 11 Pro', tier: 'phone-low', targetFps: 30, year: 2019, chip: 'A13', ram: 4, cssW: 375, cssH: 812 },
+  { slug: 'iphone-11', name: 'iPhone 11', tier: 'phone-low', targetFps: 30, year: 2019, chip: 'A13', ram: 4, cssW: 414, cssH: 896 },
+  { slug: 'iphone-xs-max', name: 'iPhone XS Max', tier: 'phone-low', targetFps: 25, year: 2018, chip: 'A12', ram: 4, cssW: 414, cssH: 896 },
+  { slug: 'iphone-xs', name: 'iPhone XS', tier: 'phone-low', targetFps: 25, year: 2018, chip: 'A12', ram: 4, cssW: 375, cssH: 812 },
+  { slug: 'iphone-xr', name: 'iPhone XR', tier: 'phone-low', targetFps: 25, year: 2018, chip: 'A12', ram: 3, cssW: 414, cssH: 896 },
+  { slug: 'iphone-x', name: 'iPhone X', tier: 'phone-low', targetFps: 20, year: 2017, chip: 'A11', ram: 3, cssW: 375, cssH: 812 },
+  { slug: 'iphone-se-2', name: 'iPhone SE 2nd Gen', tier: 'phone-low', targetFps: 30, year: 2020, chip: 'A13', ram: 3, cssW: 375, cssH: 667 },
+  { slug: 'iphone-8-plus', name: 'iPhone 8 Plus', tier: 'phone-low', targetFps: 20, year: 2017, chip: 'A11', ram: 3, cssW: 414, cssH: 736 },
+  { slug: 'iphone-8', name: 'iPhone 8', tier: 'phone-low', targetFps: 18, year: 2017, chip: 'A11', ram: 2, cssW: 375, cssH: 667 },
+];
+
+const ANDROID_LIBRARY = [
+  { slug: 'galaxy-s25-ultra', name: 'Galaxy S25 Ultra', tier: 'phone-high', targetFps: 60, year: 2025, chip: 'SD 8 Elite', ram: 12, cssW: 412, cssH: 891 },
+  { slug: 'galaxy-s25-plus', name: 'Galaxy S25+', tier: 'phone-high', targetFps: 60, year: 2025, chip: 'SD 8 Elite', ram: 12, cssW: 412, cssH: 891 },
+  { slug: 'galaxy-s25', name: 'Galaxy S25', tier: 'phone-high', targetFps: 60, year: 2025, chip: 'SD 8 Elite', ram: 12, cssW: 360, cssH: 780 },
+  { slug: 'pixel-9-pro', name: 'Pixel 9 Pro', tier: 'phone-high', targetFps: 55, year: 2024, chip: 'Tensor G4', ram: 16, cssW: 410, cssH: 914 },
+  { slug: 'galaxy-a55', name: 'Galaxy A55', tier: 'gen-mobile', targetFps: 35, year: 2024, chip: 'Exynos 1480', ram: 8, cssW: 360, cssH: 780 },
+];
+
+const ALL_DEVICES = [...IPHONE_LIBRARY, ...ANDROID_LIBRARY];
+
+// ── State ─────────────────────────────────────────────────────
+
+let running = false;
+let stopRequested = false;
+let allResults = [];
+let activeFrame = null;
+let testStartTime = 0;
+
+// ── Helpers ───────────────────────────────────────────────────
+
+function getFilteredDevices() {
+  const filter = document.getElementById('cfg-filter').value;
+  switch (filter) {
+    case 'all-iphones': return IPHONE_LIBRARY;
+    case 'phone-high': return ALL_DEVICES.filter(d => d.tier === 'phone-high');
+    case 'phone-low': return ALL_DEVICES.filter(d => d.tier === 'phone-low');
+    case 'all': return ALL_DEVICES;
+    default: return IPHONE_LIBRARY;
+  }
+}
+
+function getPermutations() {
+  const perms = ['default'];
+  if (document.getElementById('cfg-perm-crt').checked) perms.push('crt-on');
+  if (document.getElementById('cfg-perm-reflect').checked) perms.push('reflections-on');
+  if (document.getElementById('cfg-perm-crt').checked && document.getElementById('cfg-perm-reflect').checked) {
+    perms.push('crt+reflections');
+  }
+  return perms;
+}
+
+function buildURL(device, config) {
+  let url = `/?test=1&simulate=${device.slug}&hud=1`;
+  if (config === 'crt-on') url += '&force-crt=1';
+  else if (config === 'reflections-on') url += '&force-reflections=1';
+  else if (config === 'crt+reflections') url += '&force-crt=1&force-reflections=1';
+  return url;
+}
+
+function tierClass(tier) {
+  return 'tier tier-' + tier;
+}
+
+function fpsClass(fps, targetFps) {
+  if (fps === null || fps === undefined) return 'fps-na';
+  const ratio = fps / targetFps;
+  if (ratio >= 0.9) return 'fps-good';
+  if (ratio >= 0.7) return 'fps-ok';
+  return 'fps-bad';
+}
+
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+function percentile(arr, p) {
+  if (arr.length === 0) return 0;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const idx = Math.ceil(p / 100 * sorted.length) - 1;
+  return sorted[Math.max(0, idx)];
+}
+
+function stdDev(arr) {
+  if (arr.length < 2) return 0;
+  const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+  const sqDiffs = arr.map(v => (v - mean) ** 2);
+  return Math.sqrt(sqDiffs.reduce((a, b) => a + b, 0) / arr.length);
+}
+
+// ── Table rendering ───────────────────────────────────────────
+
+let rowIndex = 0;
+
+function buildTable(devices, permutations) {
+  const tbody = document.getElementById('results-body');
+  tbody.innerHTML = '';
+  rowIndex = 0;
+
+  for (const device of devices) {
+    for (const config of permutations) {
+      const tr = document.createElement('tr');
+      tr.id = `row-${device.slug}-${config}`;
+      tr.setAttribute('data-slug', device.slug);
+      tr.setAttribute('data-config', config);
+      tr.onclick = () => showDetail(device.slug, config);
+      rowIndex++;
+      tr.innerHTML = `
+        <td style="color:#555">${rowIndex}</td>
+        <td>${device.name} <span style="color:#555;font-size:10px">${device.chip} ${device.ram}GB</span></td>
+        <td><span class="${tierClass(device.tier)}">${device.tier.toUpperCase()}</span></td>
+        <td style="color:#888">${config}</td>
+        <td class="status status-wait" id="status-${device.slug}-${config}">WAIT</td>
+        <td class="fps-na" id="fps-avg-${device.slug}-${config}">--</td>
+        <td class="fps-na" id="fps-min-${device.slug}-${config}">--</td>
+        <td class="fps-na" id="fps-max-${device.slug}-${config}">--</td>
+        <td style="color:#555" id="quality-${device.slug}-${config}">--</td>
+        <td style="color:#555" id="errors-${device.slug}-${config}">--</td>
+        <td style="color:#555" id="boot-${device.slug}-${config}">--</td>
+        <td style="color:#555" id="score-${device.slug}-${config}">--</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+}
+
+function updateRow(slug, config, data) {
+  const key = `${slug}-${config}`;
+  const statusEl = document.getElementById(`status-${key}`);
+  const fpsAvgEl = document.getElementById(`fps-avg-${key}`);
+  const fpsMinEl = document.getElementById(`fps-min-${key}`);
+  const fpsMaxEl = document.getElementById(`fps-max-${key}`);
+  const qualityEl = document.getElementById(`quality-${key}`);
+  const errorsEl = document.getElementById(`errors-${key}`);
+  const bootEl = document.getElementById(`boot-${key}`);
+  const scoreEl = document.getElementById(`score-${key}`);
+  const row = document.getElementById(`row-${key}`);
+
+  if (!statusEl) return;
+
+  const device = ALL_DEVICES.find(d => d.slug === slug);
+  const targetFps = device ? device.targetFps : 60;
+
+  statusEl.textContent = data.result || 'RUN';
+  statusEl.className = `status status-${(data.result || 'run').toLowerCase()}`;
+
+  if (data.result === 'RUN') {
+    row.classList.add('active');
+  } else {
+    row.classList.remove('active');
+  }
+
+  if (data.fpsAvg !== undefined && data.fpsAvg !== null) {
+    fpsAvgEl.textContent = Math.round(data.fpsAvg);
+    fpsAvgEl.className = fpsClass(data.fpsAvg, targetFps);
+  }
+  if (data.fpsMin !== undefined && data.fpsMin !== null && data.fpsMin < 999) {
+    fpsMinEl.textContent = Math.round(data.fpsMin);
+    fpsMinEl.className = fpsClass(data.fpsMin, targetFps);
+  }
+  if (data.fpsMax !== undefined && data.fpsMax !== null) {
+    fpsMaxEl.textContent = Math.round(data.fpsMax);
+    fpsMaxEl.className = fpsClass(data.fpsMax, targetFps);
+  }
+  if (data.qualityTier) {
+    qualityEl.textContent = data.qualityTier;
+    qualityEl.style.color = data.qualityTier === 'high' ? '#22c55e' :
+                            data.qualityTier === 'medium' ? '#eab308' : '#ef4444';
+  }
+  if (data.errors !== undefined) {
+    errorsEl.textContent = data.errors;
+    errorsEl.style.color = data.errors > 0 ? '#ef4444' : '#555';
+  }
+  if (data.bootTimeMs !== undefined) {
+    bootEl.textContent = `${(data.bootTimeMs / 1000).toFixed(1)}s`;
+  }
+  if (data.score !== undefined) {
+    scoreEl.textContent = data.score;
+  }
+}
+
+// ── Detail panel ──────────────────────────────────────────────
+
+function showDetail(slug, config) {
+  const result = allResults.find(r => r.slug === slug && r.config === config);
+  if (!result) return;
+
+  const panel = document.getElementById('detail-panel');
+  const title = document.getElementById('detail-title');
+  const grid = document.getElementById('detail-grid');
+
+  title.textContent = `${result.name} — ${config}`;
+
+  const cards = [
+    { label: 'FPS Average', value: result.fps?.avg?.toFixed(1) || '--' },
+    { label: 'FPS Min', value: result.fps?.min || '--' },
+    { label: 'FPS Max', value: result.fps?.max || '--' },
+    { label: 'FPS P5', value: result.fps?.p5 || '--' },
+    { label: 'FPS P95', value: result.fps?.p95 || '--' },
+    { label: 'FPS Std Dev', value: result.fps?.stdDev?.toFixed(2) || '--' },
+    { label: 'Samples', value: result.fps?.samples?.length || 0 },
+    { label: 'Quality Initial', value: result.quality?.initial || '--' },
+    { label: 'Quality Final', value: result.quality?.final || '--' },
+    { label: 'Quality Changes', value: result.quality?.changes?.length || 0 },
+    { label: 'CRT Active', value: result.features?.crt ? 'YES' : 'NO' },
+    { label: 'Reflections', value: result.features?.reflections ? 'YES' : 'NO' },
+    { label: 'Car Count', value: result.features?.carCount ?? '--' },
+    { label: 'Parallax Layers', value: result.features?.parallaxLayers ?? '--' },
+    { label: 'Boot Time', value: result.bootTimeMs ? `${(result.bootTimeMs / 1000).toFixed(1)}s` : '--' },
+    { label: 'Score', value: result.score || 0 },
+    { label: 'Errors', value: result.errors?.length || 0 },
+  ];
+
+  grid.innerHTML = cards.map(c => `
+    <div class="detail-card">
+      <div class="label">${c.label}</div>
+      <div class="value">${c.value}</div>
+    </div>
+  `).join('');
+
+  if (result.errors?.length > 0) {
+    grid.innerHTML += `
+      <div class="detail-card" style="grid-column:1/-1;border-color:#ef4444">
+        <div class="label" style="color:#ef4444">Errors</div>
+        <div class="value" style="font-size:11px;color:#ef4444">${result.errors.join('<br>')}</div>
+      </div>
+    `;
+  }
+
+  if (result.quality?.changes?.length > 0) {
+    grid.innerHTML += `
+      <div class="detail-card" style="grid-column:1/-1;border-color:#eab308">
+        <div class="label" style="color:#eab308">Quality Changes</div>
+        <div class="value" style="font-size:11px">${result.quality.changes.join('<br>')}</div>
+      </div>
+    `;
+  }
+
+  panel.classList.add('visible');
+}
+
+// ── Test runner ───────────────────────────────────────────────
+
+async function runSingleDevice(device, config) {
+  const duration = parseInt(document.getElementById('cfg-duration').value) || 30;
+  const pollInterval = parseInt(document.getElementById('cfg-poll').value) || 500;
+  const key = `${device.slug}-${config}`;
+  const url = buildURL(device, config);
+
+  // Use iframe instead of popup (avoids popup blockers)
+  const frame = document.getElementById('test-frame');
+  frame.src = url;
+  activeFrame = frame;
+  const startTime = Date.now();
+
+  updateRow(device.slug, config, { result: 'RUN' });
+
+  // Step 1: Wait for PLAYING state
+  let bootComplete = false;
+  const bootTimeout = 45000; // 45s — includes BIOS + boot + title + countdown
+  let testState = null;
+
+  while (!bootComplete && (Date.now() - startTime) < bootTimeout) {
+    if (stopRequested) break;
+    await sleep(pollInterval);
+
+    try {
+      testState = frame.contentWindow?.__dpMotoTest?.state;
+      if (testState?.stateName === 'PLAYING') {
+        bootComplete = true;
+      }
+    } catch (e) {
+      // Frame not ready yet — keep polling
+    }
+  }
+
+  const bootTimeMs = Date.now() - startTime;
+
+  if (!bootComplete) {
+    frame.src = 'about:blank';
+    activeFrame = null;
+    const reason = stopRequested ? 'STOPPED' : 'TIMEOUT';
+    return {
+      slug: device.slug, name: device.name, tier: device.tier,
+      targetFps: device.targetFps, config, duration,
+      result: reason, bootTimeMs,
+      fps: { samples: [], avg: 0, min: 0, max: 0, p5: 0, p95: 0, stdDev: 0 },
+      quality: { initial: testState?.qualityTier || '--', final: testState?.qualityTier || '--', changes: [] },
+      features: testState?.features || {}, errors: testState?.errorHistory || [], score: 0,
+    };
+  }
+
+  // Step 2: Collect FPS samples during gameplay
+  const fpsSamples = [];
+  const qualityChanges = [];
+  let lastQuality = testState?.qualityTier || 'high';
+  const initialQuality = lastQuality;
+  const playStartTime = Date.now();
+  let lastErrors = [...(testState?.errorHistory || [])];
+
+  while ((Date.now() - playStartTime) < duration * 1000) {
+    if (stopRequested) break;
+    await sleep(pollInterval);
+
+    try {
+      testState = frame.contentWindow?.__dpMotoTest?.state;
+      if (!testState) continue;
+
+      // Collect FPS
+      if (testState.fps > 0) {
+        fpsSamples.push(testState.fps);
+      }
+
+      // Track quality changes
+      if (testState.qualityTier !== lastQuality) {
+        const elapsed = ((Date.now() - playStartTime) / 1000).toFixed(1);
+        qualityChanges.push(`${lastQuality}→${testState.qualityTier} @ ${elapsed}s`);
+        lastQuality = testState.qualityTier;
+      }
+
+      // Live update
+      const liveFpsAvg = fpsSamples.length > 0
+        ? fpsSamples.reduce((a, b) => a + b, 0) / fpsSamples.length
+        : null;
+      updateRow(device.slug, config, {
+        result: 'RUN',
+        fpsAvg: liveFpsAvg,
+        fpsMin: testState.fpsMin,
+        fpsMax: testState.fpsMax,
+        qualityTier: testState.qualityTier,
+        errors: testState.errorHistory?.length || 0,
+      });
+    } catch (e) {
+      // Frame might have errored
+    }
+  }
+
+  // Step 3: Read final state
+  let finalState = null;
+  try {
+    finalState = frame.contentWindow?.__dpMotoTest?.state;
+  } catch (e) {}
+
+  frame.src = 'about:blank';
+  activeFrame = null;
+
+  // Compute FPS stats
+  const fpsAvg = fpsSamples.length > 0
+    ? fpsSamples.reduce((a, b) => a + b, 0) / fpsSamples.length
+    : 0;
+  const fpsMin = fpsSamples.length > 0 ? Math.min(...fpsSamples) : 0;
+  const fpsMax = fpsSamples.length > 0 ? Math.max(...fpsSamples) : 0;
+
+  const result = {
+    slug: device.slug,
+    name: device.name,
+    tier: device.tier,
+    targetFps: device.targetFps,
+    config,
+    duration,
+    bootTimeMs,
+    result: stopRequested ? 'STOPPED' : 'PASS',
+    fps: {
+      samples: fpsSamples,
+      avg: fpsAvg,
+      min: fpsMin,
+      max: fpsMax,
+      p5: percentile(fpsSamples, 5),
+      p95: percentile(fpsSamples, 95),
+      stdDev: stdDev(fpsSamples),
+    },
+    quality: {
+      initial: initialQuality,
+      final: finalState?.qualityTier || lastQuality,
+      changes: qualityChanges,
+    },
+    features: finalState?.features || testState?.features || {},
+    errors: finalState?.errorHistory || [],
+    score: finalState?.score || 0,
+  };
+
+  // Check for failures
+  if (result.errors.length > 0) {
+    result.result = 'ERROR';
+  } else if (fpsSamples.length === 0) {
+    result.result = 'FAIL';
+  }
+
+  return result;
+}
+
+async function runAll() {
+  if (running) return;
+  running = true;
+  stopRequested = false;
+  testStartTime = Date.now();
+  allResults = [];
+
+  document.getElementById('btn-run-all').disabled = true;
+  document.getElementById('btn-stop').disabled = false;
+  document.getElementById('btn-export').disabled = true;
+  document.getElementById('summary').style.display = 'none';
+  document.getElementById('detail-panel').classList.remove('visible');
+
+  const devices = getFilteredDevices();
+  const permutations = getPermutations();
+  const totalTests = devices.length * permutations.length;
+
+  buildTable(devices, permutations);
+
+  let completed = 0;
+  let passes = 0;
+  let fails = 0;
+  let totalBoot = 0;
+
+  for (const device of devices) {
+    for (const config of permutations) {
+      if (stopRequested) break;
+
+      // Update progress
+      const pct = Math.round((completed / totalTests) * 100);
+      document.getElementById('progress-fill').style.width = `${pct}%`;
+      const elapsed = ((Date.now() - testStartTime) / 1000).toFixed(0);
+      const remaining = completed > 0
+        ? Math.round(((Date.now() - testStartTime) / completed) * (totalTests - completed) / 1000)
+        : '??';
+      document.getElementById('progress-text').textContent =
+        `Testing ${device.name} (${config}) — ${completed}/${totalTests} — ${elapsed}s elapsed — ETA: ${remaining}s`;
+
+      const result = await runSingleDevice(device, config);
+      allResults.push(result);
+
+      // Update row with final result
+      updateRow(device.slug, config, {
+        result: result.result,
+        fpsAvg: result.fps.avg,
+        fpsMin: result.fps.min,
+        fpsMax: result.fps.max,
+        qualityTier: result.quality.final,
+        errors: result.errors.length,
+        bootTimeMs: result.bootTimeMs,
+        score: result.score,
+      });
+
+      completed++;
+      if (result.result === 'PASS') passes++;
+      else fails++;
+      totalBoot += result.bootTimeMs;
+
+      // Brief pause between tests
+      if (!stopRequested) await sleep(500);
+    }
+    if (stopRequested) break;
+  }
+
+  // Final progress
+  document.getElementById('progress-fill').style.width = '100%';
+  document.getElementById('progress-fill').style.background = stopRequested ? '#eab308' : '#22c55e';
+  const totalElapsed = ((Date.now() - testStartTime) / 1000).toFixed(1);
+  document.getElementById('progress-text').textContent =
+    stopRequested
+      ? `Stopped after ${completed}/${totalTests} tests — ${totalElapsed}s`
+      : `Complete! ${totalTests} tests in ${totalElapsed}s`;
+
+  // Summary
+  document.getElementById('sum-total').textContent = completed;
+  document.getElementById('sum-pass').textContent = passes;
+  document.getElementById('sum-fail').textContent = fails;
+  document.getElementById('sum-boot').textContent = completed > 0 ? `${(totalBoot / completed / 1000).toFixed(1)}s` : '--';
+  document.getElementById('sum-duration').textContent = `${totalElapsed}s`;
+  document.getElementById('summary').style.display = 'flex';
+
+  running = false;
+  document.getElementById('btn-run-all').disabled = false;
+  document.getElementById('btn-stop').disabled = true;
+  document.getElementById('btn-export').disabled = false;
+}
+
+function stopTests() {
+  stopRequested = true;
+  if (activeFrame) {
+    activeFrame.src = 'about:blank';
+    activeFrame = null;
+  }
+}
+
+// ── Export ─────────────────────────────────────────────────────
+
+function exportJSON() {
+  if (allResults.length === 0) return;
+
+  // Build report with recommendations
+  const report = {
+    timestamp: new Date().toISOString(),
+    duration: ((Date.now() - testStartTime) / 1000).toFixed(1) + 's',
+    totalTests: allResults.length,
+    devices: {},
+    recommendations: [],
+  };
+
+  // Group by device
+  for (const r of allResults) {
+    if (!report.devices[r.slug]) {
+      report.devices[r.slug] = {
+        slug: r.slug,
+        name: r.name,
+        currentTier: r.tier,
+        targetFps: r.targetFps,
+        tests: {},
+      };
+    }
+    report.devices[r.slug].tests[r.config] = {
+      result: r.result,
+      fpsAvg: Math.round(r.fps.avg * 10) / 10,
+      fpsMin: r.fps.min,
+      fpsMax: r.fps.max,
+      fpsP5: r.fps.p5,
+      fpsP95: r.fps.p95,
+      quality: r.quality.final,
+      qualityChanges: r.quality.changes,
+      errors: r.errors.length,
+      bootTimeMs: r.bootTimeMs,
+      score: r.score,
+    };
+  }
+
+  // Generate recommendations
+  for (const [slug, device] of Object.entries(report.devices)) {
+    const def = device.tests['default'];
+    const crt = device.tests['crt-on'];
+    const ref = device.tests['reflections-on'];
+    const both = device.tests['crt+reflections'];
+
+    const rec = {
+      slug,
+      name: device.name,
+      tier: device.currentTier,
+      crt: def?.fpsAvg > 0 ? (device.tests['default']?.result === 'PASS') : null,
+      reflections: false,
+      rationale: [],
+    };
+
+    if (crt && crt.result === 'PASS') {
+      const ratio = crt.fpsAvg / device.targetFps;
+      if (ratio >= 0.9) {
+        rec.crt = true;
+        rec.rationale.push(`CRT safe: ${crt.fpsAvg.toFixed(0)} FPS (${(ratio * 100).toFixed(0)}% of target)`);
+      } else if (ratio >= 0.7) {
+        rec.crt = false;
+        rec.rationale.push(`CRT marginal: ${crt.fpsAvg.toFixed(0)} FPS — disable for safety`);
+      } else {
+        rec.crt = false;
+        rec.rationale.push(`CRT too heavy: ${crt.fpsAvg.toFixed(0)} FPS — disable`);
+      }
+    }
+
+    if (ref && ref.result === 'PASS') {
+      const ratio = ref.fpsAvg / device.targetFps;
+      if (ratio >= 0.9) {
+        rec.reflections = true;
+        rec.rationale.push(`Reflections safe: ${ref.fpsAvg.toFixed(0)} FPS`);
+      } else {
+        rec.reflections = false;
+        rec.rationale.push(`Reflections too heavy: ${ref.fpsAvg.toFixed(0)} FPS — disable`);
+      }
+    }
+
+    report.recommendations.push(rec);
+  }
+
+  // Download
+  const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `stress-results-${date}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Initial table ─────────────────────────────────────────────
+
+buildTable(getFilteredDevices(), getPermutations());
+
+// Rebuild table when filter changes
+document.getElementById('cfg-filter').addEventListener('change', () => {
+  if (!running) buildTable(getFilteredDevices(), getPermutations());
+});
+document.getElementById('cfg-perm-crt').addEventListener('change', () => {
+  if (!running) buildTable(getFilteredDevices(), getPermutations());
+});
+document.getElementById('cfg-perm-reflect').addEventListener('change', () => {
+  if (!running) buildTable(getFilteredDevices(), getPermutations());
+});
+
+// Auto-run: ?auto=1 starts tests immediately, ?duration=N overrides duration
+const autoParams = new URLSearchParams(location.search);
+if (autoParams.has('duration')) {
+  document.getElementById('cfg-duration').value = autoParams.get('duration');
+}
+if (autoParams.has('filter')) {
+  document.getElementById('cfg-filter').value = autoParams.get('filter');
+  buildTable(getFilteredDevices(), getPermutations());
+}
+if (autoParams.get('auto') === '1') {
+  setTimeout(() => runAll(), 500);
+}
+</script>
+
+</body>
+</html>

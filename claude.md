@@ -27,6 +27,36 @@ This rule is mandatory for all future restarts.
 
 ---
 
+## Document Summary Protocol (All Documents — Permanent)
+
+Every document in this project (and all hume projects) follows a summary-first pattern to save context window space and reading time.
+
+### How It Works
+
+1. **Every document** should have a `[SUMMARY]` block at the very top, formatted like this:
+   ```
+   [SUMMARY updated: 2026-02-23 17:45]
+   One-paragraph description of what this document contains and its purpose.
+   Key sections: list of major sections and what's in each.
+   Last major change: what was most recently modified.
+   [/SUMMARY]
+   ```
+
+2. **When reading any document:**
+   - If `[SUMMARY]` tag exists and timestamp is < 2 hours old → read ONLY the summary. Skip the full document unless you need something specific from it.
+   - If `[SUMMARY]` tag exists but timestamp is > 2 hours old → read the full document, then update the summary with a new timestamp.
+   - If NO `[SUMMARY]` tag exists → read the full document, then add a summary at the top.
+
+3. **When you DO read a full document** (because summary was stale or missing):
+   - Update/create the `[SUMMARY]` block with current timestamp.
+   - Make the summary comprehensive enough that any Claude reading it knows exactly what's in the document — they should be able to decide "what I need is here, I should dig deeper" or "not here, move on" just from the summary.
+
+4. **Exception:** CLAUDE.md itself is always read in full on session start (per Session Recovery Rule above). But other project documents (test manifests, config files, plans, scripts) should use this protocol.
+
+This protocol applies to: test JSON files, plan files, script documentation, comms files, MEMORY.md topic files, and any other document regularly read across sessions.
+
+---
+
 ## Spotify Integration Architecture
 
 - Using Spotify Web Playback SDK (Spotify app shows "Playing on DP Moto").
