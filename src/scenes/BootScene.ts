@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
 // AuthSystem imported dynamically in create() to keep Supabase SDK out of initial bundle
-import { GAME_MODE } from '../config/gameMode';
+import { GAME_MODE, DEVICE_PROFILE } from '../config/gameMode';
 
 export const TITLE_LOOP_FRAME_COUNT = 27;
 export const TITLE_START_FRAME_COUNT = 25;
@@ -159,8 +159,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('buildings-big', 'assets/background/buildings_Front_row_dark.png');
     this.load.image('railing', 'assets/background/railing_dark.jpg');
 
-    // Car sprite sheets (mobile loads fewer to fit iOS VRAM budget)
-    const carCount = GAME_MODE.mobileMode ? TUNING.CAR_COUNT_MOBILE : TUNING.CAR_COUNT;
+    // Car sprite sheets — mobile uses DEVICE_PROFILE.carCount, desktop loads all 20
+    const carCount = GAME_MODE.mobileMode ? DEVICE_PROFILE.carCount : TUNING.CAR_COUNT;
     for (let c = 1; c <= carCount; c++) {
       const key = `car-${String(c).padStart(3, '0')}`;
       this.load.spritesheet(key, `assets/cars/car_${String(c).padStart(3, '0')}${sfx}.png`, {

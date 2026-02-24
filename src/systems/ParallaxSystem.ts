@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
+import { DEVICE_PROFILE } from '../config/gameMode';
 
 // Layer definitions: bottom Y positions and speed factors
 // All layers extend from their bottomY up to Y=0 (top of screen)
@@ -267,6 +268,19 @@ export class ParallaxSystem {
     this.layers.reverse();
     this.textureKeys.reverse();
     this.scrollCompensation.reverse();
+
+    // Hide excess layers based on device profile (saves draw calls on lower tiers)
+    // Priority: keep front (railing, close buildings), hide back layers first
+    const maxLayers = DEVICE_PROFILE.parallaxLayers;
+    if (maxLayers < SCROLLING_LAYERS) {
+      // Hide from the back (highest index = furthest back)
+      for (let i = SCROLLING_LAYERS - 1; i >= maxLayers; i--) {
+        if (i < this.layers.length) {
+          this.layers[i].setVisible(false);
+          this.speedFactors[i] = 0; // skip update too
+        }
+      }
+    }
   }
 
   /** Reset all tile scrolls to deterministic positions. offsets[] is per-layer screen px (index 0=front/railing). */

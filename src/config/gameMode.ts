@@ -9,7 +9,9 @@ export const DEVICE_PROFILE: DeviceProfile = detectDeviceProfile();
 /** Global mutable runtime state. Read by systems to branch on mobile/quality. */
 export const GAME_MODE = {
   mobileMode: detectMobileLike(),
-  quality: (detectMobileLike() ? 'medium' : 'high') as QualityTier,
+  quality: (DEVICE_PROFILE.tier === 'desktop' ? 'high'
+    : DEVICE_PROFILE.tier === 'tablet' ? 'medium'
+    : 'low') as QualityTier, // phone-high/gen-mobile/phone-low → low (disables bloom + noise)
 };
 
 // Log detected device on boot (visible in Safari console + WebDriver)

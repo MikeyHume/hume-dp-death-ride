@@ -21,7 +21,7 @@ export function isiOS(): boolean {
 
 // ── Device Profiles ─────────────────────────────────────────────
 
-export type DeviceTier = 'desktop' | 'tablet' | 'phone-high' | 'phone-low';
+export type DeviceTier = 'desktop' | 'tablet' | 'phone-high' | 'gen-mobile' | 'phone-low';
 
 export interface DeviceProfile {
   tier: DeviceTier;
@@ -57,9 +57,18 @@ const PROFILES: Record<DeviceTier, DeviceProfile> = {
     tier: 'phone-high',
     label: 'Phone High (A14+)',
     crt: true,
-    reflections: true,
-    carCount: 3,
-    parallaxLayers: 8,
+    reflections: false,    // OFF — saves ~15.8 MB VRAM + 20-36 RT draws/frame + Water PostFX
+    carCount: 2,           // was 3 — each car skin ~1.8 MB mobile texture
+    parallaxLayers: 6,     // was 8 — drops 2 least-visible building layers
+    maxParallelLoads: 2,
+  },
+  'gen-mobile': {
+    tier: 'gen-mobile',
+    label: 'GEN Mobile (unknown)',
+    crt: false,           // CRT is the #1 GPU killer — off for unknowns
+    reflections: false,   // Second heaviest — off for unknowns
+    carCount: 2,          // Some traffic (not 0 like phone-low, not 5 like desktop)
+    parallaxLayers: 6,    // Reduced from 8 but not gutted
     maxParallelLoads: 2,
   },
   'phone-low': {
@@ -84,37 +93,49 @@ interface DeviceFingerprint {
 }
 
 const KNOWN_DEVICES: DeviceFingerprint[] = [
-  // iPads — all tablets get full features
+  // ── iPads ──────────────────────────────────────────────────────
   { w: 810, h: 1080, dpr: 2, tier: 'tablet', label: 'iPad 10th Gen' },
   { w: 820, h: 1180, dpr: 2, tier: 'tablet', label: 'iPad Air 4/5' },
   { w: 834, h: 1194, dpr: 2, tier: 'tablet', label: 'iPad Pro 11"' },
   { w: 1024, h: 1366, dpr: 2, tier: 'tablet', label: 'iPad Pro 12.9"' },
   { w: 768, h: 1024, dpr: 2, tier: 'tablet', label: 'iPad 9th Gen / Mini' },
-  // iPhones — grouped by generation capability
-  // A15+ (iPhone 13+) — phone-high
-  { w: 390, h: 844, dpr: 3, tier: 'phone-high', label: 'iPhone 13/14' },
-  { w: 393, h: 852, dpr: 3, tier: 'phone-high', label: 'iPhone 14/15 Pro' },
-  { w: 430, h: 932, dpr: 3, tier: 'phone-high', label: 'iPhone 14/15 Pro Max' },
-  { w: 402, h: 874, dpr: 3, tier: 'phone-high', label: 'iPhone 16 Pro' },
+
+  // ── iPhones (deduplicated by fingerprint, newest→oldest) ──────
+  // One entry per unique CSS viewport + DPR combo. Tier assigned to
+  // the weakest device sharing that fingerprint.
+
+  // 440×956 @3x — iPhone 16 Pro Max (A18 Pro, 8GB)
   { w: 440, h: 956, dpr: 3, tier: 'phone-high', label: 'iPhone 16 Pro Max' },
-  // A14 (iPhone 12 series) — phone-high
-  { w: 390, h: 844, dpr: 3, tier: 'phone-high', label: 'iPhone 12/12 Pro' },
-  { w: 428, h: 926, dpr: 3, tier: 'phone-high', label: 'iPhone 12 Pro Max' },
-  { w: 360, h: 780, dpr: 3, tier: 'phone-high', label: 'iPhone 12 Mini' },
-  // A12/A13 (iPhone Xs/XR/11 series) — phone-low
-  { w: 375, h: 812, dpr: 3, tier: 'phone-low', label: 'iPhone Xs / X / 11 Pro' },
-  { w: 414, h: 896, dpr: 3, tier: 'phone-low', label: 'iPhone Xs Max / XR / 11' },
-  { w: 414, h: 896, dpr: 2, tier: 'phone-low', label: 'iPhone XR / 11' },
-  // Older (iPhone 8 and below) — phone-low
-  { w: 375, h: 667, dpr: 2, tier: 'phone-low', label: 'iPhone 8 / SE 2/3' },
+  // 402×874 @3x — iPhone 16 Pro (A18 Pro, 8GB)
+  { w: 402, h: 874, dpr: 3, tier: 'phone-high', label: 'iPhone 16 Pro' },
+  // 430×932 @3x — 16+/15+/15 Pro Max/14 Pro Max (weakest: A15 6GB)
+  { w: 430, h: 932, dpr: 3, tier: 'phone-high', label: 'iPhone 16+/15+/15PM/14PM' },
+  // 428×926 @3x — 14+/13 Pro Max/12 Pro Max (weakest: A14 6GB)
+  { w: 428, h: 926, dpr: 3, tier: 'phone-high', label: 'iPhone 14+/13PM/12PM' },
+  // 393×852 @3x — 16/15/15 Pro/14 Pro (weakest: A16 6GB)
+  { w: 393, h: 852, dpr: 3, tier: 'phone-high', label: 'iPhone 16/15/15P/14P' },
+  // 390×844 @3x — 16e/14/13/13 Pro/12/12 Pro (weakest: A14 4GB)
+  { w: 390, h: 844, dpr: 3, tier: 'phone-high', label: 'iPhone 16e/14/13/13P/12/12P' },
+  // 360×780 @3x — 13 Mini/12 Mini (weakest: A14 4GB, small screen but capable)
+  { w: 360, h: 780, dpr: 3, tier: 'phone-high', label: 'iPhone 13 Mini/12 Mini' },
+  // 375×812 @3x — X/XS/11 Pro (A11-A13, 3-4GB)
+  { w: 375, h: 812, dpr: 3, tier: 'phone-low', label: 'iPhone X/XS/11 Pro' },
+  // 414×896 @3x — XS Max/11 Pro Max (A12/A13, 4GB)
+  { w: 414, h: 896, dpr: 3, tier: 'phone-low', label: 'iPhone XS Max/11 Pro Max' },
+  // 414×896 @2x — XR/11 (A12/A13, LCD @2x)
+  { w: 414, h: 896, dpr: 2, tier: 'phone-low', label: 'iPhone XR/11' },
+  // 375×667 @2x — 8/SE 2/SE 3 (A11-A15, LCD @2x, 2-4GB)
+  { w: 375, h: 667, dpr: 2, tier: 'phone-low', label: 'iPhone SE 2/SE 3/8' },
+  // 414×736 @3x — 8 Plus (A11, 3GB)
   { w: 414, h: 736, dpr: 3, tier: 'phone-low', label: 'iPhone 8 Plus' },
+  // 320×568 @2x — SE 1st Gen (A9, 2GB)
   { w: 320, h: 568, dpr: 2, tier: 'phone-low', label: 'iPhone SE 1st Gen' },
 ];
 
 /** Detect device and return the appropriate profile.
  *  Priority: ?profile= URL param > fingerprint match > heuristic fallback. */
 export function detectDeviceProfile(): DeviceProfile {
-  // 1. Manual override via URL param: ?profile=desktop|tablet|phone-high|phone-low
+  // 1. Manual override via URL param: ?profile=desktop|tablet|phone-high|gen-mobile|phone-low
   const params = new URLSearchParams(location.search);
   const override = params.get('profile') as DeviceTier | null;
   if (override && PROFILES[override]) {
@@ -144,14 +165,14 @@ export function detectDeviceProfile(): DeviceProfile {
       p.label = `Unknown iPad (${w}×${h} @${dpr}x)`;
       return p;
     } else {
-      // Phone-sized — default to phone-low (safe)
-      const p = { ...PROFILES['phone-low'] };
+      // Phone-sized — default to gen-mobile (safe but not crippled)
+      const p = { ...PROFILES['gen-mobile'] };
       p.label = `Unknown iPhone (${w}×${h} @${dpr}x)`;
       return p;
     }
   }
 
-  // 4. Non-iOS mobile
+  // 4. Non-iOS mobile — gen-mobile fallback (was phone-high, too generous)
   if (detectMobileLike()) {
     const w = Math.min(screen.width, screen.height);
     if (w >= 700) {
@@ -159,7 +180,7 @@ export function detectDeviceProfile(): DeviceProfile {
       p.label = `Android Tablet (${w}×${screen.height})`;
       return p;
     }
-    const p = { ...PROFILES['phone-high'] };
+    const p = { ...PROFILES['gen-mobile'] };
     p.label = `Android Phone (${w}×${screen.height})`;
     return p;
   }
