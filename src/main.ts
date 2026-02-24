@@ -20,6 +20,13 @@ if (simProfile) {
 // Set phone mode flag after device profile is finalized (incl. simulation override)
 GAME_MODE.isPhoneMode = isPhoneTier(DEVICE_PROFILE.tier);
 
+// Lite mode: ALL phones skip heavy animation spritesheets to stay within VRAM budget.
+// Full textures = ~151MB VRAM. iPhone 12 Mini (A14, 4GB) and Xs (A12, 4GB) both OOM-crash.
+// iOS doesn't expose RAM, and 4GB/6GB phones share screen fingerprints, so we can't
+// distinguish at runtime. Safe default: liteMode for all phones. Override with ?lite=0.
+const liteParam = new URLSearchParams(location.search).get('lite');
+GAME_MODE.liteMode = liteParam === '0' ? false : GAME_MODE.isPhoneMode;
+
 // Expose device profile globally for debugging + WebDriver inspection
 (window as any).__deviceProfile = DEVICE_PROFILE;
 
@@ -91,9 +98,14 @@ handleCallback().then((wasCallback) => {
   // Make the Phaser canvas fill the entire viewport width so CRT covers
   // black bars and UI (ProfileHud, MusicPlayer) can extend into them.
   // Game content stays centered at 1920px via camera scroll.
+  // MOBILE CAP: On phones, Safari's address/tab bars shrink viewport height,
+  // inflating the ratio and creating huge canvases (e.g. 2723px on Xs).
+  // Cap to 1920 on phones — no CRT to cover bars, no benefit to wider canvas,
+  // and the 42% extra pixels push the A12 past its VRAM budget.
   const vpW = window.innerWidth || document.documentElement.clientWidth || 1920;
   const vpH = window.innerHeight || document.documentElement.clientHeight || 1080;
-  const adaptiveW = Math.max(TUNING.GAME_WIDTH, Math.round(TUNING.GAME_HEIGHT * (vpW / vpH)));
+  const rawAdaptiveW = Math.max(TUNING.GAME_WIDTH, Math.round(TUNING.GAME_HEIGHT * (vpW / vpH)));
+  const adaptiveW = GAME_MODE.isPhoneMode ? TUNING.GAME_WIDTH : rawAdaptiveW;
   GAME_MODE.canvasWidth = adaptiveW;
   GAME_MODE.contentOffsetX = (adaptiveW - TUNING.GAME_WIDTH) / 2;
   console.log(`[main] adaptive canvas: ${adaptiveW}x${TUNING.GAME_HEIGHT} (offset=${GAME_MODE.contentOffsetX.toFixed(0)}, viewport=${vpW}x${vpH})`);

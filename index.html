@@ -231,22 +231,36 @@
       93%  { opacity: 1; }
       100% { opacity: 1; }
     }
-    /* "SWIPE UP" prompt — shown on phones instead of [ ENTER ] */
-    #boot-swipe-prompt {
+    /* Swipe-to-fullscreen overlay — shown on phones AFTER title screen is visible */
+    #swipe-overlay {
       display: none;
-      position: absolute;
-      top: var(--bios-enter-top);
-      right: 0;
-      text-align: right;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 10000;
+      background: #000;
+      pointer-events: none; /* let touches pass through to body for scrolling */
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    #swipe-overlay[data-active="true"] { display: flex; }
+    #swipe-overlay-text {
       font-family: var(--bios-title-font);
-      font-size: clamp(16px, 3.5vw, 36px);
-      transform: scale(var(--bios-enter-scale));
-      transform-origin: right center;
+      font-size: clamp(24px, 5vw, 48px);
       color: var(--bios-color);
-      text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow),
-                   0 0 2px var(--bios-color);
-      z-index: 1;
-      animation: enter-blink 1350ms infinite, enter-jitter var(--bios-jitter-speed) infinite alternate;
+      text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow), 0 0 2px var(--bios-color);
+      animation: enter-blink 1350ms infinite;
+    }
+    #swipe-overlay-arrow {
+      font-size: clamp(18px, 4vw, 36px);
+      color: var(--bios-color);
+      text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow);
+      animation: swipe-bounce 1s ease-in-out infinite;
+    }
+    @keyframes swipe-bounce {
+      0%, 100% { transform: translateY(0); opacity: 0.7; }
+      50% { transform: translateY(-12px); opacity: 1; }
     }
 
     /* iPad Preview Mode (desktop debug: press I) */
@@ -294,7 +308,6 @@
         <div id="boot-bar-fill" data-testid="bios-loading-fill"></div>
       </div>
       <div id="boot-enter-prompt" data-testid="bios-enter-prompt" aria-label="Press Enter">[ ENTER ]</div>
-      <div id="boot-swipe-prompt" data-testid="bios-swipe-prompt">SWIPE UP</div>
     </div>
   </div>
 
@@ -346,7 +359,7 @@
       var hh = String(now.getHours()).padStart(2, '0');
       var mi = String(now.getMinutes()).padStart(2, '0');
       var ss = String(now.getSeconds()).padStart(2, '0');
-      var verNum = '0.00.65';
+      var verNum = '0.00.71';
       var versionText = 'last saved [ ' + dd + ' : ' + monthName + ' : ' + yyyy + ' ]  [ ' + hh + ' : ' + mi + ' : ' + ss + ' ]';
       // Set title line version dynamically
       var titleLine = document.getElementById('bios-title-line');
@@ -402,7 +415,7 @@
     var bootLinesEl = document.getElementById('boot-lines');
     var enterPrompt = document.getElementById('boot-enter-prompt');
     var bootContent = document.getElementById('boot-content');
-    var swipePrompt = document.getElementById('boot-swipe-prompt');
+    var isTestMode = location.search.indexOf('test=1') !== -1;
     // Phone detection — iPads keep ENTER (Fullscreen API works on iPad)
     // Also triggers on ?simulate=iphone-* or ?simulate=android-* for desktop visual testing
     var simParam = new URLSearchParams(location.search).get('simulate') || '';
@@ -452,7 +465,7 @@
     function handleDismissUp() {
       if (guideMode) return;
       if (!readyForEnter) return;
-      if (isMobileBIOS) return; // phone: only swipe-up dismisses
+      if (isMobileBIOS) return; // phone: BIOS auto-dismisses, no tap-to-dismiss
       if (Date.now() - dismissPointerStart < BIOS_TAP_THRESHOLD) {
         dismissOverlay();
       }
@@ -460,7 +473,7 @@
     function handleDismissKey(e) {
       if (guideMode) return;
       if (!readyForEnter) return;
-      if (isMobileBIOS) return; // phone: only swipe-up dismisses
+      if (isMobileBIOS) return; // phone: BIOS auto-dismisses, no key-to-dismiss
       if (e && e.key === 'g') return; // let G through to toggle guide
       dismissOverlay();
     }
@@ -595,123 +608,126 @@
     function tryDismiss() {
       if (readyForEnter || !typingDone || !loadingDone) return;
       readyForEnter = true;
-      biosCompleteAudio.play().catch(function() { onBeepFinished(); });
 
-      if (isMobileBIOS) {
-        // Phone: show "SWIPE UP" + unlock scrolling so Safari hides chrome
-        swipePrompt.style.display = 'block';
-        enableSwipeToEnter();
+      if (isMobileBIOS && !isTestMode) {
+        // Phone: no [ENTER] prompt — auto-dismiss after beep (or immediately if audio blocked).
+        // iOS blocks audio.play() without a prior user gesture. If user didn't tap during BIOS,
+        // the beep can't play — dismiss immediately instead of waiting forever.
+        var autoDismiss = function() { if (!dismissed) dismissOverlay(); };
+        biosCompleteAudio.play().then(function() {
+          // Beep is playing — wait for it to finish, then dismiss
+          biosCompleteAudio.addEventListener('ended', autoDismiss, { once: true });
+          biosCompleteAudio.addEventListener('error', autoDismiss, { once: true });
+        }).catch(function() {
+          // Audio blocked (no user gesture) — dismiss immediately
+          onBeepFinished();
+          autoDismiss();
+        });
       } else {
-        // Desktop/tablet: show [ENTER] prompt as before
+        // Desktop/tablet: play beep + show [ENTER] prompt
+        biosCompleteAudio.play().catch(function() { onBeepFinished(); });
         enterPrompt.style.display = 'block';
       }
     }
 
-    // ---- SWIPE-UP-TO-ENTER (mobile pseudo-fullscreen) ----
-    var SWIPE_THRESHOLD = 60; // px of scroll before triggering dismiss
+    // ---- SWIPE-TO-FULLSCREEN (post-title screen, mobile only) ----
+    // ONLY a physical vertical swipe dismisses this screen. No taps, no keys.
+    var SWIPE_THRESHOLD = 60; // px of scroll before triggering fullscreen lock
 
-    function enableSwipeToEnter() {
+    function showSwipeOverlay() {
+      // Signal GameScene to lock all inputs
+      window.__swipeLock = true;
+
+      // Show solid black overlay with "SWIPE UP" text
+      document.getElementById('swipe-overlay').setAttribute('data-active', 'true');
+
+      // Prevent Phaser canvas from eating touch events — must pass through to body for scroll
+      var gc = document.getElementById('game-container');
+      if (gc) gc.style.pointerEvents = 'none';
+
       // Show spacer to make page taller than viewport → enables scrolling
-      var spacer = document.getElementById('scroll-spacer');
-      spacer.style.display = 'block';
+      document.getElementById('scroll-spacer').style.display = 'block';
 
-      // Temporarily unlock scrolling on html/body
-      // (game-container + boot-overlay stay position:fixed, unaffected by scroll)
+      // Unlock body scrolling so user can swipe
       document.documentElement.style.position = 'static';
       document.documentElement.style.overflow = 'auto';
       document.body.style.position = 'static';
       document.body.style.overflow = 'auto';
       document.body.style.height = 'auto';
 
-      // Pre-unlock iOS audio on the touch that starts the swipe gesture
-      // (scroll events don't count as "user gestures" for AudioContext)
-      document.addEventListener('touchstart', swipeTouchUnlock, { once: true, passive: true });
-
+      // Listen for scroll — ONLY way to dismiss
       window.addEventListener('scroll', onSwipeScroll, { passive: true });
     }
 
-    function swipeTouchUnlock() {
-      // iOS requires AudioContext.resume() inside a touch handler
-      try {
-        var ctx = new (window.AudioContext || window.webkitAudioContext)();
-        ctx.resume().then(function() { ctx.close(); });
-      } catch(e) {}
-      try {
-        var silent = new Audio();
-        silent.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
-        silent.volume = 0;
-        silent.play().then(function() { silent.pause(); }).catch(function(){});
-      } catch(e) {}
-      // Activate Spotify SDK element if available
-      try {
-        if (window.__spotifyPlayer && window.__spotifyPlayer.activateElement) {
-          window.__spotifyPlayer.activateElement();
-        }
-      } catch(e) {}
+    function hideSwipeOverlay() {
+      window.removeEventListener('scroll', onSwipeScroll);
+
+      // CRITICAL: Do NOT restore position:fixed on body — that tells Safari
+      // the page is non-scrollable and it re-shows chrome bars.
+      // Keep body position:static (Safari still thinks page is scrolled),
+      // just set overflow:hidden to prevent user from scrolling back to top.
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+      // Leave position:static + height:auto untouched
+
+      // Hide overlay — keep scroll spacer (removing it changes page height → relayout → chrome reappears)
+      document.getElementById('swipe-overlay').removeAttribute('data-active');
+
+      // Restore game canvas touch events
+      var gc = document.getElementById('game-container');
+      if (gc) gc.style.pointerEvents = '';
+
+      // Delay unlock — prevents queued taps from instantly triggering title actions
+      setTimeout(function() { window.__swipeLock = false; }, 300);
     }
 
     function onSwipeScroll() {
-      if (dismissed) return;
       if (window.scrollY >= SWIPE_THRESHOLD) {
-        window.removeEventListener('scroll', onSwipeScroll);
-
-        // Lock the page — restore fixed/hidden, Safari chrome stays hidden
-        document.documentElement.style.position = 'fixed';
-        document.documentElement.style.overflow = 'hidden';
-        document.body.style.position = 'fixed';
-        document.body.style.overflow = 'hidden';
-        document.body.style.height = '100dvh';
-
-        // Hide spacer
-        var spacer = document.getElementById('scroll-spacer');
-        spacer.style.display = 'none';
-
-        // Dismiss BIOS overlay (audio already unlocked via swipeTouchUnlock)
-        dismissOverlay();
+        hideSwipeOverlay();
       }
     }
 
     function dismissOverlay() {
       if (dismissed) return;
       dismissed = true;
-      fadeOutBootAudio();
 
-      // iOS audio unlock — must happen synchronously inside user gesture.
-      // Create + resume an AudioContext so all subsequent Web Audio / Phaser sound works.
-      // Also play+pause a silent HTML5 audio element to unlock <audio> for YouTube/Spotify.
+      // ── Kill ALL BIOS audio ──────────────────────────────────
+      // Stop boot-up sound immediately + remove lingering listeners
+      fadeOutBootAudio();
+      document.removeEventListener('mousemove', tryPlayBootAudio);
+      document.removeEventListener('pointerdown', tryPlayBootAudio);
+      document.removeEventListener('keydown', tryPlayBootAudio);
+      // Hard-stop boot audio in case fade didn't work (iOS audio was never unlocked)
+      try { bootupAudio.pause(); bootupAudio.currentTime = 0; } catch(e) {}
+
+      // ── iOS audio unlock (best effort — works if called from user gesture) ──
       try {
         var unlockCtx = new (window.AudioContext || window.webkitAudioContext)();
         unlockCtx.resume().then(function() { unlockCtx.close(); });
       } catch(e) {}
-      // Unlock Phaser's Web Audio context if it exists
       try {
         var phaserCtx = window.__phaserGame && window.__phaserGame.sound && window.__phaserGame.sound.context;
         if (phaserCtx && phaserCtx.state === 'suspended') phaserCtx.resume();
       } catch(e) {}
-      // Unlock HTML5 Audio for YouTube IFrame / Spotify SDK
       try {
         var silentAudio = new Audio();
         silentAudio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
         silentAudio.volume = 0;
         silentAudio.play().then(function() { silentAudio.pause(); }).catch(function(){});
       } catch(e) {}
-      // Activate Spotify Web Playback SDK audio element (iOS requires gesture context)
       try {
         if (window.__spotifyPlayer && window.__spotifyPlayer.activateElement) {
           window.__spotifyPlayer.activateElement();
         }
       } catch(e) {}
-      // Unlock YouTube IFrame player audio (play+pause during gesture)
       try {
         if (window.__ytPlayer && window.__ytPlayer.playVideo) {
           window.__ytPlayer.playVideo();
-          setTimeout(function() {
-            try { window.__ytPlayer.pauseVideo(); } catch(e) {}
-          }, 50);
+          setTimeout(function() { try { window.__ytPlayer.pauseVideo(); } catch(e) {} }, 50);
         }
       } catch(e) {}
 
-      // Fullscreen API — works on iPad, silently fails on iPhone. Must be in user gesture.
+      // Fullscreen API — works on iPad, silently fails on iPhone
       try {
         var rfs = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
         if (rfs) rfs.call(document.documentElement).catch(function(){});
@@ -721,6 +737,7 @@
         if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function(){});
       } catch(e) {}
 
+      // ── Remove BIOS dismiss listeners + fade out ──────────────
       document.removeEventListener('pointerdown', handleDismissDown);
       document.removeEventListener('pointerup', handleDismissUp);
       document.removeEventListener('keydown', handleDismissKey);
@@ -729,6 +746,10 @@
       setTimeout(function() {
         overlay.classList.add('hidden');
         if (bootCursor && bootCursor.parentNode) bootCursor.parentNode.removeChild(bootCursor);
+        // Phone: show swipe-to-fullscreen overlay now that title screen is visible
+        if (isMobileBIOS && !isTestMode) {
+          showSwipeOverlay();
+        }
       }, 320);
     }
 
@@ -775,6 +796,20 @@
         }
       }, 500);
     }
+
+    // ---- FALLBACK: if Phaser/main.ts never loads, don't leave user on blank screen ----
+    // After 8s, if targetProgress is still 0 (BootScene never called setProgress),
+    // force the BIOS text to appear and allow dismiss. Shows an error hint.
+    var BIOS_FALLBACK_MS = 8000;
+    setTimeout(function() {
+      if (dismissed || targetProgress > 0) return; // normal path worked
+      console.warn('[BIOS] Fallback: Phaser did not start within ' + BIOS_FALLBACK_MS + 'ms — forcing BIOS completion');
+      targetProgress = 2;
+      loadingDone = true;
+      if (!dripScheduled) scheduleDrip(0);
+      // If typing is already done (unlikely at 0 progress), trigger dismiss path
+      if (typingDone) tryDismiss();
+    }, BIOS_FALLBACK_MS);
 
     // ---- DEBUG GUIDE MODE (G key during BIOS) ----
     var guideSelectedIdx = 0;
@@ -1035,6 +1070,12 @@
     }, true);
   })();
   </script>
+
+  <!-- Swipe-to-fullscreen overlay — shown on phones AFTER BIOS dismisses + title screen visible -->
+  <div id="swipe-overlay">
+    <div id="swipe-overlay-text">SWIPE UP</div>
+    <div id="swipe-overlay-arrow">&#x25B2;</div>
+  </div>
 
   <div id="game-container"></div>
   <!-- Scroll spacer — extends page height so Safari hides chrome on swipe-up (mobile only) -->

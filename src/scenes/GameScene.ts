@@ -342,9 +342,10 @@ export class GameScene extends Phaser.Scene {
     // Keyboard input — only Space/Enter advance title & tutorial; all keys blocked during BIOS
     this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
       const k = event.key.toLowerCase();
-      // Block ALL keyboard input while BIOS overlay is still visible
+      // Block ALL keyboard input while BIOS overlay or swipe-to-fullscreen is active
       const biosOverlay = document.getElementById('boot-overlay');
       if (biosOverlay && !biosOverlay.classList.contains('hidden')) return;
+      if ((window as any).__swipeLock) return;
       // Forward all keys to profile popup when open
       if (this.profilePopup?.isOpen()) {
         this.profilePopup.handleKey(event);
@@ -2273,6 +2274,8 @@ export class GameScene extends Phaser.Scene {
 
     // If game mode popup is open, skip title input (popup handles its own clicks)
     if (this.gameModeOpen) return;
+    // Block title input during swipe-to-fullscreen overlay (title still animates)
+    if ((window as any).__swipeLock) return;
 
     // Button hover highlighting
     const pointer = this.input.activePointer;
@@ -2756,6 +2759,7 @@ export class GameScene extends Phaser.Scene {
     if (this.profilePopup?.isOpen()) return;
     const biosOverlay = document.getElementById('boot-overlay');
     if (biosOverlay && !biosOverlay.classList.contains('hidden')) return;
+    if ((window as any).__swipeLock) return;
     // Block all input during intro-to-tutorial cutscene (unskippable)
     if (this.introTutPlaying) return;
     if (this.state === GameState.TUTORIAL || this.state === GameState.TITLE || this.state === GameState.STARTING) {

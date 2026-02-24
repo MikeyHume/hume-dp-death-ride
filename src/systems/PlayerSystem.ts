@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
+import { GAME_MODE } from '../config/gameMode';
 import { InputSystem } from './InputSystem';
 
 type SpeedupState = 'idle' | 'intro' | 'loop' | 'outro';
@@ -71,6 +72,12 @@ export class PlayerSystem {
   /** Play the start animation once, then transition to ride loop */
   playStartAnim(): void {
     if (this.startAnimPlaying) return;
+    // Lite mode: no start animation texture — go straight to ride
+    if (GAME_MODE.liteMode) {
+      this.sprite.play('player-ride');
+      this.applyRideDisplaySize();
+      return;
+    }
     this.startAnimPlaying = true;
     this.cancelCurrentAnimation();
     this.applyStartDisplaySize();
@@ -255,6 +262,8 @@ export class PlayerSystem {
 
   /** Manage speed-up animation transitions based on input and speed state */
   private updateSpeedupAnimation(dt: number, tapped: boolean): void {
+    // Lite mode: no speed-up sprite sheet — keep ride animation
+    if (GAME_MODE.liteMode) return;
     // Speed-up animation is suppressed during start anim, attack, powered-up (rage), or COL animations
     if (this.startAnimPlaying || this.attacking || this.poweredUp || this.collectingRocket || this.collectingShield || this.collectingHit) return;
 
@@ -366,17 +375,18 @@ export class PlayerSystem {
   private restoreDefaultAnimation(): void {
     this.cancelCurrentAnimation();
 
+    // Lite mode: always fall through to ride animation (no powered/speedup textures)
     const displayH = TUNING.PLAYER_DISPLAY_HEIGHT;
-    if (this.poweredUp) {
+    if (!GAME_MODE.liteMode && this.poweredUp) {
       this.sprite.play('player-powered-loop');
       const s = TUNING.POWERED_SCALE;
       const poweredW = displayH * s * (TUNING.POWERED_FRAME_WIDTH / TUNING.POWERED_FRAME_HEIGHT);
       this.setBaseDisplaySize(poweredW, displayH * s);
-    } else if (this.speedupState === 'intro' || this.speedupState === 'loop') {
+    } else if (!GAME_MODE.liteMode && (this.speedupState === 'intro' || this.speedupState === 'loop')) {
       this.speedupState = 'loop';
       this.sprite.play('player-speedup-loop');
       this.applySpeedupDisplaySize();
-    } else if (this.speedupState === 'outro') {
+    } else if (!GAME_MODE.liteMode && this.speedupState === 'outro') {
       this.sprite.play('player-speedup-outro');
       this.applySpeedupDisplaySize();
       this.sprite.once('animationcomplete', () => {
@@ -428,6 +438,18 @@ export class PlayerSystem {
   /** Play rocket launcher animation. Cancels any current animation. Fires callback on frame ROCKET_LAUNCHER_FIRE_FRAME. */
   playRocketLaunch(onFire: () => void): boolean {
     if (this.attackCooldown > 0) return false;
+    // Lite mode: fire rocket immediately without launcher animation
+    if (GAME_MODE.liteMode) {
+      this.attacking = true;
+      this.attackCooldown = TUNING.ATTACK_COOLDOWN_ROCKET;
+      if (onFire) onFire();
+      // Brief delay then restore — simulates launch duration
+      this.scene.time.delayedCall(200, () => {
+        this.attacking = false;
+        this.restoreDefaultAnimation();
+      });
+      return true;
+    }
     // Cancel any in-progress animation (slash, previous rocket, etc.)
     this.cancelCurrentAnimation();
     this.attacking = true;
@@ -464,6 +486,8 @@ export class PlayerSystem {
   playCollectRocket(): void {
     // Don't interrupt start animation
     if (this.startAnimPlaying) return;
+    // Lite mode: no COL texture — skip collect animation (no i-frames)
+    if (GAME_MODE.liteMode) return;
 
     this.cancelCurrentAnimation();
     this.collectingRocket = true;
@@ -486,6 +510,8 @@ export class PlayerSystem {
   playCollectShield(): void {
     // Don't interrupt start animation
     if (this.startAnimPlaying) return;
+    // Lite mode: no COL texture — skip collect animation (no i-frames)
+    if (GAME_MODE.liteMode) return;
 
     this.cancelCurrentAnimation();
     this.collectingShield = true;
@@ -508,6 +534,8 @@ export class PlayerSystem {
   playCollectHit(): void {
     // Don't interrupt start animation
     if (this.startAnimPlaying) return;
+    // Lite mode: no COL texture — skip collect animation (no i-frames)
+    if (GAME_MODE.liteMode) return;
 
     this.cancelCurrentAnimation();
     this.collectingHit = true;
@@ -531,6 +559,8 @@ export class PlayerSystem {
     // Cancel any speed-up state — rage takes priority
     this.speedupState = 'idle';
     this.noTapTimer = 0;
+    // Lite mode: set gameplay flag but skip animation (no powered-up texture)
+    if (GAME_MODE.liteMode) return;
 
     // Cancel current animation and start powered intro
     this.cancelCurrentAnimation();
@@ -593,11 +623,17 @@ export class PlayerSystem {
     this.flashColors = [];
     this.flashElapsed = 0;
     this.sprite.clearTint();
-    // Show frame 0 of start animation, paused
-    // Set the frame FIRST so applyStartDisplaySize computes scale from correct frame dimensions
-    this.sprite.play({ key: 'player-start', startFrame: 0 });
-    this.sprite.anims.pause();
-    this.applyStartDisplaySize();
+    // Show frame 0 of start animation, paused (lite mode: use ride sprite instead)
+    if (GAME_MODE.liteMode) {
+      this.sprite.play('player-ride');
+      this.sprite.anims.pause();
+      this.applyRideDisplaySize();
+    } else {
+      // Set the frame FIRST so applyStartDisplaySize computes scale from correct frame dimensions
+      this.sprite.play({ key: 'player-start', startFrame: 0 });
+      this.sprite.anims.pause();
+      this.applyStartDisplaySize();
+    }
   }
 
   /** Set cursor follow blend (0 = locked at start Y, 1 = full cursor following) */

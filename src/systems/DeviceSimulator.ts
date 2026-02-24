@@ -67,16 +67,17 @@ export function initSimulation(): DeviceProfile | null {
       musicUIScale: 1.3,
     };
     // Create a synthetic device for the info bar
+    const genDevice: DeviceSpec = {
+      slug: 'gen-mobile', name: 'GEN Mobile (Fallback)', brand: 'other', year: 2026,
+      cssW: 390, cssH: 844, dpr: 3, physicalW: 1170, physicalH: 2532, screenInches: 6.1,
+      chip: 'Unknown', ram: 4, gpuCores: 4,
+      tier: 'gen-mobile', status: 'simulated', targetFps: 30,
+    };
     activeSimulation = {
-      device: {
-        slug: 'gen-mobile', name: 'GEN Mobile (Fallback)', brand: 'other', year: 2026,
-        cssW: 390, cssH: 844, dpr: 3, physicalW: 1170, physicalH: 2532, screenInches: 6.1,
-        chip: 'Unknown', ram: 4, gpuCores: 4,
-        tier: 'gen-mobile', status: 'simulated', targetFps: 30,
-      },
+      device: genDevice,
       fpsOverride: params.has('fps') ? parseInt(params.get('fps')!, 10) : null,
       landscapeW: 844,
-      landscapeH: 390,
+      landscapeH: 390 - getSafariChromeHeight(genDevice),
       featureOverrides: [],
     };
     applyFeatureOverrides(params, genProfile, activeSimulation);
@@ -92,8 +93,11 @@ export function initSimulation(): DeviceProfile | null {
   }
 
   // Landscape: swap W/H (game is horizontal)
-  const landscapeW = device.cssH;  // portrait height → landscape width
-  const landscapeH = device.cssW;  // portrait width → landscape height
+  // Subtract Safari chrome (address bar + bottom bar) from height for accurate viewport.
+  // Verified: iPhone Xs reports 812×322 (not 812×375). Chrome eats 53px.
+  const safariChrome = getSafariChromeHeight(device);
+  const landscapeW = device.cssH;                    // portrait height → landscape width
+  const landscapeH = device.cssW - safariChrome;     // portrait width → landscape height (minus chrome)
 
   activeSimulation = {
     device,
@@ -113,8 +117,9 @@ export function initSimulation(): DeviceProfile | null {
   setupCanvasConstraints(activeSimulation);
 
   console.log(
-    `[sim] Simulating ${device.name} | ${landscapeW}×${landscapeH} landscape | ` +
-    `FPS cap: ${activeSimulation.fpsOverride ?? device.targetFps} | tier: ${device.tier}`
+    `[sim] Simulating ${device.name} | ${landscapeW}×${landscapeH} landscape` +
+    (safariChrome > 0 ? ` (chrome=${safariChrome}px)` : '') +
+    ` | FPS cap: ${activeSimulation.fpsOverride ?? device.targetFps} | tier: ${device.tier}`
   );
 
   return profile;
@@ -154,6 +159,20 @@ function applyFeatureOverrides(
   if (sim.featureOverrides.length > 0) {
     console.log(`[sim] Feature overrides: ${sim.featureOverrides.join(', ')}`);
   }
+}
+
+// ── Safari chrome height calculation ─────────────────────────────
+// Real Safari eats viewport height with address bar + bottom bar.
+// Measured on iPhone Xs: 375 CSS → 322 viewport = 53px lost.
+// Simulator must subtract this to match real-world viewport.
+
+function getSafariChromeHeight(device: DeviceSpec): number {
+  if (device.brand !== 'apple') return 0; // Android Chrome varies too much; skip
+  if (device.tier === 'tablet') return 0; // iPad: Fullscreen API works, minimal chrome
+  // Non-notch iPhones (SE 2/3, 8, 8+): shorter URL bar in landscape
+  if (device.cssH <= 736) return 44;
+  // Notch / Dynamic Island iPhones (X and later, cssH >= 812): verified 53px on Xs
+  return 53;
 }
 
 // ── Profile builder ─────────────────────────────────────────────

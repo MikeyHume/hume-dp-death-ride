@@ -81,15 +81,19 @@ export class BootScene extends Phaser.Scene {
         const idx = String(i).padStart(5, '0');
         this.load.image(`intro-tut-${idx}`, `assets/cutscenes/intro_to_tut/v3/intro_to_tut_v03__${idx}.jpg`);
       }
-    } else {
-      // Mobile: load only first frame of title loop for static title background
+    } else if (!GAME_MODE.liteMode) {
+      // Mobile (non-lite): load first frame of title loop for static title background (7.9MB VRAM)
       this.load.image('start-loop-00', 'assets/start/start_loop/DP_Death_Ride_Title_Loop00.jpg');
       // Mobile: load compressed half-res first frame of intro-to-tutorial (745KB → 89KB)
+      this.load.image('intro-tut-00000', 'assets/cutscenes/intro_to_tut/v3_mobile/intro_to_tut_v03__00000.jpg');
+    } else {
+      // Lite mode: skip title frame (7.9MB), skip intro-tut (procedural placeholder in create)
       this.load.image('intro-tut-00000', 'assets/cutscenes/intro_to_tut/v3_mobile/intro_to_tut_v03__00000.jpg');
     }
     // Mobile: load half-res nearest-neighbor sprite sheets (_mobile suffix)
     // Same texture keys, same animations, just smaller textures + frame dims
     const mob = GAME_MODE.mobileMode;
+    const lite = GAME_MODE.liteMode;  // phone-low: skip heavy animation sheets (~77MB VRAM savings)
     const sfx = mob ? '_mobile' : '';                                     // file suffix
     const ms = TUNING.MOBILE_SPRITE_SCALE;
     const fw = (w: number) => mob ? Math.floor(w * ms) : w;              // scale frame width
@@ -99,38 +103,45 @@ export class BootScene extends Phaser.Scene {
       frameWidth: fw(TUNING.PLAYER_FRAME_WIDTH),
       frameHeight: fh(TUNING.PLAYER_FRAME_HEIGHT),
     });
-    this.load.spritesheet('player-start', `assets/dp_player/dp_start${sfx}.png`, {
-      frameWidth: fw(TUNING.START_ANIM_FRAME_WIDTH),
-      frameHeight: fh(TUNING.START_ANIM_FRAME_HEIGHT),
-    });
-    this.load.spritesheet('player-attack', `assets/dp_player/dp_attack${sfx}.png`, {
-      frameWidth: fw(TUNING.PLAYER_ATTACK_FRAME_WIDTH),
-      frameHeight: fh(TUNING.PLAYER_ATTACK_FRAME_HEIGHT),
-    });
-    this.load.spritesheet('player-powered', `assets/dp_player/dp_powered_up${sfx}.png`, {
-      frameWidth: fw(TUNING.POWERED_FRAME_WIDTH),
-      frameHeight: fh(TUNING.POWERED_FRAME_HEIGHT),
-    });
-    this.load.spritesheet('player-speedup', `assets/dp_player/dp_speed_up${sfx}.png`, {
-      frameWidth: fw(TUNING.SPEEDUP_FRAME_WIDTH),
-      frameHeight: fh(TUNING.SPEEDUP_FRAME_HEIGHT),
-    });
-    this.load.spritesheet('player-rocket-launch', `assets/dp_player/dp_rocket_lancher_v2${sfx}.png`, {
-      frameWidth: fw(TUNING.ROCKET_LAUNCHER_FRAME_WIDTH),
-      frameHeight: fh(TUNING.ROCKET_LAUNCHER_FRAME_HEIGHT),
-    });
-    this.load.spritesheet('player-collect-rocket', `assets/COL/COL_rocket${sfx}.png`, {
-      frameWidth: fw(TUNING.COL_FRAME_WIDTH),
-      frameHeight: fh(TUNING.COL_FRAME_HEIGHT),
-    });
-    this.load.spritesheet('player-collect-shield', `assets/COL/COL_shield${sfx}.png`, {
-      frameWidth: fw(TUNING.COL_FRAME_WIDTH),
-      frameHeight: fh(TUNING.COL_FRAME_HEIGHT),
-    });
-    this.load.spritesheet('player-collect-hit', `assets/COL/COL_hit${sfx}.png`, {
-      frameWidth: fw(TUNING.COL_FRAME_WIDTH),
-      frameHeight: fh(TUNING.COL_FRAME_HEIGHT),
-    });
+    // Lite mode: skip attack spritesheet too (11MB) — slash uses ride sprite + tint
+    if (!lite) {
+      this.load.spritesheet('player-attack', `assets/dp_player/dp_attack${sfx}.png`, {
+        frameWidth: fw(TUNING.PLAYER_ATTACK_FRAME_WIDTH),
+        frameHeight: fh(TUNING.PLAYER_ATTACK_FRAME_HEIGHT),
+      });
+    }
+    // Lite mode: skip heavy animation spritesheets (start, powered, speedup, rocket-launch, COL)
+    // Player stays in ride animation only — saves ~88MB VRAM on phone-low
+    if (!lite) {
+      this.load.spritesheet('player-start', `assets/dp_player/dp_start${sfx}.png`, {
+        frameWidth: fw(TUNING.START_ANIM_FRAME_WIDTH),
+        frameHeight: fh(TUNING.START_ANIM_FRAME_HEIGHT),
+      });
+      this.load.spritesheet('player-powered', `assets/dp_player/dp_powered_up${sfx}.png`, {
+        frameWidth: fw(TUNING.POWERED_FRAME_WIDTH),
+        frameHeight: fh(TUNING.POWERED_FRAME_HEIGHT),
+      });
+      this.load.spritesheet('player-speedup', `assets/dp_player/dp_speed_up${sfx}.png`, {
+        frameWidth: fw(TUNING.SPEEDUP_FRAME_WIDTH),
+        frameHeight: fh(TUNING.SPEEDUP_FRAME_HEIGHT),
+      });
+      this.load.spritesheet('player-rocket-launch', `assets/dp_player/dp_rocket_lancher_v2${sfx}.png`, {
+        frameWidth: fw(TUNING.ROCKET_LAUNCHER_FRAME_WIDTH),
+        frameHeight: fh(TUNING.ROCKET_LAUNCHER_FRAME_HEIGHT),
+      });
+      this.load.spritesheet('player-collect-rocket', `assets/COL/COL_rocket${sfx}.png`, {
+        frameWidth: fw(TUNING.COL_FRAME_WIDTH),
+        frameHeight: fh(TUNING.COL_FRAME_HEIGHT),
+      });
+      this.load.spritesheet('player-collect-shield', `assets/COL/COL_shield${sfx}.png`, {
+        frameWidth: fw(TUNING.COL_FRAME_WIDTH),
+        frameHeight: fh(TUNING.COL_FRAME_HEIGHT),
+      });
+      this.load.spritesheet('player-collect-hit', `assets/COL/COL_hit${sfx}.png`, {
+        frameWidth: fw(TUNING.COL_FRAME_WIDTH),
+        frameHeight: fh(TUNING.COL_FRAME_HEIGHT),
+      });
+    }
     this.load.spritesheet('rocket-projectile', `assets/pickups/rocket_Projectile${sfx}.png`, {
       frameWidth: fw(TUNING.ROCKET_PROJ_FRAME_W),
       frameHeight: fh(TUNING.ROCKET_PROJ_FRAME_H),
@@ -152,12 +163,18 @@ export class BootScene extends Phaser.Scene {
     this.load.image('obstacle-crash', 'assets/obstacles/road_barrier_01.png');
     this.load.image('obstacle-reflection-alt', 'assets/obstacles/road_barrier_01_reflection_alt.png');
     this.load.image('puddle-tex', 'assets/background/puddle example.png');
-    this.load.image('road-img', 'assets/background/road.jpg');
+    // Lite mode: skip heavy background images (road=24.4MB, railing=7.1MB, title=7.9MB)
+    // Procedural replacements created in create() for road/sky
+    if (!lite) {
+      this.load.image('road-img', 'assets/background/road.jpg');
+      this.load.image('railing', 'assets/background/railing_dark.jpg');
+    }
     this.load.image('sky-img', 'assets/background/sky.jpg');
     this.load.image('buildings-back', 'assets/background/buildings_back_row_dark.png');
     this.load.image('buildings-front', 'assets/background/buildings_Front_row_dark.png');
-    this.load.image('buildings-big', 'assets/background/buildings_Front_row_dark.png');
-    this.load.image('railing', 'assets/background/railing_dark.jpg');
+    if (!lite) {
+      this.load.image('buildings-big', 'assets/background/buildings_Front_row_dark.png');
+    }
 
     // Car sprite sheets — mobile uses DEVICE_PROFILE.carCount, desktop loads all 20
     const carCount = GAME_MODE.mobileMode ? DEVICE_PROFILE.carCount : TUNING.CAR_COUNT;
@@ -280,6 +297,56 @@ export class BootScene extends Phaser.Scene {
     const bootCounts = (window as any).__bootCounts || {};
     (window as any).__bootStats = { ...bootCounts, retryRecovered, stillFailed: failedAssets.map(f => f.key) };
 
+    // ── Lite mode: generate procedural replacements for skipped textures ──
+    // These tiny textures prevent crashes when GameScene references missing keys
+    if (GAME_MODE.liteMode) {
+      // Road: 256x128 dark gray with lane markings (replaces 12001x534 = 24.4MB)
+      const roadG = this.add.graphics();
+      roadG.fillStyle(0x333333); roadG.fillRect(0, 0, 256, 128);
+      roadG.fillStyle(0x888800); roadG.fillRect(0, 60, 256, 3); // center line
+      roadG.fillStyle(0x444444); roadG.fillRect(0, 30, 256, 1); roadG.fillRect(0, 90, 256, 1); // lane dividers
+      roadG.generateTexture('road-img', 256, 128);
+      roadG.destroy();
+
+      // Railing: 256x8 dark gray bar (replaces 18559x100 = 7.1MB)
+      const railG = this.add.graphics();
+      railG.fillStyle(0x222222); railG.fillRect(0, 0, 256, 8);
+      railG.fillStyle(0x444444); railG.fillRect(0, 0, 256, 1);
+      railG.generateTexture('railing', 256, 8);
+      railG.destroy();
+
+      // Buildings-big: reuse buildings-front key (avoids duplicate 1920x163 load)
+      if (!this.textures.exists('buildings-big')) {
+        // Copy reference from buildings-front
+        const bfTex = this.textures.get('buildings-front');
+        if (bfTex) this.textures.addImage('buildings-big', bfTex.getSourceImage());
+      }
+
+      // Title frame: 4x4 black (replaces 1928x1076 = 7.9MB)
+      if (!this.textures.exists('start-loop-00')) {
+        const titleG = this.add.graphics();
+        titleG.fillStyle(0x000000); titleG.fillRect(0, 0, 4, 4);
+        titleG.generateTexture('start-loop-00', 4, 4);
+        titleG.destroy();
+      }
+
+      // Player-attack: generate a minimal 1-frame spritesheet from player-ride frame 0
+      if (!this.textures.exists('player-attack')) {
+        const rideFrame = this.textures.getFrame('player-ride', 0);
+        if (rideFrame) {
+          const aw = rideFrame.width, ah = rideFrame.height;
+          const attackCanvas = this.textures.createCanvas('player-attack', aw, ah);
+          const actx = attackCanvas.getContext();
+          actx.drawImage(rideFrame.source.image as HTMLImageElement, rideFrame.cutX, rideFrame.cutY, aw, ah, 0, 0, aw, ah);
+          attackCanvas.refresh();
+          // Add frame data so animations don't crash
+          this.textures.get('player-attack').add(0, 0, 0, 0, aw, ah);
+        }
+      }
+
+      console.log('[boot] Lite mode: procedural textures created (road, railing, title, attack)');
+    }
+
     // Frame sequence animations — desktop only (mobile uses static frames)
     if (!GAME_MODE.mobileMode) {
       const frames: Phaser.Types.Animations.AnimationFrame[] = [];
@@ -310,15 +377,7 @@ export class BootScene extends Phaser.Scene {
     }
     this.anims.create({ key: 'intro-tut-cutscene', frames: introTutFrames, frameRate: 12, repeat: 0 });
 
-    // Player start animation (plays once before ride loop)
-    this.anims.create({
-      key: 'player-start',
-      frames: this.anims.generateFrameNumbers('player-start', { start: 0, end: TUNING.START_ANIM_FRAMES - 1 }),
-      frameRate: TUNING.START_ANIM_FPS,
-      repeat: 0,
-    });
-
-    // Player ride animation (looping spritesheet)
+    // Player ride animation (looping spritesheet) — always loaded
     this.anims.create({
       key: 'player-ride',
       frames: this.anims.generateFrameNumbers('player-ride', { start: 0, end: TUNING.PLAYER_ANIM_FRAMES - 1 }),
@@ -326,28 +385,20 @@ export class BootScene extends Phaser.Scene {
       repeat: -1,
     });
 
-    // Player attack animation (plays once)
-    this.anims.create({
-      key: 'player-attack',
-      frames: this.anims.generateFrameNumbers('player-attack', { start: 0, end: TUNING.PLAYER_ATTACK_ANIM_FRAMES - 1 }),
-      frameRate: TUNING.PLAYER_ATTACK_FPS,
-      repeat: 0,
-    });
-
-    // Player rocket launcher animation (plays once)
-    this.anims.create({
-      key: 'player-rocket-launch',
-      frames: this.anims.generateFrameNumbers('player-rocket-launch', { start: 0, end: TUNING.ROCKET_LAUNCHER_ANIM_FRAMES - 1 }),
-      frameRate: TUNING.ROCKET_LAUNCHER_FPS,
-      repeat: 0,
-    });
-
-    // COL animations (all share same frame layout — rocket, shield, hit)
-    for (const key of ['player-collect-rocket', 'player-collect-shield', 'player-collect-hit']) {
+    // Player attack animation — lite mode uses 1-frame placeholder (no multi-frame animation)
+    if (!GAME_MODE.liteMode) {
       this.anims.create({
-        key,
-        frames: this.anims.generateFrameNumbers(key, { start: 0, end: TUNING.COL_ANIM_FRAMES - 1 }),
-        frameRate: TUNING.COL_FPS * TUNING.COL_SPEED,
+        key: 'player-attack',
+        frames: this.anims.generateFrameNumbers('player-attack', { start: 0, end: TUNING.PLAYER_ATTACK_ANIM_FRAMES - 1 }),
+        frameRate: TUNING.PLAYER_ATTACK_FPS,
+        repeat: 0,
+      });
+    } else {
+      // Lite: single-frame "animation" so sprite.play('player-attack') doesn't crash
+      this.anims.create({
+        key: 'player-attack',
+        frames: [{ key: 'player-ride', frame: 0 }],
+        frameRate: 1,
         repeat: 0,
       });
     }
@@ -366,45 +417,74 @@ export class BootScene extends Phaser.Scene {
       repeat: -1,
     });
 
-    // Powered-up intro (full sequence, plays once)
-    this.anims.create({
-      key: 'player-powered-intro',
-      frames: this.anims.generateFrameNumbers('player-powered', { start: 0, end: TUNING.POWERED_ANIM_FRAMES - 1 }),
-      frameRate: TUNING.POWERED_FPS,
-      repeat: 0,
-    });
+    // Lite mode: skip animations for textures that weren't loaded (saves ~77MB VRAM)
+    if (!GAME_MODE.liteMode) {
+      // Player start animation (plays once before ride loop)
+      this.anims.create({
+        key: 'player-start',
+        frames: this.anims.generateFrameNumbers('player-start', { start: 0, end: TUNING.START_ANIM_FRAMES - 1 }),
+        frameRate: TUNING.START_ANIM_FPS,
+        repeat: 0,
+      });
 
-    // Powered-up loop (last 4 frames, loops)
-    this.anims.create({
-      key: 'player-powered-loop',
-      frames: this.anims.generateFrameNumbers('player-powered', { start: TUNING.POWERED_LOOP_START, end: TUNING.POWERED_ANIM_FRAMES - 1 }),
-      frameRate: TUNING.POWERED_FPS,
-      repeat: -1,
-    });
+      // Player rocket launcher animation (plays once)
+      this.anims.create({
+        key: 'player-rocket-launch',
+        frames: this.anims.generateFrameNumbers('player-rocket-launch', { start: 0, end: TUNING.ROCKET_LAUNCHER_ANIM_FRAMES - 1 }),
+        frameRate: TUNING.ROCKET_LAUNCHER_FPS,
+        repeat: 0,
+      });
 
-    // Speed-up intro
-    this.anims.create({
-      key: 'player-speedup-intro',
-      frames: this.anims.generateFrameNumbers('player-speedup', { start: 0, end: TUNING.SPEEDUP_INTRO_END }),
-      frameRate: TUNING.SPEEDUP_FPS,
-      repeat: 0,
-    });
+      // COL animations (all share same frame layout — rocket, shield, hit)
+      for (const key of ['player-collect-rocket', 'player-collect-shield', 'player-collect-hit']) {
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(key, { start: 0, end: TUNING.COL_ANIM_FRAMES - 1 }),
+          frameRate: TUNING.COL_FPS * TUNING.COL_SPEED,
+          repeat: 0,
+        });
+      }
 
-    // Speed-up loop
-    this.anims.create({
-      key: 'player-speedup-loop',
-      frames: this.anims.generateFrameNumbers('player-speedup', { start: TUNING.SPEEDUP_LOOP_START, end: TUNING.SPEEDUP_LOOP_END }),
-      frameRate: TUNING.SPEEDUP_FPS,
-      repeat: -1,
-    });
+      // Powered-up intro (full sequence, plays once)
+      this.anims.create({
+        key: 'player-powered-intro',
+        frames: this.anims.generateFrameNumbers('player-powered', { start: 0, end: TUNING.POWERED_ANIM_FRAMES - 1 }),
+        frameRate: TUNING.POWERED_FPS,
+        repeat: 0,
+      });
 
-    // Speed-up outro
-    this.anims.create({
-      key: 'player-speedup-outro',
-      frames: this.anims.generateFrameNumbers('player-speedup', { start: TUNING.SPEEDUP_OUTRO_START, end: TUNING.SPEEDUP_OUTRO_END }),
-      frameRate: TUNING.SPEEDUP_FPS,
-      repeat: 0,
-    });
+      // Powered-up loop (last 4 frames, loops)
+      this.anims.create({
+        key: 'player-powered-loop',
+        frames: this.anims.generateFrameNumbers('player-powered', { start: TUNING.POWERED_LOOP_START, end: TUNING.POWERED_ANIM_FRAMES - 1 }),
+        frameRate: TUNING.POWERED_FPS,
+        repeat: -1,
+      });
+
+      // Speed-up intro
+      this.anims.create({
+        key: 'player-speedup-intro',
+        frames: this.anims.generateFrameNumbers('player-speedup', { start: 0, end: TUNING.SPEEDUP_INTRO_END }),
+        frameRate: TUNING.SPEEDUP_FPS,
+        repeat: 0,
+      });
+
+      // Speed-up loop
+      this.anims.create({
+        key: 'player-speedup-loop',
+        frames: this.anims.generateFrameNumbers('player-speedup', { start: TUNING.SPEEDUP_LOOP_START, end: TUNING.SPEEDUP_LOOP_END }),
+        frameRate: TUNING.SPEEDUP_FPS,
+        repeat: -1,
+      });
+
+      // Speed-up outro
+      this.anims.create({
+        key: 'player-speedup-outro',
+        frames: this.anims.generateFrameNumbers('player-speedup', { start: TUNING.SPEEDUP_OUTRO_START, end: TUNING.SPEEDUP_OUTRO_END }),
+        frameRate: TUNING.SPEEDUP_FPS,
+        repeat: 0,
+      });
+    }
 
     // Car drive animations (mobile loads fewer cars)
     const carAnimCount = GAME_MODE.mobileMode ? TUNING.CAR_COUNT_MOBILE : TUNING.CAR_COUNT;

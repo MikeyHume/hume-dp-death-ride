@@ -18,6 +18,8 @@ export const GAME_MODE = {
   contentOffsetX: 0,
   /** True on phone tiers (phone-high, gen-mobile, phone-low) — NOT tablet or desktop. */
   isPhoneMode: false as boolean,  // set after DEVICE_PROFILE is finalized in main.ts
+  /** True on phone-low tier — skips heavy animation spritesheets to stay within VRAM budget. */
+  liteMode: false as boolean,     // set in main.ts after device profile is finalized
 };
 
 // Log detected device on boot (visible in Safari console + WebDriver)
