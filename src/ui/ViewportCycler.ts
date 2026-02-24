@@ -325,7 +325,7 @@ export class ViewportCycler {
   private currentMode = 0;
   private button!: HTMLButtonElement;
   private infoPanel!: HTMLDivElement;
-  private infoTimeout: number | null = null;
+  private modeLabel!: HTMLDivElement;
   /** Public so modes can attach/detach resize handlers */
   _scrollHandler: (() => void) | null = null;
 
@@ -339,6 +339,30 @@ export class ViewportCycler {
   }
 
   private createUI(): void {
+    // ── Big neon green mode label — always visible at top center ──
+    this.modeLabel = document.createElement('div');
+    this.modeLabel.id = 'vp-mode-label';
+    this.modeLabel.style.cssText = `
+      position: fixed;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100001;
+      font-family: 'Courier New', monospace;
+      font-size: 22px;
+      font-weight: bold;
+      color: #00ff66;
+      text-shadow: 0 0 8px #00ff66, 0 0 16px #00ff44;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 4px 16px;
+      border-radius: 6px;
+      border: 1px solid rgba(0, 255, 102, 0.4);
+      pointer-events: none;
+      white-space: nowrap;
+    `;
+    document.body.appendChild(this.modeLabel);
+
+    // ── Bottom-left: button + info panel ──
     const container = document.createElement('div');
     container.id = 'viewport-cycler';
     container.style.cssText = `
@@ -353,22 +377,24 @@ export class ViewportCycler {
       font-family: 'Courier New', monospace;
     `;
 
-    // Cycle button — big enough to tap on phone
+    // Cycle button — big, always visible
     this.button = document.createElement('button');
     this.button.style.cssText = `
-      width: 52px;
-      height: 52px;
+      width: 56px;
+      height: 56px;
       border-radius: 50%;
-      background: rgba(255, 0, 0, 0.5);
-      border: 2px solid rgba(255, 0, 0, 0.8);
-      color: #fff;
-      font-size: 20px;
+      background: rgba(0, 255, 102, 0.4);
+      border: 3px solid #00ff66;
+      color: #00ff66;
+      font-size: 22px;
       font-weight: bold;
       font-family: 'Courier New', monospace;
       cursor: pointer;
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
       flex-shrink: 0;
+      text-shadow: 0 0 6px #00ff66;
+      box-shadow: 0 0 12px rgba(0, 255, 102, 0.3);
     `;
     this.button.textContent = '0';
     this.button.addEventListener('click', (e) => {
@@ -380,20 +406,18 @@ export class ViewportCycler {
     this.button.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.button.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: false });
 
-    // Info panel
+    // Info panel — smaller details below button
     this.infoPanel = document.createElement('div');
     this.infoPanel.style.cssText = `
       background: rgba(0, 0, 0, 0.85);
-      border: 1px solid rgba(255, 0, 0, 0.5);
+      border: 1px solid rgba(0, 255, 102, 0.4);
       border-radius: 4px;
-      padding: 6px 10px;
-      color: #fff;
-      font-size: 11px;
-      line-height: 1.4;
+      padding: 4px 8px;
+      color: #00ff66;
+      font-size: 10px;
+      line-height: 1.3;
       white-space: pre;
-      max-width: 340px;
-      opacity: 1;
-      transition: opacity 0.3s;
+      max-width: 280px;
     `;
 
     container.appendChild(this.button);
@@ -411,17 +435,9 @@ export class ViewportCycler {
     const mode = MODES[this.currentMode];
     mode.apply(this.game, this);
     this.button.textContent = String(this.currentMode);
-    this.showInfo();
     // Update info after layout settles (scroll trick needs time)
+    this.updateInfo();
     setTimeout(() => this.updateInfo(), 500);
-  }
-
-  private showInfo(): void {
-    this.infoPanel.style.opacity = '1';
-    if (this.infoTimeout !== null) clearTimeout(this.infoTimeout);
-    this.infoTimeout = window.setTimeout(() => {
-      this.infoPanel.style.opacity = '0.3';
-    }, 6000);
   }
 
   private updateInfo(): void {
@@ -436,13 +452,15 @@ export class ViewportCycler {
     const coverH = Math.round((ch / vh) * 100);
     const gameW = this.game.scale.gameSize.width;
     const gameH = this.game.scale.gameSize.height;
-    const fs = document.fullscreenElement ? ' [FULLSCREEN]' : '';
 
+    // Big neon label at top — always visible
+    this.modeLabel.textContent = `${this.currentMode}/${MODES.length - 1} ${mode.shortName}  [${coverW}%]`;
+
+    // Detail panel — always visible
     this.infoPanel.textContent =
-      `MODE ${this.currentMode}/${MODES.length - 1}: ${mode.shortName}${fs}\n` +
       `${mode.description}\n` +
       `VP:${vw}x${vh} Canvas:${cw}x${ch}\n` +
-      `Game:${gameW}x${gameH} W:${coverW}% H:${coverH}%`;
+      `Game:${gameW}x${gameH}`;
   }
 
   destroy(): void {
@@ -452,6 +470,7 @@ export class ViewportCycler {
     MODES[this.currentMode].revert(this.game, this);
     const el = document.getElementById('viewport-cycler');
     if (el) el.remove();
-    if (this.infoTimeout !== null) clearTimeout(this.infoTimeout);
+    const label = document.getElementById('vp-mode-label');
+    if (label) label.remove();
   }
 }
