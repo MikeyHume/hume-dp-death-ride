@@ -114,6 +114,14 @@ handleCallback().then((wasCallback) => {
   // Expose game instance so BIOS overlay can unlock Phaser's audio context
   (window as any).__phaserGame = game;
 
+  // Viewport cycler: ?viewport=1 shows a mode cycle button for A/B testing viewport strategies
+  if (new URLSearchParams(location.search).has('viewport')) {
+    import('./ui/ViewportCycler').then(m => {
+      (window as any).__viewportCycler = new m.ViewportCycler(game);
+      console.log('[main] ViewportCycler activated — tap circle to cycle modes');
+    });
+  }
+
   // Dynamic imports: GameScene + pipelines loaded in parallel with BootScene assets.
   // This defers ~400KB of JS evaluation that would otherwise crash iOS Safari.
   Promise.all([
