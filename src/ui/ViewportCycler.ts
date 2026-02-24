@@ -425,19 +425,55 @@ export class ViewportCycler {
     document.body.appendChild(container);
   }
 
+  private _transitioning = false;
+
   private cycleNext(): void {
+    if (this._transitioning) return; // ignore taps during reset pause
+    this._transitioning = true;
+
+    // 1. Revert current mode
     MODES[this.currentMode].revert(this.game, this);
+
+    // 2. Advance to next mode
     this.currentMode = (this.currentMode + 1) % MODES.length;
-    this.applyCurrentMode();
+
+    // 3. Apply BASELINE first so user sees the "normal load" state
+    resetCSS(this.game);
+    this.game.scale.scaleMode = Phaser.Scale.FIT;
+    this.game.scale.setGameSize(GAME_W, GAME_H);
+    this.game.scale.refresh();
+
+    // Update UI to show which mode is coming, but label says "RESET..."
+    this.button.textContent = String(this.currentMode);
+    this.modeLabel.textContent = `${this.currentMode}/${MODES.length - 1} RESET...`;
+    this.modeLabel.style.color = '#ffaa00';
+    this.modeLabel.style.textShadow = '0 0 8px #ffaa00, 0 0 16px #ff8800';
+    this.updateInfoRaw('Resetting to baseline...', '#ffaa00');
+
+    // 4. After 1 second, apply the actual mode
+    setTimeout(() => {
+      this.applyCurrentMode();
+      this._transitioning = false;
+    }, 1000);
   }
 
   private applyCurrentMode(): void {
     const mode = MODES[this.currentMode];
     mode.apply(this.game, this);
     this.button.textContent = String(this.currentMode);
+    // Restore green color on both label and info panel
+    this.modeLabel.style.color = '#00ff66';
+    this.modeLabel.style.textShadow = '0 0 8px #00ff66, 0 0 16px #00ff44';
+    this.infoPanel.style.color = '#00ff66';
     // Update info after layout settles (scroll trick needs time)
     this.updateInfo();
     setTimeout(() => this.updateInfo(), 500);
+  }
+
+  /** Show a raw message in the info panel (used during reset pause) */
+  private updateInfoRaw(msg: string, color = '#00ff66'): void {
+    this.infoPanel.style.color = color;
+    this.infoPanel.textContent = msg;
   }
 
   private updateInfo(): void {
