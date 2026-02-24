@@ -6,6 +6,16 @@ import { GAME_MODE, DEVICE_PROFILE } from './config/gameMode';
 import { initTelemetry } from './util/telemetry';
 import { initTestMode, TEST_MODE } from './util/testMode';
 import { isiOS } from './util/device';
+import { initSimulation, isSimulating, applyFpsThrottle } from './systems/DeviceSimulator';
+
+// Device simulation: ?simulate=<slug> overrides DEVICE_PROFILE before anything runs
+const simProfile = initSimulation();
+if (simProfile) {
+  // Override the exported DEVICE_PROFILE properties in-place
+  Object.assign(DEVICE_PROFILE, simProfile);
+  GAME_MODE.mobileMode = true; // Simulating a mobile device
+  GAME_MODE.quality = simProfile.tier === 'phone-low' ? 'low' : 'medium';
+}
 
 // Expose device profile globally for debugging + WebDriver inspection
 (window as any).__deviceProfile = DEVICE_PROFILE;
@@ -17,8 +27,15 @@ initTestMode();
 
 // Vision system: activate debug HUD overlay when ?hud=1 is in URL
 // Separate from ?test=1 — safe on iOS Safari (no polling, no command queue)
+// GUARD: HUD crashes iPhone 12 Mini (4GB) at 4s — disable on mobile devices.
+// MacClaude finding #3: "hud=1 causes iPhone 12 Mini crash at 4s — base game stable"
 if (new URLSearchParams(location.search).has('hud')) {
-  (window as any).__dpMotoHud = true;
+  if (DEVICE_PROFILE.tier === 'desktop' || DEVICE_PROFILE.tier === 'tablet') {
+    (window as any).__dpMotoHud = true;
+  } else {
+    console.warn('[main] ?hud=1 blocked on mobile tier:', DEVICE_PROFILE.tier,
+      '— causes OOM crash on low-memory devices. Use desktop/tablet only.');
+  }
 }
 
 // Dev-only: activate Safari telemetry when ?debug=1 is in URL
@@ -88,6 +105,11 @@ handleCallback().then((wasCallback) => {
   };
 
   const game = new Phaser.Game(config);
+
+  // Apply FPS throttle in simulation mode
+  if (isSimulating()) {
+    applyFpsThrottle(game);
+  }
 
   // Expose game instance so BIOS overlay can unlock Phaser's audio context
   (window as any).__phaserGame = game;

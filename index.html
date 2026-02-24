@@ -317,7 +317,7 @@
       var hh = String(now.getHours()).padStart(2, '0');
       var mi = String(now.getMinutes()).padStart(2, '0');
       var ss = String(now.getSeconds()).padStart(2, '0');
-      var verNum = '0.00.50';
+      var verNum = '0.00.54';
       var versionText = 'last saved [ ' + dd + ' : ' + monthName + ' : ' + yyyy + ' ]  [ ' + hh + ' : ' + mi + ' : ' + ss + ' ]';
       // Set title line version dynamically
       var titleLine = document.getElementById('bios-title-line');
@@ -430,6 +430,11 @@
     document.addEventListener('pointerdown', handleDismissDown);
     document.addEventListener('pointerup', handleDismissUp);
     document.addEventListener('keydown', handleDismissKey);
+    // Allow programmatic click() on enter prompt to dismiss (for WebDriver/act.mjs)
+    enterPrompt.addEventListener('click', function() {
+      if (!readyForEnter || dismissed) return;
+      dismissOverlay();
+    });
 
     // Build flat character list, count dots/non-dots, assign progress thresholds
     var chars = [];
@@ -613,6 +618,11 @@
     scheduleDrip(0);
 
     window.__bootOverlay = {
+      dismiss: function() {
+        if (!readyForEnter || dismissed) return false;
+        dismissOverlay();
+        return true;
+      },
       setProgress: function(p) {
         if (dismissed) return;
         targetProgress = p;
