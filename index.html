@@ -328,7 +328,7 @@
       var hh = String(now.getHours()).padStart(2, '0');
       var mi = String(now.getMinutes()).padStart(2, '0');
       var ss = String(now.getSeconds()).padStart(2, '0');
-      var verNum = '0.00.57';
+      var verNum = '0.00.58';
       var versionText = 'last saved [ ' + dd + ' : ' + monthName + ' : ' + yyyy + ' ]  [ ' + hh + ' : ' + mi + ' : ' + ss + ' ]';
       // Set title line version dynamically
       var titleLine = document.getElementById('bios-title-line');
@@ -956,45 +956,6 @@
   })();
   </script>
 
-  <!-- "Add to Home Screen" banner — iOS Safari browser mode only, one-time -->
-  <div id="ath-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99998;
-    background:rgba(0,0,0,0.92);border-top:2px solid #cc0000;padding:12px 16px;
-    font-family:'Retro Gaming',monospace;color:#fff;text-align:center;font-size:12px;">
-    <div style="margin-bottom:6px;color:#ff4444;font-size:14px;letter-spacing:1px;">FULLSCREEN MODE</div>
-    <div>Tap <span style="font-size:18px;vertical-align:middle;">&#x2B06;&#xFE0E;</span> Share &rarr; <b>"Add to Home Screen"</b> for the best experience</div>
-    <button id="ath-dismiss" style="margin-top:8px;background:#cc0000;color:#fff;border:none;
-      padding:6px 20px;font-family:inherit;font-size:11px;cursor:pointer;letter-spacing:1px;">GOT IT</button>
-  </div>
-  <script>
-  (function(){
-    var ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    var sa = (navigator.standalone === true) || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
-    if (!ios || sa || localStorage.getItem('ath_dismissed')) return;
-    // Show banner after BIOS dismiss (wait for overlay to hide)
-    var check = setInterval(function() {
-      var overlay = document.getElementById('boot-overlay');
-      if (overlay && overlay.classList.contains('hidden')) {
-        clearInterval(check);
-        setTimeout(function() {
-          var banner = document.getElementById('ath-banner');
-          if (banner) banner.style.display = 'block';
-        }, 2000); // 2s after BIOS dismiss
-      }
-    }, 500);
-    // Auto-hide after 15 seconds
-    setTimeout(function() {
-      var banner = document.getElementById('ath-banner');
-      if (banner) banner.style.display = 'none';
-    }, 20000);
-    // Dismiss button
-    document.addEventListener('click', function(e) {
-      if (e.target && e.target.id === 'ath-dismiss') {
-        localStorage.setItem('ath_dismissed', '1');
-        var banner = document.getElementById('ath-banner');
-        if (banner) banner.style.display = 'none';
-      }
-    });
-  })();
-  </script>
+  <!-- ATH banner removed — too much friction, users won't save to homescreen -->
 </body>
 </html>
