@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
+import { GAME_MODE } from '../config/gameMode';
 import { loadOrCreateProfile, updateUsername, uploadAvatarAndSave, disconnectProfile } from '../systems/ProfileSystem';
 import { startLogin, isConnected, disconnect } from '../systems/SpotifyAuthSystem';
 import { fetchPlayerTop10, fetchWeeklyHistory, type PlayerScore, type WeeklyHistoryEntry } from '../systems/LeaderboardService';
@@ -199,12 +200,12 @@ export class ProfilePopup {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    const cx = TUNING.GAME_WIDTH / 2;
+    const cx = GAME_MODE.canvasWidth / 2;
     const cy = TUNING.GAME_HEIGHT / 2;
     this.scrollAreaHeight = SCROLL_AREA_BOTTOM - SCROLL_AREA_TOP;
 
     /* ---------- Backdrop ---------- */
-    this.backdrop = scene.add.rectangle(cx, cy, TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT, 0x000000, BACKDROP_ALPHA)
+    this.backdrop = scene.add.rectangle(cx, cy, GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT, 0x000000, BACKDROP_ALPHA)
       .setDepth(POPUP_DEPTH).setScrollFactor(0).setInteractive().setVisible(false);
 
     /* ---------- Container ---------- */

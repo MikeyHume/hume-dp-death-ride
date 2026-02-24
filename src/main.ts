@@ -84,9 +84,20 @@ handleCallback().then((wasCallback) => {
   // Expose for telemetry + BootScene logging
   (window as any).__loaderConfig = { maxParallel, source: loaderSource, ios };
 
+  // ── Adaptive canvas width ────────────────────────────────
+  // Make the Phaser canvas fill the entire viewport width so CRT covers
+  // black bars and UI (ProfileHud, MusicPlayer) can extend into them.
+  // Game content stays centered at 1920px via camera scroll.
+  const vpW = window.innerWidth || document.documentElement.clientWidth || 1920;
+  const vpH = window.innerHeight || document.documentElement.clientHeight || 1080;
+  const adaptiveW = Math.max(TUNING.GAME_WIDTH, Math.round(TUNING.GAME_HEIGHT * (vpW / vpH)));
+  GAME_MODE.canvasWidth = adaptiveW;
+  GAME_MODE.contentOffsetX = (adaptiveW - TUNING.GAME_WIDTH) / 2;
+  console.log(`[main] adaptive canvas: ${adaptiveW}x${TUNING.GAME_HEIGHT} (offset=${GAME_MODE.contentOffsetX.toFixed(0)}, viewport=${vpW}x${vpH})`);
+
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.WEBGL,
-    width: TUNING.GAME_WIDTH,
+    width: GAME_MODE.canvasWidth,
     height: TUNING.GAME_HEIGHT,
     parent: 'game-container',
     backgroundColor: '#000000',

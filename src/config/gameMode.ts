@@ -12,6 +12,10 @@ export const GAME_MODE = {
   quality: (DEVICE_PROFILE.tier === 'desktop' ? 'high'
     : DEVICE_PROFILE.tier === 'tablet' ? 'medium'
     : 'low') as QualityTier, // phone-high/gen-mobile/phone-low → low (disables bloom + noise)
+  /** Actual canvas width (adaptive to viewport). Set in main.ts before game creation. */
+  canvasWidth: 1920,
+  /** X offset to center 1920px content in the wider canvas. = (canvasWidth - 1920) / 2 */
+  contentOffsetX: 0,
 };
 
 // Log detected device on boot (visible in Safari console + WebDriver)

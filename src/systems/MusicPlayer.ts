@@ -320,9 +320,9 @@ export class MusicPlayer {
 
     this.container = document.createElement('div');
     const topPct = (TUNING.MUSIC_UI_PAD_TOP / TUNING.GAME_HEIGHT) * 100;
-    const rightPct = (TUNING.MUSIC_UI_PAD_RIGHT / TUNING.GAME_WIDTH) * 100;
+    const rightPct = (TUNING.MUSIC_UI_PAD_RIGHT / GAME_MODE.canvasWidth) * 100;
     const uiWidth = GAME_MODE.mobileMode ? TUNING.MUSIC_UI_MOBILE_WIDTH : TUNING.MUSIC_UI_WIDTH;
-    const widthPct = (uiWidth / TUNING.GAME_WIDTH) * 100;
+    const widthPct = (uiWidth / GAME_MODE.canvasWidth) * 100;
     const MUSIC_BG_PAD = 20;  // px padding inside background
     Object.assign(this.container.style, {
       position: 'absolute',
@@ -1497,7 +1497,7 @@ export class MusicPlayer {
 
   private expandUI(): void {
     const uiWidth = GAME_MODE.mobileMode ? TUNING.MUSIC_UI_MOBILE_WIDTH : TUNING.MUSIC_UI_WIDTH;
-    const widthPct = (uiWidth / TUNING.GAME_WIDTH) * 100;
+    const widthPct = (uiWidth / GAME_MODE.canvasWidth) * 100;
     this.container.style.width = `calc(${widthPct}% + ${2 * 20}px)`;
     this.container.style.gap = GAME_MODE.mobileMode ? '40px' : '14px';
     this.rightColumnEl.style.opacity = '1';
@@ -1607,9 +1607,9 @@ export class MusicPlayer {
     // --- Background panel ---
     if (containerVisible) {
       const cRect = this.container.getBoundingClientRect();
-      const bgX = (cRect.left - overlayRect.left) / ow * TUNING.GAME_WIDTH;
+      const bgX = (cRect.left - overlayRect.left) / ow * GAME_MODE.canvasWidth;
       const bgY = (cRect.top - overlayRect.top) / oh * TUNING.GAME_HEIGHT;
-      const bgW = (cRect.width / ow) * TUNING.GAME_WIDTH;
+      const bgW = (cRect.width / ow) * GAME_MODE.canvasWidth;
       const bgH = (cRect.height / oh) * TUNING.GAME_HEIGHT;
       this.bgPanel.setPosition(bgX, bgY).setDisplaySize(bgW, bgH).setVisible(true);
 
@@ -1628,9 +1628,9 @@ export class MusicPlayer {
       const btnRect = this.btnElements[i].getBoundingClientRect();
       const cx = btnRect.left + btnRect.width / 2 - overlayRect.left;
       const cy = btnRect.top + btnRect.height / 2 - overlayRect.top;
-      const gameX = (cx / ow) * TUNING.GAME_WIDTH;
+      const gameX = (cx / ow) * GAME_MODE.canvasWidth;
       const gameY = (cy / oh) * TUNING.GAME_HEIGHT;
-      const gameSize = (btnRect.width / ow) * TUNING.GAME_WIDTH;
+      const gameSize = (btnRect.width / ow) * GAME_MODE.canvasWidth;
       this.btnSprites[i].setPosition(gameX, gameY);
       this.btnSprites[i].setDisplaySize(gameSize, gameSize);
       this.btnSprites[i].setVisible(true);
@@ -1642,8 +1642,8 @@ export class MusicPlayer {
       const tr = this.thumbnailImg.getBoundingClientRect();
       const tcx = tr.left + tr.width / 2 - overlayRect.left;
       const tcy = tr.top + tr.height / 2 - overlayRect.top;
-      this.thumbSprite.setPosition((tcx / ow) * TUNING.GAME_WIDTH, (tcy / oh) * TUNING.GAME_HEIGHT);
-      this.thumbSprite.setDisplaySize((tr.width / ow) * TUNING.GAME_WIDTH, (tr.height / oh) * TUNING.GAME_HEIGHT);
+      this.thumbSprite.setPosition((tcx / ow) * GAME_MODE.canvasWidth, (tcy / oh) * TUNING.GAME_HEIGHT);
+      this.thumbSprite.setDisplaySize((tr.width / ow) * GAME_MODE.canvasWidth, (tr.height / oh) * TUNING.GAME_HEIGHT);
       this.thumbSprite.setVisible(true);
       // Hover brightness overlay
       this.thumbHoverOverlay.setPosition(this.thumbSprite.x, this.thumbSprite.y);
@@ -1664,7 +1664,7 @@ export class MusicPlayer {
       }
 
       // Scale font size to game coordinates (only update when changed)
-      const scale = TUNING.GAME_WIDTH / ow;
+      const scale = GAME_MODE.canvasWidth / ow;
       const gameFontSize = Math.round(24 * scale);
       if (gameFontSize !== this.lastGameFontSize) {
         this.lastGameFontSize = gameFontSize;
@@ -1673,16 +1673,16 @@ export class MusicPlayer {
 
       // Position text from HTML trackTitle bounding rect (includes scroll offset)
       const titleRect = this.trackTitle.getBoundingClientRect();
-      const titleLeft = (titleRect.left - overlayRect.left) / ow * TUNING.GAME_WIDTH;
+      const titleLeft = (titleRect.left - overlayRect.left) / ow * GAME_MODE.canvasWidth;
       const titleMidY = (titleRect.top + titleRect.height / 2 - overlayRect.top) / oh * TUNING.GAME_HEIGHT;
       this.titleText.setPosition(titleLeft, titleMidY);
       this.titleText.setVisible(true);
 
       // Update geometry mask to match titleClip bounds
       const clipRect = this.titleClip.getBoundingClientRect();
-      const clipLeft = (clipRect.left - overlayRect.left) / ow * TUNING.GAME_WIDTH;
+      const clipLeft = (clipRect.left - overlayRect.left) / ow * GAME_MODE.canvasWidth;
       const clipTop = (clipRect.top - overlayRect.top) / oh * TUNING.GAME_HEIGHT;
-      const clipW = (clipRect.width / ow) * TUNING.GAME_WIDTH;
+      const clipW = (clipRect.width / ow) * GAME_MODE.canvasWidth;
       const clipH = (clipRect.height / oh) * TUNING.GAME_HEIGHT;
       this.titleMaskGfx.clear();
       this.titleMaskGfx.fillStyle(0xffffff);
@@ -1697,9 +1697,9 @@ export class MusicPlayer {
       const hRect = this.heartBtn.getBoundingClientRect();
       const hcx = hRect.left + hRect.width / 2 - overlayRect.left;
       const hcy = hRect.top + hRect.height / 2 - overlayRect.top;
-      const gameHX = (hcx / ow) * TUNING.GAME_WIDTH;
+      const gameHX = (hcx / ow) * GAME_MODE.canvasWidth;
       const gameHY = (hcy / oh) * TUNING.GAME_HEIGHT;
-      const gameHSize = (hRect.width / ow) * TUNING.GAME_WIDTH;
+      const gameHSize = (hRect.width / ow) * GAME_MODE.canvasWidth;
       const heartFontSize = Math.round(gameHSize * 0.7);
       this.heartTextP.setPosition(gameHX, gameHY);
       this.heartTextP.setFontSize(heartFontSize);

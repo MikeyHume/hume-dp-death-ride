@@ -10,6 +10,7 @@
 
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
+import { GAME_MODE } from '../config/gameMode';
 import { fetchAllTracks, fetchArtists, type CatalogTrack, type CatalogArtist } from '../systems/MusicCatalogService';
 import { startLogin } from '../systems/SpotifyAuthSystem';
 import { ensureAnonUser, getAuthUserId } from '../systems/AuthSystem';
@@ -2132,7 +2133,7 @@ export class WMPPopup {
     const or = this.overlay.getBoundingClientRect();
     const ow = or.width || 1;
     const oh = or.height || 1;
-    const sx = TUNING.GAME_WIDTH / ow;
+    const sx = GAME_MODE.canvasWidth / ow;
     const sy = TUNING.GAME_HEIGHT / oh;
     const bw = Math.max(1, 2 * sx);   // 2px border scaled to game coords
     const bwThin = Math.max(1, 1.5 * sx);
@@ -2742,7 +2743,7 @@ export class WMPPopup {
 
     // Hover detection — determine which library row + cell the mouse is in
     {
-      const mgx = ((this.lastMouseX - or.left) / or.width) * TUNING.GAME_WIDTH;
+      const mgx = ((this.lastMouseX - or.left) / or.width) * GAME_MODE.canvasWidth;
       const mgy = ((this.lastMouseY - or.top) / or.height) * TUNING.GAME_HEIGHT;
       let newRow = -1;
       let newCol = -1;

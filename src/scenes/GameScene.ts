@@ -529,13 +529,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     // --- HUD (visible during PLAYING) ---
-    this.hudLabel = this.add.text(TUNING.GAME_WIDTH / 2, 20, 'WEEKLY HIGH SCORE', {
+    this.hudLabel = this.add.text(GAME_MODE.canvasWidth / 2, 20, 'WEEKLY HIGH SCORE', {
       fontSize: '24px',
       color: '#ffffff',
       fontFamily: 'Alagard',
     }).setOrigin(0.5, 0).setDepth(100).setScrollFactor(0).setVisible(false);
 
-    this.hudHighScore = this.add.text(TUNING.GAME_WIDTH / 2, 50, '', {
+    this.hudHighScore = this.add.text(GAME_MODE.canvasWidth / 2, 50, '', {
       fontSize: '32px',
       color: '#ffffff',
       fontFamily: 'Early GameBoy',
@@ -905,8 +905,8 @@ export class GameScene extends Phaser.Scene {
 
     // Black overlay for countdown (covers game world, below countdown numbers)
     this.blackOverlay = this.add.rectangle(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
-      TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
+      GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2,
+      GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT,
       0x000000
     ).setDepth(249).setScrollFactor(0).setVisible(false);
 
@@ -914,21 +914,21 @@ export class GameScene extends Phaser.Scene {
     // Desktop only — 46 PNGs, too heavy for mobile
     if (!GAME_MODE.mobileMode) {
       this.preStartSprite = this.add.sprite(
-        TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00000'
-      ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT)
+        GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00000'
+      ).setDisplaySize(GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT)
        .setDepth(248).setScrollFactor(0).setVisible(false);
     }
 
     // Intro-to-tutorial cutscene (all platforms — unskippable transition)
     this.introTutSprite = this.add.sprite(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'intro-tut-00000'
-    ).setDisplaySize(TUNING.GAME_WIDTH * TUNING.INTRO_TUT_SCALE, TUNING.GAME_HEIGHT)
+      GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'intro-tut-00000'
+    ).setDisplaySize(GAME_MODE.canvasWidth * TUNING.INTRO_TUT_SCALE, TUNING.GAME_HEIGHT)
      .setDepth(248).setScrollFactor(0).setVisible(false);
 
     // Death exposure white overlay (above everything game-related)
     this.deathWhiteOverlay = this.add.rectangle(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
-      TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
+      GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2,
+      GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT,
       0xffffff
     ).setDepth(1200).setScrollFactor(0).setAlpha(0).setVisible(false);
 
@@ -1041,7 +1041,7 @@ export class GameScene extends Phaser.Scene {
     this.playerSystem.setVisible(false);
 
     // Start hold text — shown during hold phase, hidden when ramp begins
-    this.startHoldText = this.add.text(TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
+    this.startHoldText = this.add.text(GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2,
       GAME_MODE.mobileMode ? 'TAP AND HOLD TO GO' : 'HOLD SPACEBAR TO GO', {
       fontFamily: 'Early GameBoy',
       fontSize: '36px',
@@ -1053,6 +1053,9 @@ export class GameScene extends Phaser.Scene {
       this.cameras.main.setPostPipeline(CRTPipeline);
     }
     this.cameras.main.setPostPipeline(DamageFlashPipeline);
+
+    // --- Adaptive canvas: center 1920px game content in the wider viewport ---
+    this.cameras.main.setScroll(-GAME_MODE.contentOffsetX, 0);
 
     // --- Custom cursor (under CRT shader) ---
     this.game.canvas.style.cursor = 'none';
@@ -1295,12 +1298,12 @@ export class GameScene extends Phaser.Scene {
       const volPanelW = 1040;
       const volTopY = volPanelH / 2;
       this.debugVolumeBg = this.add.rectangle(
-        TUNING.GAME_WIDTH / 2, volTopY, volPanelW, volPanelH, 0x000000, 0.75
+        GAME_MODE.canvasWidth / 2, volTopY, volPanelW, volPanelH, 0x000000, 0.75
       ).setDepth(9999).setScrollFactor(0).setVisible(false);
       this.debugVolumeTexts = [];
       for (let i = 0; i < volParamCount; i++) {
         const y = 8 + i * volLineH + volLineH / 2;
-        const txt = this.add.text(TUNING.GAME_WIDTH / 2 - volPanelW / 2 + 16, y, '', {
+        const txt = this.add.text(GAME_MODE.canvasWidth / 2 - volPanelW / 2 + 16, y, '', {
           fontSize: `${volFontSize}px`, color: '#ff0000', fontFamily: 'monospace',
         }).setOrigin(0, 0.5).setDepth(9999).setScrollFactor(0).setVisible(false);
         this.debugVolumeTexts.push(txt);
@@ -1322,12 +1325,12 @@ export class GameScene extends Phaser.Scene {
       const spPanelW = 1040;
       const spTopY = spPanelH / 2;
       this.debugSpritePosBg = this.add.rectangle(
-        TUNING.GAME_WIDTH / 2, spTopY, spPanelW, spPanelH, 0x000000, 0.75
+        GAME_MODE.canvasWidth / 2, spTopY, spPanelW, spPanelH, 0x000000, 0.75
       ).setDepth(9999).setScrollFactor(0).setVisible(false);
       this.debugSpritePosTexts = [];
       for (let i = 0; i < spParamCount; i++) {
         const y = 8 + i * spLineH + spLineH / 2;
-        const txt = this.add.text(TUNING.GAME_WIDTH / 2 - spPanelW / 2 + 16, y, '', {
+        const txt = this.add.text(GAME_MODE.canvasWidth / 2 - spPanelW / 2 + 16, y, '', {
           fontSize: `${spFontSize}px`, color: '#ff0000', fontFamily: 'monospace',
         }).setOrigin(0, 0.5).setDepth(9999).setScrollFactor(0).setVisible(false);
         this.debugSpritePosTexts.push(txt);
@@ -1342,8 +1345,8 @@ export class GameScene extends Phaser.Scene {
 
     // Pre-start last frame overlay (F) — static image for composition reference
     this.debugPreStartOverlay = this.add.image(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00045'
-    ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT)
+      GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00045'
+    ).setDisplaySize(GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT)
      .setDepth(247).setScrollFactor(0).setAlpha(0.5).setVisible(false);
     this.input.keyboard?.addKey(DEBUG_HOTKEYS.preStartOverlay.key).on('down', () => {
       if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.preStartOverlay.active || this.debugPanelOpen) return;
@@ -1352,10 +1355,10 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Text inspector (N) — cycle through all text objects to identify mystery text
-    this._tiLabel = this.add.text(TUNING.GAME_WIDTH / 2, 60, '', {
+    this._tiLabel = this.add.text(GAME_MODE.canvasWidth / 2, 60, '', {
       fontSize: '28px', color: '#00ff00', fontFamily: 'monospace',
       backgroundColor: '#000000', padding: { x: 12, y: 8 },
-      wordWrap: { width: TUNING.GAME_WIDTH - 100 },
+      wordWrap: { width: GAME_MODE.canvasWidth - 100 },
     }).setOrigin(0.5, 0).setDepth(99999).setScrollFactor(0).setVisible(false);
     this.input.keyboard?.addKey(DEBUG_HOTKEYS.textInspect.key).on('down', () => {
       if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.textInspect.active || this.debugPanelOpen) return;
@@ -1621,8 +1624,8 @@ export class GameScene extends Phaser.Scene {
 
     // Green flash overlay for 2X bonus
     this.bonusFlashOverlay = this.add.rectangle(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
-      TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
+      GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2,
+      GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT,
       TUNING.RHYTHM_BONUS_FLASH_COLOR,
     ).setAlpha(0).setDepth(150).setScrollFactor(0);
 
@@ -2244,6 +2247,22 @@ export class GameScene extends Phaser.Scene {
     s.ui.countdownVisible = this.state === GameState.STARTING;
     s.ui.trackTitle = (this.musicPlayer as any)?.currentTrackName || null;
     s.ui.sceneName = 'Game';
+
+    // ── Performance metrics (stress testing) ───────────────────
+    s.fps = Math.round(this.game.loop.actualFps);
+    s.fpsAvg = Math.round(this.perfSystem.getFps());
+    s.qualityTier = this.perfSystem.getQuality();
+    s.features.crt = this.crtEnabled && DEVICE_PROFILE.crt;
+    s.features.reflections = !!this.reflectionSystem;
+    s.features.carCount = DEVICE_PROFILE.carCount;
+    s.features.parallaxLayers = DEVICE_PROFILE.parallaxLayers;
+    s.features.mobileMode = GAME_MODE.mobileMode;
+    s.features.simulatedDevice = (window as any).__deviceProfile?.label || null;
+    // Track FPS min/max during PLAYING only
+    if (this.state === GameState.PLAYING && s.fps > 0) {
+      if (s.fps < s.fpsMin) s.fpsMin = s.fps;
+      if (s.fps > s.fpsMax) s.fpsMax = s.fps;
+    }
   }
 
   private updateTitle(dt: number): void {
@@ -2296,7 +2315,7 @@ export class GameScene extends Phaser.Scene {
   // ── Win95 Game Mode Popup ─────────────────────────────────────
 
   private createGameModePopup(): void {
-    const cx = TUNING.GAME_WIDTH / 2;
+    const cx = GAME_MODE.canvasWidth / 2;
     const cy = TUNING.GAME_HEIGHT / 2;
     const pw = TUNING.GAME_MODE_POPUP_W;
     const ph = TUNING.GAME_MODE_POPUP_H;
@@ -2305,7 +2324,7 @@ export class GameScene extends Phaser.Scene {
     const depth = TUNING.GAME_MODE_POPUP_DEPTH;
 
     // Dimmed backdrop — blocks clicks, click to close
-    this.gameModeBackdrop = this.add.rectangle(cx, cy, TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT, 0x000000, 0.5)
+    this.gameModeBackdrop = this.add.rectangle(cx, cy, GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT, 0x000000, 0.5)
       .setDepth(depth - 1).setScrollFactor(0).setInteractive().setVisible(false);
     this.gameModeBackdrop.on('pointerdown', () => this.hideGameModePopup());
 
@@ -2669,7 +2688,7 @@ export class GameScene extends Phaser.Scene {
     this.audioSystem.silenceEngine();
     this.rageZoomProgress = 0;
     this.cameras.main.setZoom(1);
-    this.cameras.main.setScroll(0, 0);
+    this.cameras.main.setScroll(-GAME_MODE.contentOffsetX, 0);
     this.adjustHudForZoom(1);
     this.pickupSystem.reset();
     this.pickupSystem.setHUDVisible(false);
@@ -3254,13 +3273,13 @@ export class GameScene extends Phaser.Scene {
         this.parallaxSystem.setSkyOffsetX(val);
         break;
       case 'SPRITE_OFFSET_HOLD_TEXT':
-        this.startHoldText.x = TUNING.GAME_WIDTH / 2 + val;
+        this.startHoldText.x = GAME_MODE.canvasWidth / 2 + val;
         break;
       case 'SPRITE_OFFSET_HUD_LABEL':
-        this.hudLabel.x = TUNING.GAME_WIDTH / 2 + val;
+        this.hudLabel.x = GAME_MODE.canvasWidth / 2 + val;
         break;
       case 'SPRITE_OFFSET_HUD_SCORE':
-        this.hudHighScore.x = TUNING.GAME_WIDTH / 2 + val;
+        this.hudHighScore.x = GAME_MODE.canvasWidth / 2 + val;
         break;
       case 'SPRITE_OFFSET_PROFILE_HUD':
         this.profileHud.setPosition(40 + val, 40);
@@ -3344,9 +3363,9 @@ export class GameScene extends Phaser.Scene {
     const weeklyHigh = entries.length > 0 ? entries[0].score : 0;
     this.hudHighScore.setText(String(weeklyHigh).padStart(7, '0'));
     this.hudLabel.setVisible(true);
-    this.hudLabel.x = TUNING.GAME_WIDTH / 2 + TUNING.SPRITE_OFFSET_HUD_LABEL;
+    this.hudLabel.x = GAME_MODE.canvasWidth / 2 + TUNING.SPRITE_OFFSET_HUD_LABEL;
     this.hudHighScore.setVisible(true);
-    this.hudHighScore.x = TUNING.GAME_WIDTH / 2 + TUNING.SPRITE_OFFSET_HUD_SCORE;
+    this.hudHighScore.x = GAME_MODE.canvasWidth / 2 + TUNING.SPRITE_OFFSET_HUD_SCORE;
     this.profileHud.setVisible(true);
     this.profileHud.setPosition(40 + TUNING.SPRITE_OFFSET_PROFILE_HUD, 40);
     this.profileHud.showPlayingMode(this.profilePopup.getName());
@@ -3365,7 +3384,7 @@ export class GameScene extends Phaser.Scene {
     this.rageZoomProgress = 0;
     this.roadSpeedBonus = 0;
     this.cameras.main.setZoom(1);
-    this.cameras.main.setScroll(0, 0);
+    this.cameras.main.setScroll(-GAME_MODE.contentOffsetX, 0);
     this.adjustHudForZoom(1);
     this.audioSystem.setDistortion(0);
     CRT_TUNING.rageDistortion = 0;
@@ -3390,7 +3409,7 @@ export class GameScene extends Phaser.Scene {
       this.startHoldTimer = 0;
       this.startHoldRampT = 0;
       this.startHoldText.setAlpha(1);
-      this.startHoldText.x = TUNING.GAME_WIDTH / 2 + TUNING.SPRITE_OFFSET_HOLD_TEXT;
+      this.startHoldText.x = GAME_MODE.canvasWidth / 2 + TUNING.SPRITE_OFFSET_HOLD_TEXT;
       this.startHoldText.setVisible(true);
       // Blink: on → fade out → off → fade in → repeat
       if (this.startHoldBlinkTween) this.startHoldBlinkTween.destroy();
@@ -4349,16 +4368,16 @@ export class GameScene extends Phaser.Scene {
     const cx = this.cameras.main.width / 2;
     const cy = this.cameras.main.height / 2;
     const invZ = 1 / zoom;
-    // hudLabel original position: (GAME_WIDTH/2, 20)
+    // hudLabel original position: (canvasWidth/2, 20)
     this.hudLabel.setScale(invZ);
     this.hudLabel.setPosition(
-      cx + (TUNING.GAME_WIDTH / 2 - cx) * invZ,
+      cx + (GAME_MODE.canvasWidth / 2 - cx) * invZ,
       cy + (20 - cy) * invZ,
     );
-    // hudHighScore original position: (GAME_WIDTH/2, 50)
+    // hudHighScore original position: (canvasWidth/2, 50)
     this.hudHighScore.setScale(invZ);
     this.hudHighScore.setPosition(
-      cx + (TUNING.GAME_WIDTH / 2 - cx) * invZ,
+      cx + (GAME_MODE.canvasWidth / 2 - cx) * invZ,
       cy + (50 - cy) * invZ,
     );
   }
@@ -4367,7 +4386,7 @@ export class GameScene extends Phaser.Scene {
   private applyRageZoom(): void {
     if (this.rageZoomProgress <= 0) {
       this.cameras.main.setZoom(1);
-      this.cameras.main.setScroll(0, 0);
+      this.cameras.main.setScroll(-GAME_MODE.contentOffsetX, 0);
       this.adjustHudForZoom(1);
       return;
     }
@@ -4389,8 +4408,8 @@ export class GameScene extends Phaser.Scene {
     centerX = Math.max(halfVisW, Math.min(TUNING.GAME_WIDTH - halfVisW, centerX));
     centerY = Math.max(halfVisH, Math.min(TUNING.GAME_HEIGHT - halfVisH, centerY));
 
-    // Convert world center to scroll (scroll 0,0 = center at GAME_WIDTH/2, GAME_HEIGHT/2)
-    this.cameras.main.setScroll(centerX - TUNING.GAME_WIDTH / 2, centerY - TUNING.GAME_HEIGHT / 2);
+    // Convert world center to scroll (accounting for adaptive canvas offset)
+    this.cameras.main.setScroll(centerX - TUNING.GAME_WIDTH / 2 - GAME_MODE.contentOffsetX, centerY - TUNING.GAME_HEIGHT / 2);
   }
 
   // Color palettes for score popups by interaction type
@@ -4693,7 +4712,7 @@ export class GameScene extends Phaser.Scene {
     // Reset camera zoom before death transition
     this.rageZoomProgress = 0;
     this.cameras.main.setZoom(1);
-    this.cameras.main.setScroll(0, 0);
+    this.cameras.main.setScroll(-GAME_MODE.contentOffsetX, 0);
     this.adjustHudForZoom(1);
 
     // Collapse music player to thumbnail-only

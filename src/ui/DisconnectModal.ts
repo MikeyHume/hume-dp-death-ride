@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
+import { GAME_MODE } from '../config/gameMode';
 
 const MODAL_DEPTH = 1500;
 const DIALOG_W = 500;
@@ -16,18 +17,18 @@ export class DisconnectModal {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    const cx = TUNING.GAME_WIDTH / 2;
+    const cx = GAME_MODE.canvasWidth / 2;
     const cy = TUNING.GAME_HEIGHT / 2;
 
     // Dimmed full-screen overlay — blocks clicks behind it
-    this.backdrop = scene.add.rectangle(cx, cy, TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT, 0x000000, 0.7)
+    this.backdrop = scene.add.rectangle(cx, cy, GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT, 0x000000, 0.7)
       .setDepth(MODAL_DEPTH)
       .setScrollFactor(0)
       .setInteractive()
       .setVisible(false);
     this.backdrop.on('pointerdown', () => this.answer(false));
 
-    // Container for dialog content
+    // Container for dialog content (cx already = canvasWidth/2 via scrollFactor(0))
     this.container = scene.add.container(cx, cy)
       .setDepth(MODAL_DEPTH + 1)
       .setScrollFactor(0)
