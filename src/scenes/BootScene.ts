@@ -319,7 +319,7 @@ export class BootScene extends Phaser.Scene {
       if (!this.textures.exists('buildings-big')) {
         // Copy reference from buildings-front
         const bfTex = this.textures.get('buildings-front');
-        if (bfTex) this.textures.addImage('buildings-big', bfTex.getSourceImage());
+        if (bfTex) this.textures.addImage('buildings-big', bfTex.getSourceImage() as HTMLImageElement);
       }
 
       // Title frame: 4x4 black (replaces 1928x1076 = 7.9MB)
@@ -335,8 +335,8 @@ export class BootScene extends Phaser.Scene {
         const rideFrame = this.textures.getFrame('player-ride', 0);
         if (rideFrame) {
           const aw = rideFrame.width, ah = rideFrame.height;
-          const attackCanvas = this.textures.createCanvas('player-attack', aw, ah);
-          const actx = attackCanvas.getContext();
+          const attackCanvas = this.textures.createCanvas('player-attack', aw, ah)!;
+          const actx = attackCanvas.getContext()!;
           actx.drawImage(rideFrame.source.image as HTMLImageElement, rideFrame.cutX, rideFrame.cutY, aw, ah, 0, 0, aw, ah);
           attackCanvas.refresh();
           // Add frame data so animations don't crash
