@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
 import { SeededRNG } from '../util/rng';
-import { GAME_MODE } from '../config/gameMode';
+import { GAME_MODE, DEVICE_PROFILE } from '../config/gameMode';
 
 export enum ObstacleType {
   CRASH = 'crash',
@@ -130,10 +130,11 @@ export class ObstacleSystem {
     this.shufflePuddleSizeDeck();
   }
 
-  /** Shuffle all 20 car skins into a new deck, ensuring no back-to-back repeat. */
+  /** Shuffle car skins into a new deck, ensuring no back-to-back repeat. */
   private shuffleCarDeck(): void {
     this.carDeck = [];
-    for (let i = 1; i <= TUNING.CAR_COUNT; i++) this.carDeck.push(i);
+    const count = GAME_MODE.mobileMode ? DEVICE_PROFILE.carCount : TUNING.CAR_COUNT;
+    for (let i = 1; i <= count; i++) this.carDeck.push(i);
     // Fisher-Yates shuffle
     for (let i = this.carDeck.length - 1; i > 0; i--) {
       const j = Math.floor(this.rng.next() * (i + 1));

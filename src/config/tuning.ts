@@ -172,7 +172,8 @@ export const TUNING = {
   // Puddle road overlay
   PUDDLE_ROAD_OPACITY: 0.4,        // road texture opacity inside puddle holes (0 = fully transparent, 1 = solid)
 
-  CAR_COUNT: 20,                    // number of car sprite sheets
+  CAR_COUNT: 20,                    // number of car sprite sheets (desktop)
+  CAR_COUNT_MOBILE: 0,              // mobile: oncoming car count (0 = disabled, 3 cars adds ~15MB VRAM causing iOS crash)
   CAR_FRAME_WIDTH: 441,             // px per frame in sprite sheet
   CAR_FRAME_HEIGHT: 186,            // px per frame in sprite sheet
   CAR_ANIM_FRAMES: 59,              // usable frames per sheet (61 total, last 2 empty)
@@ -537,6 +538,18 @@ export const TUNING = {
 
   // Debug — set to true to enable hotkeys (0 = instant rage)
   DEBUG_KEYS: true,
+
+  // ── Vision Debug HUD (?hud=1 overlay) ──
+  HUD_FONT_SIZE: 14,
+  HUD_BG_ALPHA: 0.55,
+  HUD_WIDTH: 340,
+  HUD_ROW_HEIGHT: 18,
+  HUD_PADDING: 6,
+  HUD_X: 8,
+  HUD_Y: 8,
+  HUD_DEPTH: 999,
+  HUD_FPS_GREEN: 30,            // FPS ≥ this = green
+  HUD_FPS_YELLOW: 15,           // FPS ≥ this = yellow, below = red
 
   // ── Time dilation (300-style katana slow-mo) ──
   TDIL_MIN_SCALE: 0.1,            // min time scale at full slowdown (0.1 = 10% speed)

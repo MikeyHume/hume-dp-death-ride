@@ -242,6 +242,18 @@
 <body>
   <!-- BIOS boot overlay — renders instantly before any JS -->
   <div id="boot-overlay" data-testid="bios-overlay">
+    <!-- Device debug banner — bottom-left, tiny text -->
+    <div id="device-debug" style="position:fixed;bottom:4px;left:8px;font-size:10px;color:#660000;font-family:monospace;z-index:100000;opacity:0.7;pointer-events:none"></div>
+    <script>
+    (function(){
+      var w = Math.min(screen.width, screen.height);
+      var h = Math.max(screen.width, screen.height);
+      var dpr = window.devicePixelRatio;
+      var ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      var el = document.getElementById('device-debug');
+      if (el) el.textContent = (ios ? 'iOS' : 'other') + ' ' + w + 'x' + h + ' @' + dpr + 'x | cores=' + (navigator.hardwareConcurrency||'?') + ' | mem=' + (navigator.deviceMemory||'?') + 'GB';
+    })();
+    </script>
     <div id="boot-content" data-testid="bios-content">
       <div id="boot-lines" data-testid="bios-lines">
         <div class="line" id="bios-title-line" data-text="DP MOTO BIOS      v0.1"></div>
@@ -269,12 +281,22 @@
   };
 
   // Prevent unhandled errors from crashing iOS Safari (which reloads the page)
+  // Also show errors visually on the device debug banner for diagnosis
+  window.__errorLog = [];
   window.addEventListener('error', function(e) {
-    console.error('Uncaught error:', e.error || e.message);
+    var msg = (e.error && e.error.stack) ? e.error.stack.substring(0, 200) : (e.message || 'unknown');
+    console.error('Uncaught error:', msg);
+    window.__errorLog.push('ERR: ' + msg);
+    var el = document.getElementById('device-debug');
+    if (el) el.textContent += ' | ERR: ' + (e.message || 'unknown').substring(0, 80);
     e.preventDefault();
   });
   window.addEventListener('unhandledrejection', function(e) {
-    console.error('Unhandled rejection:', e.reason);
+    var msg = (e.reason && e.reason.stack) ? e.reason.stack.substring(0, 200) : String(e.reason || 'unknown');
+    console.error('Unhandled rejection:', msg);
+    window.__errorLog.push('REJ: ' + msg);
+    var el = document.getElementById('device-debug');
+    if (el) el.textContent += ' | REJ: ' + String(e.reason || 'unknown').substring(0, 80);
     e.preventDefault();
   });
 
@@ -295,7 +317,7 @@
       var hh = String(now.getHours()).padStart(2, '0');
       var mi = String(now.getMinutes()).padStart(2, '0');
       var ss = String(now.getSeconds()).padStart(2, '0');
-      var verNum = '0.00.39';
+      var verNum = '0.00.50';
       var versionText = 'last saved [ ' + dd + ' : ' + monthName + ' : ' + yyyy + ' ]  [ ' + hh + ' : ' + mi + ' : ' + ss + ' ]';
       // Set title line version dynamically
       var titleLine = document.getElementById('bios-title-line');
@@ -887,6 +909,8 @@
   </script>
 
   <div id="game-container"></div>
+  <!-- Phaser loaded via CDN to avoid Vite pre-bundling crash on iOS Safari -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
-import { ensureAnonUser } from '../systems/AuthSystem';
+// AuthSystem imported dynamically in create() to keep Supabase SDK out of initial bundle
 import { GAME_MODE } from '../config/gameMode';
 
 export const TITLE_LOOP_FRAME_COUNT = 27;
@@ -84,11 +84,8 @@ export class BootScene extends Phaser.Scene {
     } else {
       // Mobile: load only first frame of title loop for static title background
       this.load.image('start-loop-00', 'assets/start/start_loop/DP_Death_Ride_Title_Loop00.jpg');
-      // Mobile: still load intro-to-tutorial cutscene (unskippable transition)
-      for (let i = 0; i < INTRO_TO_TUT_FRAME_COUNT; i++) {
-        const idx = String(i).padStart(5, '0');
-        this.load.image(`intro-tut-${idx}`, `assets/cutscenes/intro_to_tut/v3/intro_to_tut_v03__${idx}.jpg`);
-      }
+      // Mobile: load only first frame of intro-to-tutorial (saves ~216MB VRAM)
+      this.load.image('intro-tut-00000', 'assets/cutscenes/intro_to_tut/v3/intro_to_tut_v03__00000.jpg');
     }
     // Mobile: load half-res nearest-neighbor sprite sheets (_mobile suffix)
     // Same texture keys, same animations, just smaller textures + frame dims
@@ -162,8 +159,9 @@ export class BootScene extends Phaser.Scene {
     this.load.image('buildings-big', 'assets/background/buildings_Front_row_dark.png');
     this.load.image('railing', 'assets/background/railing_dark.jpg');
 
-    // Car sprite sheets (all 20, mobile uses _mobile half-res variants)
-    for (let c = 1; c <= TUNING.CAR_COUNT; c++) {
+    // Car sprite sheets (mobile loads fewer to fit iOS VRAM budget)
+    const carCount = GAME_MODE.mobileMode ? TUNING.CAR_COUNT_MOBILE : TUNING.CAR_COUNT;
+    for (let c = 1; c <= carCount; c++) {
       const key = `car-${String(c).padStart(3, '0')}`;
       this.load.spritesheet(key, `assets/cars/car_${String(c).padStart(3, '0')}${sfx}.png`, {
         frameWidth: fw(TUNING.CAR_FRAME_WIDTH),
@@ -302,9 +300,10 @@ export class BootScene extends Phaser.Scene {
 
     }
 
-    // Intro-to-tutorial cutscene animation — all platforms (unskippable transition)
+    // Intro-to-tutorial cutscene animation (desktop: 27-frame sequence, mobile: single frame)
+    const introTutFrameCount = GAME_MODE.mobileMode ? 1 : INTRO_TO_TUT_FRAME_COUNT;
     const introTutFrames: Phaser.Types.Animations.AnimationFrame[] = [];
-    for (let i = 0; i < INTRO_TO_TUT_FRAME_COUNT; i++) {
+    for (let i = 0; i < introTutFrameCount; i++) {
       introTutFrames.push({ key: `intro-tut-${String(i).padStart(5, '0')}` });
     }
     this.anims.create({ key: 'intro-tut-cutscene', frames: introTutFrames, frameRate: 12, repeat: 0 });
@@ -405,8 +404,9 @@ export class BootScene extends Phaser.Scene {
       repeat: 0,
     });
 
-    // Car drive animations (all 20 cars, mobile uses half-res sheets)
-    for (let c = 1; c <= TUNING.CAR_COUNT; c++) {
+    // Car drive animations (mobile loads fewer cars)
+    const carAnimCount = GAME_MODE.mobileMode ? TUNING.CAR_COUNT_MOBILE : TUNING.CAR_COUNT;
+    for (let c = 1; c <= carAnimCount; c++) {
       const key = `car-${String(c).padStart(3, '0')}`;
       this.anims.create({
         key: `${key}-drive`,
@@ -519,6 +519,7 @@ export class BootScene extends Phaser.Scene {
     }
 
     try {
+      const { ensureAnonUser } = await import('../systems/AuthSystem');
       await ensureAnonUser();
     } catch (err) {
       console.warn('[boot] ensureAnonUser failed (non-critical):', err);
@@ -542,6 +543,18 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    this.scene.start('GameScene');
+    const waitForGameScene = () => {
+      if ((window as any).__gameSceneReady) {
+        const loadErr = (window as any).__gameSceneError;
+        if (loadErr) {
+          console.error('[boot] GameScene chunk failed to load:', loadErr);
+        } else {
+          this.scene.start('GameScene');
+        }
+      } else {
+        setTimeout(waitForGameScene, 100);
+      }
+    };
+    waitForGameScene();
   }
 }

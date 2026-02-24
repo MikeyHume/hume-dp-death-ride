@@ -30,6 +30,9 @@ export class InputSystem {
   private rightTouchStartTime: number = 0;
   private rightRocketFired: boolean = false;
 
+  // Test injection flag (works on both desktop and mobile)
+  private injectedSpeedTap: boolean = false;
+
   // Visual cursor (green triangle, left edge of screen)
   private cursorGraphic: Phaser.GameObjects.Triangle | null = null;
 
@@ -173,8 +176,13 @@ export class InputSystem {
     return this.spaceKey.isDown;
   }
 
-  /** Returns true on tap boost (JustDown Space on desktop, quick tap on mobile) */
+  /** Returns true on tap boost (JustDown Space on desktop, quick tap on mobile, or injected) */
   getSpeedTap(): boolean {
+    // Injected speed tap (works on both desktop and mobile)
+    if (this.injectedSpeedTap) {
+      this.injectedSpeedTap = false;
+      return true;
+    }
     if (this.mobileMode) {
       if (this.touchBoostTap) {
         this.touchBoostTap = false;
@@ -234,7 +242,7 @@ export class InputSystem {
   }
 
   // ── Test injection (programmatic input for robot pilot) ──
-  injectSpeedTap(): void { this.touchBoostTap = true; }
+  injectSpeedTap(): void { this.injectedSpeedTap = true; }
   injectAttack(): void { this.slashPressed = true; }
   injectRocket(): void { this.rocketPressed = true; }
   injectTargetY(y: number): void { this.touchTargetY = y; }

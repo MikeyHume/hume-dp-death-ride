@@ -11,6 +11,10 @@
 # launches mac-agent targeting the specified device over HTTP.
 
 set -euo pipefail
+
+# ── Deterministic PATH (non-interactive SSH may not source profiles) ──
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
 cd "$(dirname "$0")/.."
 
 # ── Device profiles (Bash 3.2 compatible — no associative arrays) ──
@@ -81,19 +85,20 @@ fi
 
 # ── Start safaridriver ─────────────────────────────────────────
 echo "Starting safaridriver on port 4723..."
-safaridriver -p 4723 &
-SAFARI_PID=$!
-sleep 2
+nohup bash -c "safaridriver -p 4723" &>/tmp/safaridriver.log &
+sleep 3
 
 # Verify it started
-if ! kill -0 $SAFARI_PID 2>/dev/null; then
+SAFARI_PID=$(pgrep -x safaridriver)
+if [ -z "$SAFARI_PID" ]; then
   echo "ERROR: safaridriver failed to start. Run: sudo safaridriver --enable"
+  echo "Log: $(cat /tmp/safaridriver.log 2>/dev/null)"
   exit 1
 fi
 echo "safaridriver running (PID $SAFARI_PID)"
 
 # ── Build mac-agent command ────────────────────────────────────
-CMD="node scripts/mac-agent.mjs"
+CMD="/usr/local/bin/node scripts/mac-agent.mjs"
 if [ -n "$UDID" ]; then
   CMD="$CMD --udid $UDID"
 fi

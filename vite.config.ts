@@ -41,6 +41,377 @@ function telemetryPlugin(): Plugin {
   const MAX_CMD_LOG = 200;
   let lastKnownRunId: string | null = null;
 
+  // ── Scenario Runner ─────────────────────────────────────────
+  // Executes multi-step test scenarios by reading game state and pushing commands.
+  // Runs as an async loop inside the Vite server — zero network latency.
+
+  interface ScenarioStep {
+    action: string;
+    state?: string;
+    field?: string;
+    value?: any;
+    y?: number;
+    delay?: number;
+    timeout?: number;
+    duration?: number;
+    repeat?: number;
+    interval?: number;
+    seed?: number;
+  }
+
+  interface Scenario {
+    name: string;
+    description?: string;
+    setup?: { skipBios?: boolean; skipMusic?: boolean; skipTutorial?: boolean; fastCountdown?: boolean };
+    steps: ScenarioStep[];
+    success?: { field: string; value: any };
+    failure?: string[];
+  }
+
+  interface StepResult {
+    step: number;
+    action: string;
+    outcome: 'pass' | 'fail' | 'skip';
+    duration: number;
+    detail?: string;
+  }
+
+  interface RunResult {
+    runId: string;
+    scenario: string;
+    startTime: number;
+    endTime: number;
+    outcome: 'pass' | 'fail' | 'crash' | 'timeout';
+    crashSignature: string | null;
+    stateHistory: Array<{ time: number; state: string }>;
+    errorHistory: string[];
+    stepResults: StepResult[];
+  }
+
+  let activeScenario: Scenario | null = null;
+  let scenarioStatus: {
+    running: boolean;
+    stepIndex: number;
+    totalSteps: number;
+    scenarioName: string;
+    currentAction: string;
+    outcome: string | null;
+    stepResults: StepResult[];
+    startTime: number;
+    error: string | null;
+  } = {
+    running: false, stepIndex: 0, totalSteps: 0, scenarioName: '',
+    currentAction: '', outcome: null, stepResults: [], startTime: 0, error: null,
+  };
+  const runHistory: RunResult[] = [];
+  const MAX_RUN_HISTORY = 50;
+
+  /** Push a command into the command log (same as /test-command POST) */
+  function pushCmd(cmd: any): number {
+    const cmdStr = typeof cmd === 'string' ? cmd : JSON.stringify(cmd);
+    const seq = nextSeq++;
+    commandLog.push({ seq, cmd: cmdStr });
+    while (commandLog.length > MAX_CMD_LOG) commandLog.shift();
+    return seq;
+  }
+
+  /** Read a field from the latest test state using dot notation */
+  function readStateField(field: string): any {
+    if (!latestTestState) return undefined;
+    const parts = field.split('.');
+    let obj: any = latestTestState;
+    for (const p of parts) {
+      if (obj == null) return undefined;
+      obj = obj[p];
+    }
+    return obj;
+  }
+
+  /** Generate a crash signature hash from current state */
+  function generateCrashSignature(): string | null {
+    if (!latestTestState) return 'hard-crash:no-state';
+    const errors = latestTestState.errorHistory || [];
+    if (errors.length > 0) {
+      // Simple hash of latest error
+      const lastErr = errors[errors.length - 1];
+      const hash = lastErr.slice(0, 80).replace(/[^a-zA-Z0-9]/g, '_');
+      return `js-error:${hash}`;
+    }
+    if (latestTestState.unloading) return `unload:${latestTestState.stateName}`;
+    return null;
+  }
+
+  /** Execute a single scenario step. Returns a StepResult. */
+  async function executeStep(step: ScenarioStep, stepIdx: number): Promise<StepResult> {
+    const startMs = Date.now();
+
+    // Apply delay before action (if specified)
+    if (step.delay && step.delay > 0) {
+      await new Promise(r => setTimeout(r, step.delay));
+    }
+
+    switch (step.action) {
+      case 'wait-state': {
+        const timeout = step.timeout || 15000;
+        const target = step.state;
+        const deadline = Date.now() + timeout;
+        while (Date.now() < deadline) {
+          const current = latestTestState?.stateName;
+          if (current === target) {
+            return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs, detail: `reached ${target}` };
+          }
+          await new Promise(r => setTimeout(r, 250));
+        }
+        return { step: stepIdx, action: step.action, outcome: 'fail', duration: Date.now() - startMs, detail: `timeout waiting for ${target}, stuck at ${latestTestState?.stateName}` };
+      }
+
+      case 'tap': {
+        const repeat = step.repeat || 1;
+        const interval = step.interval || 0;
+        for (let i = 0; i < repeat; i++) {
+          pushCmd({ type: 'tap' });
+          if (interval > 0 && i < repeat - 1) await new Promise(r => setTimeout(r, interval));
+        }
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs, detail: `${repeat}x` };
+      }
+
+      case 'speed-tap': {
+        const repeat = step.repeat || 1;
+        const interval = step.interval || 200;
+        for (let i = 0; i < repeat; i++) {
+          pushCmd({ type: 'speed-tap' });
+          if (i < repeat - 1) await new Promise(r => setTimeout(r, interval));
+        }
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs, detail: `${repeat}x @${interval}ms` };
+      }
+
+      case 'attack': {
+        pushCmd({ type: 'attack' });
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs };
+      }
+
+      case 'rocket': {
+        pushCmd({ type: 'rocket' });
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs };
+      }
+
+      case 'move-y': {
+        pushCmd({ type: 'move-y', y: step.y ?? 540 });
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs, detail: `y=${step.y}` };
+      }
+
+      case 'skip-to-play': {
+        pushCmd({ type: 'skip-to-play' });
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs };
+      }
+
+      case 'set-seed': {
+        pushCmd({ type: 'set-seed', seed: step.seed ?? 42 });
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs, detail: `seed=${step.seed}` };
+      }
+
+      case 'die': {
+        pushCmd({ type: 'die' });
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs };
+      }
+
+      case 'return-title': {
+        pushCmd({ type: 'return-title' });
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs };
+      }
+
+      case 'submit-name': {
+        pushCmd({ type: 'submit-name', name: (step as any).name || 'ROBOT' });
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs };
+      }
+
+      case 'open-profile': {
+        pushCmd({ type: 'open-profile' });
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs };
+      }
+
+      case 'close-profile': {
+        pushCmd({ type: 'close-profile' });
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs };
+      }
+
+      case 'toggle-music-menu': {
+        pushCmd({ type: 'toggle-music-menu' });
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs };
+      }
+
+      case 'reload': {
+        pushCmd({ type: 'reload' });
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs };
+      }
+
+      case 'assert': {
+        const timeout = step.timeout || 5000;
+        const deadline = Date.now() + timeout;
+        while (Date.now() < deadline) {
+          const actual = readStateField(step.field!);
+          if (actual === step.value) {
+            return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs, detail: `${step.field}=${actual}` };
+          }
+          await new Promise(r => setTimeout(r, 250));
+        }
+        const finalVal = readStateField(step.field!);
+        return { step: stepIdx, action: step.action, outcome: 'fail', duration: Date.now() - startMs, detail: `${step.field}: expected=${step.value}, got=${finalVal}` };
+      }
+
+      case 'survive': {
+        const duration = step.duration || 10000;
+        const deadline = Date.now() + duration;
+        const startFrame = latestTestState?.frameCount ?? 0;
+        let lastFrame = startFrame;
+        let lastCheckMs = Date.now();
+        while (Date.now() < deadline) {
+          await new Promise(r => setTimeout(r, 500));
+          const currentFrame = latestTestState?.frameCount ?? 0;
+          const currentState = latestTestState?.stateName;
+          // Check for crash: frames stopped advancing
+          if (currentFrame === lastFrame && Date.now() - lastCheckMs > 3000) {
+            return { step: stepIdx, action: step.action, outcome: 'fail', duration: Date.now() - startMs, detail: `freeze at frame ${currentFrame}, state=${currentState}` };
+          }
+          // Check for death
+          if (currentState === 'DEAD' || currentState === 'DYING') {
+            return { step: stepIdx, action: step.action, outcome: 'fail', duration: Date.now() - startMs, detail: `died at frame ${currentFrame}` };
+          }
+          if (currentFrame !== lastFrame) {
+            lastFrame = currentFrame;
+            lastCheckMs = Date.now();
+          }
+        }
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs, detail: `survived ${duration}ms, ${(latestTestState?.frameCount ?? 0) - startFrame} frames` };
+      }
+
+      case 'delay': {
+        const ms = step.duration || step.delay || 1000;
+        await new Promise(r => setTimeout(r, ms));
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs, detail: `${ms}ms` };
+      }
+
+      case 'screenshot': {
+        // Request the game to capture a screenshot
+        // The game-side captureScreenshot() is called via the test object
+        pushCmd({ type: 'screenshot' });
+        await new Promise(r => setTimeout(r, 1000)); // Give time for capture
+        return { step: stepIdx, action: step.action, outcome: 'pass', duration: Date.now() - startMs };
+      }
+
+      default:
+        return { step: stepIdx, action: step.action, outcome: 'skip', duration: 0, detail: `unknown action: ${step.action}` };
+    }
+  }
+
+  /** Run a full scenario from start to finish */
+  async function runScenario(scenario: Scenario): Promise<void> {
+    console.log(`\x1b[46m\x1b[30m ▶ SCENARIO START: ${scenario.name} (${scenario.steps.length} steps) \x1b[0m`);
+    const stateHistory: Array<{ time: number; state: string }> = [];
+    let lastSeenState = '';
+
+    scenarioStatus = {
+      running: true,
+      stepIndex: 0,
+      totalSteps: scenario.steps.length,
+      scenarioName: scenario.name,
+      currentAction: 'initializing',
+      outcome: null,
+      stepResults: [],
+      startTime: Date.now(),
+      error: null,
+    };
+
+    // Track state changes during scenario
+    const stateTracker = setInterval(() => {
+      const currentState = latestTestState?.stateName || 'UNKNOWN';
+      if (currentState !== lastSeenState) {
+        stateHistory.push({ time: Date.now(), state: currentState });
+        lastSeenState = currentState;
+      }
+    }, 250);
+
+    // Heartbeat monitor: detect hard crashes (no state update for 8s)
+    let lastUpdateMs = Date.now();
+    const heartbeatChecker = setInterval(() => {
+      const gameLastUpdate = latestTestState?.lastUpdateMs ?? 0;
+      if (gameLastUpdate > lastUpdateMs) {
+        lastUpdateMs = gameLastUpdate;
+      }
+    }, 1000);
+
+    try {
+      // Execute each step
+      for (let i = 0; i < scenario.steps.length; i++) {
+        const step = scenario.steps[i];
+        scenarioStatus.stepIndex = i;
+        scenarioStatus.currentAction = step.action;
+
+        console.log(`\x1b[36m  [step ${i}/${scenario.steps.length - 1}] ${step.action}${step.state ? ` → ${step.state}` : ''}${step.y != null ? ` y=${step.y}` : ''}${step.duration ? ` ${step.duration}ms` : ''}\x1b[0m`);
+
+        const result = await executeStep(step, i);
+        scenarioStatus.stepResults.push(result);
+
+        if (result.outcome === 'fail') {
+          console.log(`\x1b[31m  ✗ Step ${i} FAILED: ${result.detail}\x1b[0m`);
+          // Check for hard crash
+          const timeSinceUpdate = Date.now() - lastUpdateMs;
+          const isCrash = timeSinceUpdate > 8000;
+
+          scenarioStatus.outcome = isCrash ? 'crash' : 'fail';
+          scenarioStatus.error = result.detail || null;
+
+          const runResult: RunResult = {
+            runId: latestTestState?.runId || `unknown-${Date.now()}`,
+            scenario: scenario.name,
+            startTime: scenarioStatus.startTime,
+            endTime: Date.now(),
+            outcome: isCrash ? 'crash' : 'fail',
+            crashSignature: isCrash ? generateCrashSignature() : null,
+            stateHistory,
+            errorHistory: latestTestState?.errorHistory || [],
+            stepResults: scenarioStatus.stepResults,
+          };
+          runHistory.push(runResult);
+          if (runHistory.length > MAX_RUN_HISTORY) runHistory.shift();
+
+          console.log(`\x1b[41m\x1b[37m ■ SCENARIO ${isCrash ? 'CRASH' : 'FAIL'}: ${scenario.name} at step ${i} (${result.action}) \x1b[0m`);
+          break;
+        }
+
+        console.log(`\x1b[32m  ✓ Step ${i} OK (${result.duration}ms)${result.detail ? ` — ${result.detail}` : ''}\x1b[0m`);
+      }
+
+      // All steps passed
+      if (!scenarioStatus.outcome) {
+        scenarioStatus.outcome = 'pass';
+        const runResult: RunResult = {
+          runId: latestTestState?.runId || `unknown-${Date.now()}`,
+          scenario: scenario.name,
+          startTime: scenarioStatus.startTime,
+          endTime: Date.now(),
+          outcome: 'pass',
+          crashSignature: null,
+          stateHistory,
+          errorHistory: latestTestState?.errorHistory || [],
+          stepResults: scenarioStatus.stepResults,
+        };
+        runHistory.push(runResult);
+        if (runHistory.length > MAX_RUN_HISTORY) runHistory.shift();
+        console.log(`\x1b[42m\x1b[30m ■ SCENARIO PASS: ${scenario.name} (${Date.now() - scenarioStatus.startTime}ms) \x1b[0m`);
+      }
+    } catch (err: any) {
+      scenarioStatus.outcome = 'crash';
+      scenarioStatus.error = err.message || String(err);
+      console.log(`\x1b[41m\x1b[37m ■ SCENARIO ERROR: ${scenario.name} — ${err.message} \x1b[0m`);
+    } finally {
+      clearInterval(stateTracker);
+      clearInterval(heartbeatChecker);
+      scenarioStatus.running = false;
+      activeScenario = null;
+    }
+  }
+
   function readBody(req: IncomingMessage): Promise<string> {
     return new Promise((resolve) => {
       let body = '';
@@ -369,6 +740,35 @@ function telemetryPlugin(): Plugin {
           });
         }
 
+        // ─── Scenario Runner Endpoints ──────────────────────────
+        // POST /test-scenario — start a scenario
+        // GET  /test-scenario/status — check progress
+        // GET  /test-runs — view run history
+        if (req.url === '/test-scenario' && req.method === 'POST') {
+          readBody(req).then((raw) => {
+            try {
+              const scenario: Scenario = JSON.parse(raw);
+              if (!scenario.name || !scenario.steps?.length) {
+                return json(res, { ok: false, error: 'scenario must have name and steps[]' });
+              }
+              if (scenarioStatus.running) {
+                return json(res, { ok: false, error: 'scenario already running', current: scenarioStatus.scenarioName });
+              }
+              activeScenario = scenario;
+              // Fire and forget — runs async in background
+              runScenario(scenario);
+              json(res, { ok: true, name: scenario.name, steps: scenario.steps.length });
+            } catch { json(res, { ok: false, error: 'invalid json' }); }
+          });
+          return;
+        }
+        if (req.url === '/test-scenario/status' && req.method === 'GET') {
+          return json(res, scenarioStatus);
+        }
+        if (req.url === '/test-runs' && req.method === 'GET') {
+          return json(res, runHistory);
+        }
+
         // ─── Screenshot Storage ─────────────────────────────────
         // Game POSTs canvas screenshot → server stores for runner to GET.
         if (req.url === '/test-screenshot' && req.method === 'POST') {
@@ -394,14 +794,21 @@ function telemetryPlugin(): Plugin {
 export default defineConfig({
   base: '/',
   plugins: [telemetryPlugin()],
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          phaser: ['phaser']
-        }
-      }
+  resolve: {
+    alias: {
+      // Phaser is loaded via CDN <script> tag in index.html.
+      // This alias redirects all `import Phaser from 'phaser'` to a shim
+      // that re-exports window.Phaser. Avoids Vite pre-bundling crash on iOS Safari.
+      'phaser': path.resolve(__dirname, 'src/phaserShim.ts'),
     }
+  },
+  optimizeDeps: {
+    exclude: ['phaser'], // Don't pre-bundle Phaser — it's loaded via CDN
+  },
+  build: {
+    // No external/globals needed — the resolve.alias above redirects 'phaser'
+    // imports to phaserShim.ts, which re-exports window.Phaser (loaded via CDN).
+    // Rollup follows the alias and inlines the tiny shim code.
   },
   server: {
     host: '0.0.0.0',

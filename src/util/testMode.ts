@@ -276,7 +276,10 @@ export function initTestMode(): void {
   // ── Serial polling loop (seq/ack) ─────────────────────────
   // Self-scheduling: only one fetch in flight at a time.
   // Sends {state, ackSeq} → receives {commands: [{seq, cmd}, ...]}
+  // IMPORTANT: Delay start until BootScene has finished loading assets
+  // to avoid competing for iOS Safari's limited HTTP connection pool.
   let ackSeq = 0;
+  let pollStarted = false;
 
   async function pollLoop() {
     const t = (window as any).__dpMotoTest;
@@ -316,11 +319,24 @@ export function initTestMode(): void {
     }
     setTimeout(pollLoop, 500);
   }
-  setTimeout(pollLoop, 500);
+
+  // Delay polling until game has produced at least 1 frame (BootScene done)
+  // This avoids fetch() competing with Phaser's asset loader on iOS Safari.
+  function waitForBoot() {
+    if (state.frameCount > 0 && !pollStarted) {
+      pollStarted = true;
+      console.log('[test-mode] Boot complete — starting poll loop');
+      setTimeout(pollLoop, 500);
+    } else {
+      setTimeout(waitForBoot, 1000);
+    }
+  }
+  setTimeout(waitForBoot, 2000);
 
   // ── Self-recovery watchdog ────────────────────────────────
   // If frameCount stalls for STALL_SOFT_MS → push return-title command.
   // If still stalled after STALL_HARD_MS → location.reload().
+  // Delayed until boot complete to avoid interfering during asset loading.
   const STALL_SOFT_MS = 10_000;
   const STALL_HARD_MS = 15_000;
   let watchdogLastFrame = 0;

@@ -23,7 +23,7 @@ import { ShieldSystem } from '../systems/ShieldSystem';
 import { TimeDilationSystem } from '../systems/TimeDilationSystem';
 import { PerfSystem } from '../systems/PerfSystem';
 import { OrientationOverlay } from '../systems/OrientationOverlay';
-import { GAME_MODE } from '../config/gameMode';
+import { GAME_MODE, DEVICE_PROFILE } from '../config/gameMode';
 import { submitScore, fetchGlobalTop10, GlobalLeaderboardEntry } from '../systems/LeaderboardService';
 import { submitRhythmScore, fetchRhythmTop10 } from '../systems/RhythmLeaderboardService';
 import { ReflectionSystem } from '../systems/ReflectionSystem';
@@ -114,7 +114,7 @@ export class GameScene extends Phaser.Scene {
   private parallaxSystem!: ParallaxSystem;
   private roadSystem!: RoadSystem;
   private obstacleSystem!: ObstacleSystem;
-  private reflectionSystem!: ReflectionSystem;
+  private reflectionSystem!: ReflectionSystem | null;
   private skyGlowSystem!: SkyGlowSystem;
   private lastBeatTrackId: string | null = null;
   private rhythmMode = false;
@@ -262,6 +262,9 @@ export class GameScene extends Phaser.Scene {
   private debugRepeatTimers: Record<string, number> = {};
   private collisionDebug: boolean = false;
   private collisionGfx!: Phaser.GameObjects.Graphics;
+
+  // Vision debug HUD (?hud=1)
+  private debugHudSystem: import('../systems/DebugHudSystem').DebugHudSystem | null = null;
 
   // Text inspector debug (N — cycle all texts)
   private _tiActive = false;
@@ -432,15 +435,20 @@ export class GameScene extends Phaser.Scene {
     this.roadSystem = new RoadSystem(this);
     this.skyGlowSystem.setRoadTile(this.roadSystem.getRoadTile());
     this.obstacleSystem = new ObstacleSystem(this, this.weekSeed);
-    this.reflectionSystem = new ReflectionSystem(this, this.parallaxSystem, this.obstacleSystem.getPool(), this.roadSystem.getRoadTile());
-    this.reflectionSystem.setLinesTile(this.roadSystem.getLinesTile());
+    // Reflections gated by device profile — render textures cost ~16MB VRAM
+    if (DEVICE_PROFILE.reflections) {
+      this.reflectionSystem = new ReflectionSystem(this, this.parallaxSystem, this.obstacleSystem.getPool(), this.roadSystem.getRoadTile());
+      this.reflectionSystem?.setLinesTile(this.roadSystem.getLinesTile());
+    } else {
+      this.reflectionSystem = null;
+    }
     this.pickupSystem = new PickupSystem(this);
     this.rocketSystem = new RocketSystem(this, this.obstacleSystem);
 
     this.shieldSystem = new ShieldSystem(this);
-    this.reflectionSystem.setPickupPool(this.pickupSystem.getPool());
-    this.reflectionSystem.setShieldPool(this.shieldSystem.getPool());
-    this.reflectionSystem.setRocketPool(this.rocketSystem.getPool());
+    this.reflectionSystem?.setPickupPool(this.pickupSystem.getPool());
+    this.reflectionSystem?.setShieldPool(this.shieldSystem.getPool());
+    this.reflectionSystem?.setRocketPool(this.rocketSystem.getPool());
 
     // Wire obstacle system to spawn pickups behind CRASH obstacles
     this.obstacleSystem.onPickupSpawn = (x: number, y: number) => {
@@ -479,7 +487,7 @@ export class GameScene extends Phaser.Scene {
     this.difficultySystem = new DifficultySystem();
     this.inputSystem = new InputSystem(this);
     this.playerSystem = new PlayerSystem(this, this.inputSystem);
-    this.reflectionSystem.setPlayerSprite(this.playerSystem.getSprite());
+    this.reflectionSystem?.setPlayerSprite(this.playerSystem.getSprite());
     this.scoreSystem = new ScoreSystem();
     this.fxSystem = new FXSystem(this);
     this.audioSystem = new AudioSystem(this);
@@ -537,6 +545,13 @@ export class GameScene extends Phaser.Scene {
     this.perfSystem = new PerfSystem();
     if (GAME_MODE.mobileMode) {
       this.orientationOverlay = new OrientationOverlay(this);
+    }
+
+    // --- Vision debug HUD (?hud=1) ---
+    if ((window as any).__dpMotoHud) {
+      import('../systems/DebugHudSystem').then(({ DebugHudSystem }) => {
+        this.debugHudSystem = new DebugHudSystem(this);
+      });
     }
 
     // --- Profile HUD (Phaser-based, upper-left, affected by shaders) ---
@@ -756,7 +771,7 @@ export class GameScene extends Phaser.Scene {
     this.deathLbEntriesContainer = this.add.container(0, 0);
     this.deathRestartText = this.add.text(
       TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 450,
-      'Press SPACEBAR to try again', {
+      GAME_MODE.mobileMode ? 'Tap to try again' : 'Press SPACEBAR to try again', {
         fontSize: '28px',
         color: '#ffffff',
         fontFamily: 'Early GameBoy',
@@ -1018,7 +1033,7 @@ export class GameScene extends Phaser.Scene {
     // Katana slash VFX sprite (hidden until activated)
     this.slashSprite = this.add.sprite(0, 0, 'slash-vfx');
     this.slashSprite.setVisible(false).setDepth(4);
-    this.reflectionSystem.setSlashSprite(this.slashSprite);
+    this.reflectionSystem?.setSlashSprite(this.slashSprite);
     this.slashActiveTimer = 0;
     this.slashCooldownTimer = 0;
 
@@ -1026,14 +1041,17 @@ export class GameScene extends Phaser.Scene {
     this.playerSystem.setVisible(false);
 
     // Start hold text — shown during hold phase, hidden when ramp begins
-    this.startHoldText = this.add.text(TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'HOLD SPACEBAR TO GO', {
+    this.startHoldText = this.add.text(TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
+      GAME_MODE.mobileMode ? 'TAP AND HOLD TO GO' : 'HOLD SPACEBAR TO GO', {
       fontFamily: 'Early GameBoy',
       fontSize: '36px',
       color: '#ffffff',
     }).setOrigin(0.5).setDepth(1000).setScrollFactor(0).setVisible(false);
 
-    // --- CRT post-processing ---
-    this.cameras.main.setPostPipeline(CRTPipeline);
+    // --- CRT post-processing (gated by device profile) ---
+    if (DEVICE_PROFILE.crt) {
+      this.cameras.main.setPostPipeline(CRTPipeline);
+    }
     this.cameras.main.setPostPipeline(DamageFlashPipeline);
 
     // --- Custom cursor (under CRT shader) ---
@@ -1202,19 +1220,19 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard?.addKey(hotkey.key).on('down', () => {
         if (!this.debugMasterEnabled || !hotkey.active || this.debugPanelOpen) return;
         this.parallaxSystem.toggleLayer(layerIdx);
-        this.reflectionSystem.toggleLayer(layerIdx);
+        this.reflectionSystem?.toggleLayer(layerIdx);
       });
     }
     // Sky toggle (key 8)
     this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleSky.key).on('down', () => {
       if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.toggleSky.active || this.debugPanelOpen) return;
       this.parallaxSystem.toggleSky();
-      this.reflectionSystem.toggleSky();
+      this.reflectionSystem?.toggleSky();
     });
     // Reflection mask toggle (M)
     this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleRefMask.key).on('down', () => {
       if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.toggleRefMask.active || this.debugPanelOpen) return;
-      this.reflectionSystem.toggleMask();
+      this.reflectionSystem?.toggleMask();
     });
     // Freeze frame toggle (T)
     this.input.keyboard?.addKey(DEBUG_HOTKEYS.freezeFrame.key).on('down', () => {
@@ -1245,7 +1263,7 @@ export class GameScene extends Phaser.Scene {
       this.obstacleSystem.setVisible(v);
       this.pickupSystem.setVisible(v);
       this.shieldSystem.setVisible(v);
-      this.reflectionSystem.setVisible(v);
+      this.reflectionSystem?.setVisible(v);
       for (let i = 0; i < this.warningPool.length; i++) {
         this.warningPool[i].circle.setVisible(v);
         this.warningPool[i].preview.setVisible(v);
@@ -2020,6 +2038,27 @@ export class GameScene extends Phaser.Scene {
 
     // Test mode: sync state to window.__dpMotoTest for XCUITest polling
     this.syncTestState();
+
+    // Vision system: lightweight state for WebDriver reads (separate from ?test=1)
+    if ((window as any).__dpMotoHud) {
+      const STATE_NAMES_V = ['TITLE','SONG_SELECT','TUTORIAL','STARTING','PLAYING','DYING','NAME_ENTRY','DEAD'];
+      const visionData = {
+        fps: Math.round(this.game.loop.actualFps),
+        stateName: STATE_NAMES_V[this.state] || 'UNKNOWN',
+        state: this.state,
+        playerX: this.playerSystem?.getX() ?? 0,
+        playerY: this.playerSystem?.getY() ?? 0,
+        speed: this.playerSystem?.getPlayerSpeed() ?? 0,
+        score: this.scoreSystem?.getScore() ?? 0,
+        elapsed: this.elapsed,
+        difficulty: this.difficultySystem?.getFactor() ?? 0,
+        obstacleCount: this.obstacleSystem?.getActiveCount() ?? 0,
+        alive: this.playerSystem?.isAlive() ?? false,
+        frameCount: this.game.loop.frame,
+      };
+      (window as any).__dpMotoVision = visionData;
+      this.debugHudSystem?.update(dt, visionData);
+    }
   }
 
   // ─── Robot Pilot: Command Processing ──────────────────────
@@ -2051,7 +2090,18 @@ export class GameScene extends Phaser.Scene {
 
     switch (cmd.type) {
       case 'tap':
-        this.anyInputPressed = true;
+        // State-aware tap: bypass pointer-position dependencies
+        if (this.state === GameState.TITLE) {
+          this.audioSystem.start();
+          this.rhythmMode = false;
+          this.courseRunner = null;
+          this.enterTutorial();
+        } else if (this.state === GameState.DEAD) {
+          // DEAD screen listens for speedTap, not anyInput
+          this.inputSystem.injectSpeedTap();
+        } else {
+          this.anyInputPressed = true;
+        }
         break;
       case 'speed-tap':
         this.inputSystem.injectSpeedTap();
@@ -2098,6 +2148,17 @@ export class GameScene extends Phaser.Scene {
           if (wmp?.toggle) wmp.toggle();
         }
         break;
+      case 'submit-name':
+        if (this.state === GameState.NAME_ENTRY) {
+          this.enteredName = cmd.name || 'ROBOT';
+          this.nameConfirmed = true;
+        }
+        break;
+      case 'screenshot': {
+        const t2 = (window as any).__dpMotoTest;
+        if (t2?.captureScreenshot) t2.captureScreenshot();
+        break;
+      }
       default:
         console.warn(`[test] Unknown command: ${cmd.type}`);
     }
@@ -2568,7 +2629,7 @@ export class GameScene extends Phaser.Scene {
     this.setCrosshairMode(false);
     this.elapsed = 0;
     this.debugPreStartOverlay.setVisible(false);
-    this.reflectionSystem.setVisible(false);
+    this.reflectionSystem?.setVisible(false);
 
     // Clean up tutorial
     this.tutorialPhase = 'done';
@@ -2699,6 +2760,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   private enterTutorial(): void {
+    // Test mode: skip tutorial entirely (TITLE → STARTING)
+    if (TEST_MODE.active && TEST_MODE.skipTutorial) {
+      this.titleContainer.setVisible(false);
+      if (!GAME_MODE.mobileMode) {
+        this.titleLoopSprite.stop();
+        this.titleLoopSprite.setVisible(false);
+      } else {
+        this.titleLoopSprite.setVisible(false);
+      }
+      this.enterStarting();
+      return;
+    }
     this.state = GameState.TUTORIAL;
     this.titleContainer.setVisible(false);
 
@@ -2932,6 +3005,13 @@ export class GameScene extends Phaser.Scene {
     this.countdownPhaseTimer = 0;
     this.countdownPhase = 'delay';
     this.countdownSprite.setVisible(false);
+
+    // Test mode: fast countdown — inject tap on next frame to skip
+    if (TEST_MODE.active && TEST_MODE.fastCountdown) {
+      this.time.delayedCall(100, () => {
+        this.anyInputPressed = true;
+      });
+    }
   }
 
   private setCrosshairMode(enabled: boolean): void {
@@ -3218,7 +3298,7 @@ export class GameScene extends Phaser.Scene {
       TUNING.SPRITE_OFFSET_PARALLAX_7,
     ]);
     this.parallaxSystem.setSkyOffsetX(TUNING.SPRITE_OFFSET_SKY);
-    this.reflectionSystem.setVisible(true);
+    this.reflectionSystem?.setVisible(true);
     this.playerSystem.reset();
     if (this.spectatorMode) this.playerSystem.setSpectator(true);
     this.playerSystem.setVisible(true);
@@ -3474,7 +3554,7 @@ export class GameScene extends Phaser.Scene {
       this.roadSystem.update(0, dt);
       this.parallaxSystem.update(0, dt);
       this.skyGlowSystem.update(dt, this.musicPlayer.getPlaybackPosition().current);
-      this.reflectionSystem.update(0, dt);
+      this.reflectionSystem?.update(0, dt);
       return;
     }
     // Ramp from 0 to base speed over START_HOLD_RAMP seconds after hold release
@@ -3847,7 +3927,7 @@ export class GameScene extends Phaser.Scene {
     this.skyGlowSystem.update(hDt, this.musicPlayer.getPlaybackPosition().current);
     this.skyGlowSystem.setRage(this.rageTimer > 0);
     this.roadSystem.update(roadSpeed, hDt);
-    this.reflectionSystem.update(roadSpeed, hDt);
+    this.reflectionSystem?.update(roadSpeed, hDt);
 
     // Lane collision highlights
     const collY = this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y;
@@ -3906,7 +3986,7 @@ export class GameScene extends Phaser.Scene {
       for (let i = 0; i < this.laneHighlights.length; i++) {
         this.laneHighlights[i].setVisible(false);
       }
-      this.reflectionSystem.setVisible(false);
+      this.reflectionSystem?.setVisible(false);
     }
 
     // CRT debug overlay
@@ -4580,7 +4660,7 @@ export class GameScene extends Phaser.Scene {
     this.state = GameState.DYING;
     this.autoSubmitted = false;
     this.debugPreStartOverlay.setVisible(false);
-    this.reflectionSystem.setVisible(false);
+    this.reflectionSystem?.setVisible(false);
 
     // Mobile: hide all cursors on death/high score screen
     if (GAME_MODE.mobileMode) {
@@ -4919,12 +4999,20 @@ export class GameScene extends Phaser.Scene {
 
     this.highlightRank = highlightIdx >= 0 ? rank : 0;
 
-    // Update restart prompt for rhythm vs normal mode
-    this.deathRestartText.setText(
-      this.rhythmMode
-        ? 'SPACE = Play Again  |  ESC = Song Select'
-        : 'Press SPACEBAR to try again'
-    );
+    // Update restart prompt for rhythm vs normal mode + mobile
+    if (GAME_MODE.mobileMode) {
+      this.deathRestartText.setText(
+        this.rhythmMode
+          ? 'Tap = Play Again  |  Back = Song Select'
+          : 'Tap to try again'
+      );
+    } else {
+      this.deathRestartText.setText(
+        this.rhythmMode
+          ? 'SPACE = Play Again  |  ESC = Song Select'
+          : 'Press SPACEBAR to try again'
+      );
+    }
 
     this.deathContainer.setVisible(true);
     this.deathRestartText.setVisible(true);

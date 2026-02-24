@@ -1,18 +1,25 @@
 import Phaser from 'phaser';
 import { TUNING } from './config/tuning';
 import { BootScene } from './scenes/BootScene';
-import { GameScene } from './scenes/GameScene';
-import { CRTPipeline } from './fx/CRTPipeline';
-import { WaterDistortionPipeline } from './fx/WaterDistortionPipeline';
-import { DamageFlashPipeline } from './fx/DamageFlashPipeline';
 import { handleCallback } from './systems/SpotifyAuthSystem';
-import { GAME_MODE } from './config/gameMode';
+import { GAME_MODE, DEVICE_PROFILE } from './config/gameMode';
 import { initTelemetry } from './util/telemetry';
 import { initTestMode, TEST_MODE } from './util/testMode';
 import { isiOS } from './util/device';
 
+// Expose device profile globally for debugging + WebDriver inspection
+(window as any).__deviceProfile = DEVICE_PROFILE;
+
 // Automation: activate test mode when ?test=1 is in URL
+// Poll loop is delayed until frameCount > 0 (BootScene complete), so it won't
+// compete with iOS Safari's limited HTTP connection pool during asset loading.
 initTestMode();
+
+// Vision system: activate debug HUD overlay when ?hud=1 is in URL
+// Separate from ?test=1 — safe on iOS Safari (no polling, no command queue)
+if (new URLSearchParams(location.search).has('hud')) {
+  (window as any).__dpMotoHud = true;
+}
 
 // Dev-only: activate Safari telemetry when ?debug=1 is in URL
 initTelemetry();
@@ -50,7 +57,7 @@ handleCallback().then((wasCallback) => {
     maxParallel = ios ? 8 : 32;
     loaderSource = ios ? 'url:low=0 (iOS capped 8)' : 'url:low=0 (forced off)';
   } else if (lowParam === '1' || ios) {
-    maxParallel = 4;
+    maxParallel = 2;
     loaderSource = lowParam === '1' ? 'url:low=1' : 'auto:iOS';
   } else {
     maxParallel = 32;
@@ -66,7 +73,7 @@ handleCallback().then((wasCallback) => {
     height: TUNING.GAME_HEIGHT,
     parent: 'game-container',
     backgroundColor: '#000000',
-    scene: [BootScene, GameScene],
+    scene: [BootScene],
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH
@@ -85,11 +92,28 @@ handleCallback().then((wasCallback) => {
   // Expose game instance so BIOS overlay can unlock Phaser's audio context
   (window as any).__phaserGame = game;
 
-  // Register CRT as a post-processing pipeline
-  const renderer = game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
-  renderer.pipelines.addPostPipeline('CRTPipeline', CRTPipeline);
-  renderer.pipelines.addPostPipeline('WaterDistortionPipeline', WaterDistortionPipeline);
-  renderer.pipelines.addPostPipeline('DamageFlashPipeline', DamageFlashPipeline);
+  // Dynamic imports: GameScene + pipelines loaded in parallel with BootScene assets.
+  // This defers ~400KB of JS evaluation that would otherwise crash iOS Safari.
+  Promise.all([
+    import('./scenes/GameScene'),
+    import('./fx/CRTPipeline'),
+    import('./fx/WaterDistortionPipeline'),
+    import('./fx/DamageFlashPipeline'),
+  ]).then(([gsModule, crtModule, waterModule, dmgModule]) => {
+    game.scene.add('GameScene', gsModule.GameScene, false);
+
+    const renderer = game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
+    renderer.pipelines.addPostPipeline('CRTPipeline', crtModule.CRTPipeline);
+    renderer.pipelines.addPostPipeline('WaterDistortionPipeline', waterModule.WaterDistortionPipeline);
+    renderer.pipelines.addPostPipeline('DamageFlashPipeline', dmgModule.DamageFlashPipeline);
+
+    (window as any).__gameSceneReady = true;
+    console.log('[main] GameScene + pipelines loaded and registered');
+  }).catch((err) => {
+    console.error('[main] Failed to load GameScene:', err);
+    (window as any).__gameSceneError = String(err);
+    (window as any).__gameSceneReady = true;
+  });
 
   // Handle WebGL context loss gracefully (common on iOS Safari)
   game.canvas.addEventListener('webglcontextlost', (e) => {
