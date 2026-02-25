@@ -361,7 +361,7 @@ export const TUNING = {
   MUSIC_VOL_SPOTIFY: 0.1,           // Spotify playback volume multiplier
   MUSIC_VOL_YOUTUBE: 1.0,           // YouTube playback volume multiplier
   MUSIC_VOL_HUME: 1.0,               // hume (self-hosted) playback volume multiplier
-  MUSIC_VOL_COUNTDOWN: 0.69,         // countdown music volume before Spotify
+  MUSIC_VOL_COUNTDOWN: 1.0,          // countdown music volume before Spotify (was 0.69, capped at 1.0)
   SFX_BIOS_MASTER: 1,             // master multiplier for BIOS intro + end beep (scales both together)
   SFX_BIOS_BOOTUP_VOLUME: .2,      // BIOS boot-up sound volume
   SFX_BIOS_BEEP_VOLUME: 0.2,        // BIOS complete chime volume
@@ -572,13 +572,6 @@ export const TUNING = {
   SKY_HUE_SAMPLE_SIZE: 32,            // thumbnail downsample size for k-means color extraction
   SKY_HUE_KMEANS_ITERS: 10,           // k-means clustering iterations
 
-  // ── Rhythm mode ──
-  RHYTHM_MODE_LABEL_X: -20,           // offset from right edge (negative = inward)
-  RHYTHM_MODE_LABEL_Y: 20,            // offset from top
-  RHYTHM_MODE_LABEL_SIZE: 28,         // font size
-  RHYTHM_MODE_LABEL_COLOR: '#ff00ff', // magenta
-  // RHYTHM_SPAWN_LEAD_TIME removed — now computed per-type in CourseRunner
-
   // ── Rhythm mode zones ──
   RHYTHM_KILL_ZONE_X: 200,              // right edge of kill zone (px from left)
   RHYTHM_KILL_ZONE_COLOR: 0xff0000,     // kill zone glow color
@@ -623,18 +616,4 @@ export const TUNING = {
   RHYTHM_ENEMY_CAR_MAX_SCORE: 1000,        // max score at dead center
   RHYTHM_ENEMY_CAR_ZONE_HALF: 150,         // half-width of proximity scoring zone (px from center)
 
-  // ── Game Mode Popup (Win95) ──
-  GAME_MODE_POPUP_W: 420,                   // popup width
-  GAME_MODE_POPUP_H: 260,                   // popup height
-  GAME_MODE_POPUP_DEPTH: 300,               // above title container (201)
-  GAME_MODE_TITLEBAR_H: 36,                 // purple title bar height
-  GAME_MODE_TITLEBAR_COLOR: 0x800080,       // Win95 purple
-  GAME_MODE_FACE_COLOR: 0xc0c0c0,          // Win95 gray
-  GAME_MODE_HIGHLIGHT_COLOR: 0xffffff,     // Win95 highlight (white)
-  GAME_MODE_SHADOW_COLOR: 0x808080,        // Win95 shadow (gray)
-  GAME_MODE_BTN_W: 160,                     // Normal/Rhythm button width
-  GAME_MODE_BTN_H: 50,                      // Normal/Rhythm button height
-  GAME_MODE_BTN_GAP: 30,                    // gap between buttons
-  GAME_MODE_CLOSE_SIZE: 24,                 // close button square size
-  GAME_MODE_BORDER_W: 2,                    // Win95 border width
 } as const;

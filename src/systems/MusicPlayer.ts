@@ -163,6 +163,12 @@ export class MusicPlayer {
     this.playlistStarted = false;
     this.titleTrackPlaying = false;
     this.titlePlaylistLoaded = false;
+    // Clean up any lingering countdown audio from previous run
+    if (this.countdownMusic) {
+      this.countdownMusic.stop();
+      this.countdownMusic.destroy();
+      this.countdownMusic = null;
+    }
   }
 
   /** Start the in-game title music. Call from a user gesture handler. */
@@ -893,11 +899,15 @@ export class MusicPlayer {
   /** Stop title music and start playlist. Call from a user gesture handler. */
   switchToPlaylist(): void {
     if (TEST_MODE.active && TEST_MODE.skipMusic) return;
-    if (this.playlistStarted) return;
+    if (this.playlistStarted) {
+      console.warn('[MusicPlayer] switchToPlaylist() skipped — already started');
+      return;
+    }
     this.playlistStarted = true;
 
     // Already browsing playlist from title screen — just continue playing
     if (this.titlePlaylistLoaded) {
+      console.log('[MusicPlayer] switchToPlaylist() — titlePlaylistLoaded, continuing');
       this.titlePlaylistLoaded = false;
       return;
     }
@@ -918,12 +928,29 @@ export class MusicPlayer {
 
     // If Spotify player is ready, use it
     if (this.spotifyPlayer?.isReady()) {
+      console.log('[MusicPlayer] switchToPlaylist() → Spotify path');
+      if (GAME_MODE.isPhoneMode) {
+        // Mobile: skip Phaser countdown audio — GameScene plays it via HTML5 Audio.
+        // Just set source and mute YouTube. GameScene will call startPlaylistNow() when countdown ends.
+        this.source = 'spotify';
+        if (this.ytPlayer) {
+          try { this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+        }
+        return;
+      }
       this.switchSourceToSpotify();
       return;
     }
 
     // Otherwise use YouTube: play countdown audio, then start playlist
     this.source = 'youtube';
+    if (GAME_MODE.isPhoneMode) {
+      // Mobile: skip Phaser countdown audio — GameScene plays it via HTML5 Audio.
+      // GameScene will call startPlaylistNow() when countdown ends.
+      console.log('[MusicPlayer] switchToPlaylist() → YouTube path (mobile, no Phaser countdown)');
+      return;
+    }
+    console.log('[MusicPlayer] switchToPlaylist() → YouTube path');
     this.startYTWithCountdown();
   }
 
@@ -936,35 +963,41 @@ export class MusicPlayer {
       try { this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
     }
 
-    // Play countdown audio first, crossfade Spotify in before it ends
-    // Resume iOS audio context (may be suspended if play() called outside gesture handler)
-    const ctx1 = (this.scene.sound as any).context as AudioContext | undefined;
-    if (ctx1?.state === 'suspended') ctx1.resume();
-    if (this.scene.cache.audio.exists('countdown-music')) {
-      this.countdownMusic = this.scene.sound.add('countdown-music', { loop: false, volume: TUNING.MUSIC_VOL_COUNTDOWN });
-      this.countdownMusic.play();
+    // iOS Safari suspends AudioContext when no WebAudio sources are active.
+    // Await resume before playing countdown audio (same pattern as startYTWithCountdown).
+    const ctx = (this.scene.sound as any).context as AudioContext | undefined;
+    console.log('[MusicPlayer] Spotify path — audioCtx state:', ctx?.state);
+    const resumeP = (ctx?.state === 'suspended') ? ctx.resume() : Promise.resolve();
+    resumeP.then(() => {
+      console.log('[MusicPlayer] Spotify path — audioCtx after resume:', ctx?.state);
+      if (this.scene.cache.audio.exists('countdown-music')) {
+        this.countdownMusic = this.scene.sound.add('countdown-music', { loop: false, volume: TUNING.MUSIC_VOL_COUNTDOWN });
+        this.countdownMusic.play();
+        console.log('[MusicPlayer] countdown-music playing, duration:', (this.countdownMusic as any).duration);
 
-      // Schedule Spotify early enough that startup + fade finishes before countdown ends
-      const duration = (this.countdownMusic as any).duration || 0;
-      const leadMs = Math.max(0, duration - CROSSFADE_LEAD_S - CROSSFADE_STARTUP_S) * 1000;
-      let spotifyStarted = false;
+        // Schedule Spotify early enough that startup + fade finishes before countdown ends
+        const duration = (this.countdownMusic as any).duration || 0;
+        const leadMs = Math.max(0, duration - CROSSFADE_LEAD_S - CROSSFADE_STARTUP_S) * 1000;
+        console.log('[MusicPlayer] Spotify crossfade leadMs:', leadMs);
+        let spotifyStarted = false;
 
-      this.crossfadeTimer = window.setTimeout(() => {
-        spotifyStarted = true;
-        this.startSpotifyWithFade();
-      }, leadMs);
+        this.crossfadeTimer = window.setTimeout(() => {
+          spotifyStarted = true;
+          this.startSpotifyWithFade();
+        }, leadMs);
 
-      this.countdownMusic.once('complete', () => {
-        this.countdownMusic = null;
-        // Fallback: if the timer hasn't fired yet, start normally
-        if (!spotifyStarted) {
-          window.clearTimeout(this.crossfadeTimer);
-          this.startSpotifyPlaylist();
-        }
-      });
-    } else {
-      this.startSpotifyPlaylist();
-    }
+        this.countdownMusic.once('complete', () => {
+          this.countdownMusic = null;
+          // Fallback: if the timer hasn't fired yet, start normally
+          if (!spotifyStarted) {
+            window.clearTimeout(this.crossfadeTimer);
+            this.startSpotifyPlaylist();
+          }
+        });
+      } else {
+        this.startSpotifyPlaylist();
+      }
+    });
   }
 
   /** Start Spotify and fade in from CROSSFADE_START_DB to 0 dB over CROSSFADE_LEAD_S. */
@@ -1022,31 +1055,40 @@ export class MusicPlayer {
 
   /** Play countdown audio, then start YT playlist when both countdown and API are ready. */
   private startYTWithCountdown(): void {
-    // Resume iOS audio context (may be suspended if play() called outside gesture handler)
-    const ctx2 = (this.scene.sound as any).context as AudioContext | undefined;
-    if (ctx2?.state === 'suspended') ctx2.resume();
-    if (this.scene.cache.audio.exists('countdown-music')) {
-      this.countdownMusic = this.scene.sound.add('countdown-music', { loop: false, volume: TUNING.MUSIC_VOL_COUNTDOWN });
-      this.countdownMusic.play();
-      this.countdownMusic.once('complete', () => {
-        this.countdownMusic = null;
+    // iOS Safari suspends AudioContext when no WebAudio sources are active.
+    // Title music on phones uses HTML5 Audio (not WebAudio), so the context
+    // may be suspended even after user gestures. Await resume before playing.
+    const ctx = (this.scene.sound as any).context as AudioContext | undefined;
+    console.log('[MusicPlayer] YT path — audioCtx state:', ctx?.state);
+    const resumeP = (ctx?.state === 'suspended') ? ctx.resume() : Promise.resolve();
+    resumeP.then(() => {
+      console.log('[MusicPlayer] YT path — audioCtx after resume:', ctx?.state);
+      if (this.scene.cache.audio.exists('countdown-music')) {
+        this.countdownMusic = this.scene.sound.add('countdown-music', { loop: false, volume: TUNING.MUSIC_VOL_COUNTDOWN });
+        this.countdownMusic.play();
+        console.log('[MusicPlayer] countdown-music playing, isPlaying:', (this.countdownMusic as any).isPlaying);
+        this.countdownMusic.once('complete', () => {
+          this.countdownMusic = null;
+          if (this.ytReady) {
+            this.startYTPlaylist();
+          } else {
+            this.pendingPlay = true;
+          }
+        });
+      } else {
+        console.warn('[MusicPlayer] countdown-music not in cache — skipping');
         if (this.ytReady) {
           this.startYTPlaylist();
         } else {
           this.pendingPlay = true;
         }
-      });
-    } else {
-      if (this.ytReady) {
-        this.startYTPlaylist();
-      } else {
-        this.pendingPlay = true;
       }
-    }
+    });
   }
 
   /** Stop countdown audio early and immediately start the music source. */
   skipCountdownAudio(): void {
+    console.log('[MusicPlayer] skipCountdownAudio() — countdownMusic:', !!this.countdownMusic);
     if (!this.countdownMusic) return;
     this.countdownMusic.stop();
     this.countdownMusic.destroy();
@@ -1069,6 +1111,18 @@ export class MusicPlayer {
       } else {
         this.pendingPlay = true;
       }
+    }
+  }
+
+  /** Start the playlist music immediately (no countdown audio).
+   *  Called by GameScene on mobile when the HTML5 Audio countdown ends. */
+  startPlaylistNow(): void {
+    if (this.source === 'spotify' && this.spotifyPlayer) {
+      this.startSpotifyPlaylist();
+    } else if (this.ytReady) {
+      this.startYTPlaylist();
+    } else {
+      this.pendingPlay = true;
     }
   }
 

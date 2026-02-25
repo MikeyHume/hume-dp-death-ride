@@ -504,23 +504,11 @@
 <body>
   <!-- DEBUG: visible error overlay for mobile testing -->
   <div id="err-overlay" style="display:none;position:fixed;top:0;left:0;right:0;z-index:999999;background:rgba(255,0,0,0.9);color:#fff;font:12px monospace;padding:8px;max-height:40vh;overflow:auto;word-break:break-all"></div>
-  <!-- FPS counter — neon green, bold, bottom-left, above everything -->
-  <div id="fps-counter" style="position:fixed;bottom:8px;left:8px;z-index:999999;font:bold 18px monospace;color:#39ff14;text-shadow:0 0 6px #39ff14,0 0 2px #000;pointer-events:none"></div>
+  <!-- Version label — neon green, bold, bottom-left, above everything -->
+  <div id="version-label" style="position:fixed;bottom:8px;left:8px;z-index:999999;font:bold 18px monospace;color:#39ff14;text-shadow:0 0 6px #39ff14,0 0 2px #000;pointer-events:none"></div>
   <script>
     (function() {
-      var fpsEl = document.getElementById('fps-counter');
-      var frames = 0, lastTime = performance.now();
-      function fpsLoop() {
-        frames++;
-        var now = performance.now();
-        if (now - lastTime >= 500) {
-          fpsEl.textContent = Math.round(frames * 1000 / (now - lastTime)) + ' FPS';
-          frames = 0;
-          lastTime = now;
-        }
-        requestAnimationFrame(fpsLoop);
-      }
-      requestAnimationFrame(fpsLoop);
+      // Version label is set later by the BIOS script (after verNum is defined)
     })();
 
     window.__errLog = [];
@@ -630,7 +618,10 @@
       var hh = String(now.getHours()).padStart(2, '0');
       var mi = String(now.getMinutes()).padStart(2, '0');
       var ss = String(now.getSeconds()).padStart(2, '0');
-      var verNum = '0.00.99';
+      var verNum = '0.01.07';
+      window.__dpMotoVersion = verNum;
+      var vLabel = document.getElementById('version-label');
+      if (vLabel) vLabel.textContent = 'v' + verNum;
       var versionText = 'last saved [ ' + dd + ' : ' + monthName + ' : ' + yyyy + ' ]  [ ' + hh + ' : ' + mi + ' : ' + ss + ' ]';
       // Set title line version dynamically
       var titleLine = document.getElementById('bios-title-line');

@@ -1,0 +1,41 @@
+# Dev-only animation frame folders (raw source — spritesheets are the compiled versions)
+public/assets/start/start_loop_L*/
+public/assets/start/start_play_L*/
+public/assets/cars/frames/
+public/assets/cars/tiny/
+
+# Full-res spritesheet source files (s50 variants are used by the game)
+public/assets/start/start_loop_sheet.jpg
+public/assets/start/start_loop_sheet.json
+public/assets/start/start_loop_sheet_info.json
+public/assets/start/start_play_sheet.jpg
+public/assets/start/start_play_sheet.json
+public/assets/start/start_play_sheet_info.json
+public/assets/start/start_loop_sheet_s25.jpg
+public/assets/start/start_loop_sheet_s25.json
+public/assets/start/start_loop_sheet_s25_info.json
+public/assets/start/start_play_sheet_s25.jpg
+public/assets/start/start_play_sheet_s25.json
+public/assets/start/start_play_sheet_s25_info.json
+
+# Telemetry / test harnesses
+telemetry/
+public/stress/
+public/test-*.html
+public/sim/
+
+# Dev scripts
+scripts/
+
+# Claude docs (not part of game)
+claude.md
+claude.cdf
+CLAUDE.md
+GAME_FLOW.md
+GAME_FLOW.cdf
+r_stone.md
+dp_moto_Mobile_Optimization.cdf
+MIGRATION_NEW_LAPTOP.cdf
+BUG_REPORT.md
+ENCODING_BENCHMARK.txt
+public/assets/start/anim_levels_manifest.json

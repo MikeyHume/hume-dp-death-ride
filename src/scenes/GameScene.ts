@@ -81,8 +81,6 @@ const DEBUG_HOTKEYS = {
   freezeFrame:    { key: 'T',       active: true },  // freeze all movement for frame analysis
   textInspect:    { key: 'N',       active: true },  // cycle through all text elements to identify mystery text
   clickInspect:   { key: 'B',       active: true },  // click any element to identify it
-  rhythmMode:     { key: 'Y',       active: true  },  // toggle Normal ↔ Rhythm mode
-
 };
 
 // ── Death screen leaderboard: Scale multipliers ──
@@ -119,7 +117,6 @@ export class GameScene extends Phaser.Scene {
   private skyGlowSystem!: SkyGlowSystem;
   private lastBeatTrackId: string | null = null;
   private rhythmMode = false;
-  private rhythmModeLabel!: Phaser.GameObjects.Text;
   private courseRunner: CourseRunner | null = null;
   private courseData: CourseData | null = null;
   private rhythmTrackId: string | null = null;
@@ -132,15 +129,6 @@ export class GameScene extends Phaser.Scene {
   private bonusZoneRect!: Phaser.GameObjects.Rectangle;
   private bonus2xPopup!: Phaser.GameObjects.Text;
   private bonusFlashOverlay!: Phaser.GameObjects.Rectangle;
-  private titleGameModesBtn!: Phaser.GameObjects.Text;
-  private gameModeBackdrop!: Phaser.GameObjects.Rectangle;
-  private gameModeContainer!: Phaser.GameObjects.Container;
-  private gameModeOpen = false;
-  private gameModeNormalBtn!: Phaser.GameObjects.Zone;
-  private gameModeRhythmBtn!: Phaser.GameObjects.Zone;
-  private gameModeCloseBtn!: Phaser.GameObjects.Zone;
-  private gameModeNormalText!: Phaser.GameObjects.Text;
-  private gameModeRhythmText!: Phaser.GameObjects.Text;
   private difficultySystem!: DifficultySystem;
   private scoreSystem!: ScoreSystem;
   private fxSystem!: FXSystem;
@@ -234,7 +222,6 @@ export class GameScene extends Phaser.Scene {
   private _titleAnimLoop = true;
   private _titleAnimSheet: 'loop' | 'play' = 'loop';
   private _titleAnimOnComplete: (() => void) | null = null;
-  private animLevelText: Phaser.GameObjects.Text | null = null;
 
   /** True if title animation frames were loaded (desktop always, mobile with ?anim_level=N). */
   private get titleAnimEnabled(): boolean {
@@ -378,6 +365,8 @@ export class GameScene extends Phaser.Scene {
   private countdownPhase: 'animate' | 'delay' | 'cutscene' | 'grace' | 'done' = 'done';
   private preStartSprite: Phaser.GameObjects.Sprite | null = null;
   private spawnGraceTimer: number = 0;
+  /** HTML5 Audio for countdown music on mobile (bypasses Phaser WebAudio which is unreliable on iOS) */
+  private countdownAudioEl: HTMLAudioElement | null = null;
 
   // Tutorial (pre-countdown screens)
   private introTutSprite: Phaser.GameObjects.Sprite | null = null;
@@ -454,12 +443,20 @@ export class GameScene extends Phaser.Scene {
         this.nameSkipConfirmPending = false;
         this.nameSkipWarning.setVisible(false);
       }
-      // Block all input during intro-to-tutorial cutscene (unskippable)
+      // Block all input during unskippable cutscenes
       if (this.introTutPlaying) return;
       // Only Space and Enter can advance title/tutorial (other keys are ignored)
       const isAdvanceKey = k === ' ' || k === 'enter';
+      // Eagerly resume AudioContext in user gesture (keyboard path)
+      if (isAdvanceKey && (this.state === GameState.TUTORIAL || this.state === GameState.TITLE || this.state === GameState.STARTING)) {
+        const ctx = (this.sound as any).context as AudioContext | undefined;
+        if (ctx?.state === 'suspended') ctx.resume();
+      }
       if (this.state === GameState.TUTORIAL) {
-        if (isAdvanceKey) this.tutorialAdvance = true;
+        if (isAdvanceKey) {
+          this.primeCountdownAudio(); // Bless HTML5 Audio in gesture context for iOS
+          this.tutorialAdvance = true;
+        }
       } else if (this.state === GameState.TITLE) {
         if (isAdvanceKey) {
           this.anyInputPressed = true;
@@ -718,23 +715,6 @@ export class GameScene extends Phaser.Scene {
     if (this.titleAnimEnabled) this._titleAnimPlay('loop');
     // Mobile without ?anim_level: static first frame (no animation)
 
-    // --- Anim level debug overlay (visible when ?anim_level=N) ---
-    const __al = (window as any).__animLevel;
-    if (__al !== null && __al !== undefined) {
-      const sc = 1.0 - __al * 0.02;
-      const aw = Math.max(2, Math.round(1920 * sc));
-      const ah = Math.max(2, Math.round(1080 * sc));
-      const awE = aw % 2 === 0 ? aw : aw + 1;
-      const ahE = ah % 2 === 0 ? ah : ah + 1;
-      const vram = (awE * ahE * 4 * 27 / 1024 / 1024).toFixed(0);
-      this.animLevelText = this.add.text(
-        TUNING.GAME_WIDTH - 20, 20,
-        `ANIM L${String(__al).padStart(2, '0')} | ${awE}x${ahE} | ~${vram}MB VRAM\n27f @ 12fps`,
-        { fontSize: '22px', color: '#00ffff', fontFamily: 'monospace',
-          backgroundColor: '#000000', padding: { x: 10, y: 6 } }
-      ).setOrigin(1, 0).setDepth(99999).setScrollFactor(0).setAlpha(0.85);
-    }
-
     // --- Title screen ---
     this.titleContainer = this.add.container(0, 0).setDepth(200);
     const titleText = this.add.text(
@@ -762,27 +742,13 @@ export class GameScene extends Phaser.Scene {
         fontFamily: 'monospace',
       }
     ).setOrigin(0.5);
-    // Title screen — single "GAME MODES" button, bottom-left (mirrors music player padding)
-    const titleBtnStyle: Phaser.Types.GameObjects.Text.TextStyle = {
-      fontSize: '26px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
-      backgroundColor: '#333333', padding: { x: 28, y: 14 },
-    };
-    this.titleGameModesBtn = this.add.text(
-      TUNING.MUSIC_UI_PAD_RIGHT, TUNING.GAME_HEIGHT - TUNING.MUSIC_UI_PAD_TOP,
-      'GAME MODES', titleBtnStyle
-    ).setOrigin(0, 1).setDepth(201);
-
-    this.titleContainer.add([titleText, startText, weekText, this.titleGameModesBtn]);
-
-    // --- Win95 Game Mode Popup ---
-    this.createGameModePopup();
+    this.titleContainer.add([titleText, startText, weekText]);
 
     // --- Song Select Screen ---
     this.songSelectScreen = new SongSelectScreen(this, {
       onPlay: (track, difficulty) => {
         this.rhythmMode = true;
         this.rhythmDifficulty = difficulty;
-        this.rhythmModeLabel.setVisible(true);
         this.setRhythmZonesVisible(true);
         // Load course then start
         loadCourseData(track.spotifyTrackId, difficulty).then((cd) => {
@@ -1001,14 +967,12 @@ export class GameScene extends Phaser.Scene {
       0x000000
     ).setDepth(249).setScrollFactor(0).setVisible(false);
 
-    // Pre-start cutscene (fullscreen, plays once after countdown, above game world)
-    // Desktop only — 46 PNGs, too heavy for mobile
-    if (!GAME_MODE.mobileMode) {
-      this.preStartSprite = this.add.sprite(
-        GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00000'
-      ).setDisplaySize(GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT)
-       .setDepth(248).setScrollFactor(0).setVisible(false);
-    }
+    // Pre-start cutscene (fullscreen, plays once after countdown "2" appears — unskippable)
+    // Desktop: full-res PNGs (1924×1076). Mobile: half-res JPGs (962×538, ~68MB VRAM).
+    this.preStartSprite = this.add.sprite(
+      GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00000'
+    ).setDisplaySize(GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT)
+     .setDepth(248).setScrollFactor(0).setVisible(false);
 
     // Intro-to-tutorial cutscene (all platforms — unskippable transition)
     this.introTutSprite = this.add.sprite(
@@ -1094,6 +1058,10 @@ export class GameScene extends Phaser.Scene {
     this.tutorialSkipBtn.setData('startPulse', startSkipPulse);
     this.tutorialSkipBtn.on('pointerdown', () => {
       this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
+      // Eagerly resume AudioContext in user gesture (same reason as handleScreenTap)
+      const ctx = (this.sound as any).context as AudioContext | undefined;
+      if (ctx?.state === 'suspended') ctx.resume();
+      this.primeCountdownAudio(); // Bless HTML5 Audio in gesture context for iOS
       if (this.state === GameState.TUTORIAL && this.tutorialPhase !== 'skip_fade' && this.tutorialPhase !== 'done') {
         // Flash red, shrink smoothly from current scale to base, fade out over 0.5s
         this.tweens.killTweensOf(this.tutorialSkipBtn);
@@ -1459,11 +1427,16 @@ export class GameScene extends Phaser.Scene {
       for (const t of this.debugSpritePosTexts) t.setVisible(this.debugSpritePosActive);
     });
 
-    // Pre-start last frame overlay (F) — static image for composition reference
-    this.debugPreStartOverlay = this.add.image(
-      GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00045'
-    ).setDisplaySize(GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT)
-     .setDepth(247).setScrollFactor(0).setAlpha(0.5).setVisible(false);
+    // Pre-start last frame overlay (F) — static image for composition reference (desktop only)
+    if (!GAME_MODE.mobileMode && this.textures.exists('pre-start-00045')) {
+      this.debugPreStartOverlay = this.add.image(
+        GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00045'
+      ).setDisplaySize(GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT)
+       .setDepth(247).setScrollFactor(0).setAlpha(0.5).setVisible(false);
+    } else {
+      // Placeholder for mobile — never shown
+      this.debugPreStartOverlay = this.add.image(0, 0, '__DEFAULT').setVisible(false);
+    }
     this.input.keyboard?.addKey(DEBUG_HOTKEYS.preStartOverlay.key).on('down', () => {
       if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.preStartOverlay.active || this.debugPanelOpen) return;
       if (this.state !== GameState.PLAYING) return;
@@ -1535,7 +1508,6 @@ export class GameScene extends Phaser.Scene {
         { label: 'startHold',       key: '`',                               desc: 'Skip start hold' },
         { label: 'textInspect',     key: DEBUG_HOTKEYS.textInspect.key,     desc: 'Text inspector ←→' },
         { label: 'clickInspect',    key: DEBUG_HOTKEYS.clickInspect.key,    desc: 'Click inspector' },
-        { label: 'rhythmMode',      key: DEBUG_HOTKEYS.rhythmMode.key,      desc: 'Rhythm mode toggle' },
       ];
 
       this.debugHelpContainer = this.add.container(0, 0).setDepth(9999).setScrollFactor(0).setVisible(false);
@@ -1670,16 +1642,6 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // Rhythm mode indicator label
-    this.rhythmModeLabel = this.add.text(
-      TUNING.GAME_WIDTH + TUNING.RHYTHM_MODE_LABEL_X, TUNING.RHYTHM_MODE_LABEL_Y,
-      'RHYTHM', {
-        fontFamily: 'monospace',
-        fontSize: `${TUNING.RHYTHM_MODE_LABEL_SIZE}px`,
-        color: TUNING.RHYTHM_MODE_LABEL_COLOR,
-      }
-    ).setOrigin(1, 0).setDepth(200).setScrollFactor(0).setVisible(false);
-
     // ── Rhythm zone visuals (kill zone, sweet spot, bonus zone) ──
     // Kill zone — red tinted rectangle on left side
     this.killZoneRect = this.add.rectangle(
@@ -1744,28 +1706,6 @@ export class GameScene extends Phaser.Scene {
       GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT,
       TUNING.RHYTHM_BONUS_FLASH_COLOR,
     ).setAlpha(0).setDepth(150).setScrollFactor(0);
-
-    // Rhythm mode toggle hotkey
-    this.input.keyboard?.addKey(DEBUG_HOTKEYS.rhythmMode.key).on('down', () => {
-      if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.rhythmMode.active || this.debugPanelOpen) return;
-      this.rhythmMode = !this.rhythmMode;
-      this.rhythmModeLabel.setVisible(this.rhythmMode);
-      this.setRhythmZonesVisible(this.rhythmMode);
-
-      if (this.rhythmMode) {
-        // Entering Rhythm Mode: clear static color, force beat data re-fetch
-        this.skyGlowSystem.setStaticColor(null);
-        this.lastBeatTrackId = null; // triggers re-fetch on next frame
-      } else {
-        // Returning to Normal Mode: clear beat data, force dominant color re-fetch
-        this.skyGlowSystem.clearBeatData();
-        this.lastBeatTrackId = null; // triggers dominant color fetch on next frame
-      }
-
-      if (this.state === GameState.PLAYING) {
-        this.startGame();
-      }
-    });
 
     // Collision debug overlay
     this.collisionGfx = this.add.graphics().setDepth(9000);
@@ -2399,8 +2339,6 @@ export class GameScene extends Phaser.Scene {
     this.skyGlowSystem.update(dt, this.musicPlayer.getPlaybackPosition().current);
     this.roadSystem.update(titleSpeed, dt);
 
-    // If game mode popup is open, skip title input (popup handles its own clicks)
-    if (this.gameModeOpen) return;
     // Block title input during swipe-to-fullscreen overlay (title still animates)
     if ((window as any).__swipeLock) return;
 
@@ -2409,12 +2347,6 @@ export class GameScene extends Phaser.Scene {
     if (GAME_MODE.isPhoneMode && (window as any).__mobileSwipeComplete) {
       this.tryAutoplayMusic();
     }
-
-    // Button hover highlighting
-    const pointer = this.input.activePointer;
-    const gmBounds = this.titleGameModesBtn.getBounds();
-    const overGM = gmBounds.contains(pointer.x, pointer.y);
-    this.titleGameModesBtn.setColor(overGM ? '#ffcc00' : '#ffffff');
 
     if (this.anyInputPressed) {
       this.anyInputPressed = false;
@@ -2425,178 +2357,25 @@ export class GameScene extends Phaser.Scene {
       // Start audio on first user gesture
       this.audioSystem.start();
 
-      if (overGM) {
-        this.showGameModePopup();
-      } else if (!this.isTitleUIZone(pointer.x, pointer.y)) {
-        // Click anywhere outside UI zones → Normal mode
+      const pointer = this.input.activePointer;
+      if (!this.isTitleUIZone(pointer.x, pointer.y)) {
         this.rhythmMode = false;
-        this.rhythmModeLabel.setVisible(false);
         this.courseRunner = null;
         this.enterTutorial();
       }
     }
   }
 
-  /** Check if a point is over a title-screen UI element (music player, profile HUD, game modes btn). */
+  /** Check if a point is over a title-screen UI element (music player, profile HUD). */
   private isTitleUIZone(px: number, py: number): boolean {
     // Profile HUD — upper left (origin 40,40, avatar 128px + score/bar ~600px wide, ~180px tall)
     if (px < 680 && py < 220) return true;
     // Music player — upper right (pad 40 from right, pad 40 from top, width 740)
     if (px > TUNING.GAME_WIDTH - TUNING.MUSIC_UI_PAD_RIGHT - TUNING.MUSIC_UI_WIDTH - 40 && py < 200) return true;
-    // Game modes button — lower left (checked via getBounds above, but also guard here)
-    if (this.titleGameModesBtn.getBounds().contains(px, py)) return true;
     return false;
   }
 
-  // ── Win95 Game Mode Popup ─────────────────────────────────────
 
-  private createGameModePopup(): void {
-    const cx = GAME_MODE.canvasWidth / 2;
-    const cy = TUNING.GAME_HEIGHT / 2;
-    const pw = TUNING.GAME_MODE_POPUP_W;
-    const ph = TUNING.GAME_MODE_POPUP_H;
-    const bw = TUNING.GAME_MODE_BORDER_W;
-    const tbH = TUNING.GAME_MODE_TITLEBAR_H;
-    const depth = TUNING.GAME_MODE_POPUP_DEPTH;
-
-    // Dimmed backdrop — blocks clicks, click to close
-    this.gameModeBackdrop = this.add.rectangle(cx, cy, GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT, 0x000000, 0.5)
-      .setDepth(depth - 1).setScrollFactor(0).setInteractive().setVisible(false);
-    this.gameModeBackdrop.on('pointerdown', () => this.hideGameModePopup());
-
-    // Container for popup content
-    this.gameModeContainer = this.add.container(cx, cy).setDepth(depth).setScrollFactor(0).setVisible(false);
-
-    const g = this.add.graphics();
-    const left = -pw / 2;
-    const top = -ph / 2;
-
-    // Win95 raised outer border
-    g.fillStyle(TUNING.GAME_MODE_HIGHLIGHT_COLOR);
-    g.fillRect(left, top, pw, ph);
-    g.fillStyle(TUNING.GAME_MODE_SHADOW_COLOR);
-    g.fillRect(left + bw, top + bw, pw - bw, ph - bw);
-    // Gray face fill
-    g.fillStyle(TUNING.GAME_MODE_FACE_COLOR);
-    g.fillRect(left + bw, top + bw, pw - bw * 2, ph - bw * 2);
-
-    // Purple title bar
-    const tbLeft = left + bw;
-    const tbTop = top + bw;
-    const tbWidth = pw - bw * 2;
-    g.fillStyle(TUNING.GAME_MODE_TITLEBAR_COLOR);
-    g.fillRect(tbLeft, tbTop, tbWidth, tbH);
-
-    this.gameModeContainer.add(g);
-
-    // Title bar text
-    const titleText = this.add.text(tbLeft + 8, tbTop + tbH / 2, 'Game Modes', {
-      fontSize: '18px', fontFamily: 'monospace', fontStyle: 'bold', color: '#ffffff',
-    }).setOrigin(0, 0.5);
-    this.gameModeContainer.add(titleText);
-
-    // Close button [X] — small raised square in top-right
-    const closeSize = TUNING.GAME_MODE_CLOSE_SIZE;
-    const closeRight = left + pw - bw - 4;
-    const closeTop = tbTop + (tbH - closeSize) / 2;
-    const closeCx = closeRight - closeSize / 2;
-    const closeCy = closeTop + closeSize / 2;
-
-    const closeGfx = this.add.graphics();
-    // Raised border for close button
-    closeGfx.fillStyle(TUNING.GAME_MODE_FACE_COLOR);
-    closeGfx.fillRect(closeRight - closeSize, closeTop, closeSize, closeSize);
-    closeGfx.fillStyle(TUNING.GAME_MODE_HIGHLIGHT_COLOR);
-    closeGfx.fillRect(closeRight - closeSize, closeTop, closeSize - 1, closeSize - 1);
-    closeGfx.fillStyle(TUNING.GAME_MODE_SHADOW_COLOR);
-    closeGfx.fillRect(closeRight - closeSize + 1, closeTop + 1, closeSize - 1, closeSize - 1);
-    closeGfx.fillStyle(TUNING.GAME_MODE_FACE_COLOR);
-    closeGfx.fillRect(closeRight - closeSize + 1, closeTop + 1, closeSize - 2, closeSize - 2);
-    this.gameModeContainer.add(closeGfx);
-
-    const closeText = this.add.text(closeCx, closeCy, 'x', {
-      fontSize: '16px', fontFamily: 'monospace', fontStyle: 'bold', color: '#000000',
-    }).setOrigin(0.5);
-    this.gameModeContainer.add(closeText);
-
-    this.gameModeCloseBtn = this.add.zone(closeCx, closeCy, closeSize, closeSize).setInteractive();
-    this.gameModeCloseBtn.on('pointerdown', () => this.hideGameModePopup());
-    this.gameModeContainer.add(this.gameModeCloseBtn);
-
-    // "Pick a game mode" centered label
-    const labelY = tbTop + tbH + 40;
-    const pickLabel = this.add.text(0, labelY, 'Pick a game mode', {
-      fontSize: '22px', fontFamily: 'monospace', color: '#000000',
-    }).setOrigin(0.5);
-    this.gameModeContainer.add(pickLabel);
-
-    // Normal + Rhythm buttons
-    const btnW = TUNING.GAME_MODE_BTN_W;
-    const btnH = TUNING.GAME_MODE_BTN_H;
-    const btnGap = TUNING.GAME_MODE_BTN_GAP;
-    const btnY = labelY + 60;
-    const normalX = -btnW / 2 - btnGap / 2;
-    const rhythmX = btnW / 2 + btnGap / 2;
-
-    // Draw raised button backgrounds
-    const btnGfx = this.add.graphics();
-    for (const bx of [normalX, rhythmX]) {
-      const bl = bx - btnW / 2;
-      const bt = btnY - btnH / 2;
-      // Raised border
-      btnGfx.fillStyle(TUNING.GAME_MODE_HIGHLIGHT_COLOR);
-      btnGfx.fillRect(bl, bt, btnW, btnH);
-      btnGfx.fillStyle(TUNING.GAME_MODE_SHADOW_COLOR);
-      btnGfx.fillRect(bl + bw, bt + bw, btnW - bw, btnH - bw);
-      btnGfx.fillStyle(TUNING.GAME_MODE_FACE_COLOR);
-      btnGfx.fillRect(bl + bw, bt + bw, btnW - bw * 2, btnH - bw * 2);
-    }
-    this.gameModeContainer.add(btnGfx);
-
-    // Button labels
-    this.gameModeNormalText = this.add.text(normalX, btnY, 'Normal', {
-      fontSize: '22px', fontFamily: 'monospace', fontStyle: 'bold', color: '#000000',
-    }).setOrigin(0.5);
-    this.gameModeRhythmText = this.add.text(rhythmX, btnY, 'Rhythm', {
-      fontSize: '22px', fontFamily: 'monospace', fontStyle: 'bold', color: '#000000',
-    }).setOrigin(0.5);
-    this.gameModeContainer.add([this.gameModeNormalText, this.gameModeRhythmText]);
-
-    // Hit zones for buttons
-    this.gameModeNormalBtn = this.add.zone(normalX, btnY, btnW, btnH).setInteractive();
-    this.gameModeRhythmBtn = this.add.zone(rhythmX, btnY, btnW, btnH).setInteractive();
-
-    this.gameModeNormalBtn.on('pointerover', () => this.gameModeNormalText.setColor('#ffcc00'));
-    this.gameModeNormalBtn.on('pointerout', () => this.gameModeNormalText.setColor('#000000'));
-    this.gameModeRhythmBtn.on('pointerover', () => this.gameModeRhythmText.setColor('#ffcc00'));
-    this.gameModeRhythmBtn.on('pointerout', () => this.gameModeRhythmText.setColor('#000000'));
-
-    this.gameModeNormalBtn.on('pointerdown', () => {
-      this.hideGameModePopup();
-      this.rhythmMode = false;
-      this.rhythmModeLabel.setVisible(false);
-      this.courseRunner = null;
-      this.enterTutorial();
-    });
-    this.gameModeRhythmBtn.on('pointerdown', () => {
-      this.hideGameModePopup();
-      this.enterSongSelect();
-    });
-
-    this.gameModeContainer.add([this.gameModeNormalBtn, this.gameModeRhythmBtn]);
-  }
-
-  private showGameModePopup(): void {
-    this.gameModeBackdrop.setVisible(true);
-    this.gameModeContainer.setVisible(true);
-    this.gameModeOpen = true;
-  }
-
-  private hideGameModePopup(): void {
-    this.gameModeBackdrop.setVisible(false);
-    this.gameModeContainer.setVisible(false);
-    this.gameModeOpen = false;
-  }
 
   /** Show/hide kill zone, sweet spot line, and bonus zone visuals */
   private setRhythmZonesVisible(visible: boolean): void {
@@ -2666,7 +2445,7 @@ export class GameScene extends Phaser.Scene {
     this.inputSystem.getAttackPressed();
     this.inputSystem.getRocketPressed();
 
-    // Skip countdown on any click or key press
+    // Skip countdown on any click or key press — jump to pre-start cutscene (unskippable)
     if (this.anyInputPressed && this.countdownPhase !== 'done') {
       this.anyInputPressed = false;
       this.countdownPhase = 'done';
@@ -2674,19 +2453,33 @@ export class GameScene extends Phaser.Scene {
       this.tweens.killTweensOf(this.blackOverlay);
       if (this.cursorMain) this.tweens.killTweensOf(this.cursorMain);
       if (this.cursorStroke) this.tweens.killTweensOf(this.cursorStroke);
-      if (this.preStartSprite) this.tweens.killTweensOf(this.preStartSprite);
-      this.blackOverlay.setAlpha(0).setVisible(false);
       this.cursorMain?.setAlpha(0);
       if (this.cursorStroke) this.cursorStroke.setAlpha(0);
-      this.preStartSprite?.stop();
-      this.preStartSprite?.setVisible(false);
       this._titleAnimStop();
       this.titleLoopSprite.setVisible(false);
-      this.musicPlayer.skipCountdownAudio();
+      this.musicPlayer.skipCountdownAudio(); // Stop Phaser countdown audio (desktop)
       this.musicPlayer.revealForGameplay();
       this.playerSystem.reset();
-      this.startGame();
-      this.spawnGraceTimer = TUNING.COUNTDOWN_SPAWN_DELAY;
+      // Play pre-start cutscene over the black overlay — unskippable
+      this.introTutPlaying = true;
+      this.preStartSprite!.setVisible(true).setAlpha(1);
+      this.preStartSprite!.play('pre-start-cutscene');
+      // Start shuffle music now — countdown audio plays on top, finishes naturally
+      if (GAME_MODE.isPhoneMode) this.musicPlayer.startPlaylistNow();
+      this.preStartSprite!.once('animationcomplete', () => {
+        this.introTutPlaying = false;
+        this.startGame();
+        this.spawnGraceTimer = TUNING.COUNTDOWN_SPAWN_DELAY;
+        this.tweens.add({
+          targets: this.preStartSprite!,
+          alpha: 0,
+          duration: 1000,
+          onComplete: () => { this.preStartSprite?.setVisible(false); },
+        });
+      });
+      // Fade black overlay out during the cutscene
+      this.blackOverlay.setAlpha(1).setVisible(true);
+      this.tweens.add({ targets: this.blackOverlay, alpha: 0, duration: 1000 });
       return;
     }
 
@@ -2711,45 +2504,6 @@ export class GameScene extends Phaser.Scene {
         this.countdownPhase = 'delay';
         this.countdownPhaseTimer = 0;
         this.countdownSprite.setVisible(false);
-
-        // When "2" finishes animating, start the cutscene + fade black + reveal music UI
-        if (this.countdownIndex === TUNING.COUNTDOWN_FRAMES - 2) {
-          this.musicPlayer.revealForGameplay();
-          this._titleAnimStop();
-          this.titleLoopSprite.setVisible(false);
-          this.playerSystem.reset();
-          if (this.preStartSprite) {
-            this.preStartSprite.setVisible(true).setAlpha(1);
-            this.preStartSprite.play('pre-start-cutscene');
-            this.preStartSprite.once('animationcomplete', () => {
-              if (this.countdownPhase !== 'done') {
-                this.countdownPhase = 'done';
-                this.startGame();
-                this.spawnGraceTimer = TUNING.COUNTDOWN_SPAWN_DELAY;
-                this.tweens.add({
-                  targets: this.preStartSprite!,
-                  alpha: 0,
-                  duration: 1000,
-                  onComplete: () => {
-                    this.preStartSprite?.setVisible(false);
-                  },
-                });
-              }
-            });
-          } else {
-            // Mobile: no cutscene — start game immediately
-            this.countdownPhase = 'done';
-            this.startGame();
-            this.spawnGraceTimer = TUNING.COUNTDOWN_SPAWN_DELAY;
-          }
-          // Fade black overlay + cursor out over the delay period
-          const fadeDur = TUNING.COUNTDOWN_DELAY * 1000;
-          this.tweens.add({ targets: this.blackOverlay, alpha: 0, duration: fadeDur });
-          this.tweens.add({ targets: this.cursorMain, alpha: 0, duration: fadeDur });
-          if (this.cursorStroke) {
-            this.tweens.add({ targets: this.cursorStroke, alpha: 0, duration: fadeDur });
-          }
-        }
       }
     } else if (this.countdownPhase === 'delay') {
       const wait = this.countdownIndex < 0
@@ -2757,14 +2511,54 @@ export class GameScene extends Phaser.Scene {
         : TUNING.COUNTDOWN_DELAY;
       if (this.countdownPhaseTimer >= wait) {
         const nextIndex = this.countdownIndex + 1;
-        if (nextIndex >= TUNING.COUNTDOWN_FRAMES - 1) {
-          // Skip "1" — go straight to cutscene phase (black already faded during "2"'s delay)
+        if (nextIndex === TUNING.COUNTDOWN_FRAMES - 2) {
+          // "2" appears — show it AND start the pre-start cutscene simultaneously.
+          // "2" animates at depth 250 (on top), cutscene plays at 248 behind it.
+          this.countdownIndex = nextIndex;
+          this.countdownPhaseTimer = 0;
+          this.countdownPhase = 'animate'; // Let "2" animate normally (fades out over 0.8s)
+          this.countdownSprite.setFrame(this.countdownIndex);
+          this.countdownSprite.setScale(0.5);
+          this.countdownSprite.setAlpha(1);
+          this.countdownSprite.setVisible(true);
+
+          // Start cutscene + block input
+          this.introTutPlaying = true;
+          this.preStartSprite!.setVisible(true).setAlpha(1);
+          this.preStartSprite!.play('pre-start-cutscene');
+          // Start shuffle music now — countdown audio plays on top, finishes naturally
+          if (GAME_MODE.isPhoneMode) this.musicPlayer.startPlaylistNow();
+          this.preStartSprite!.once('animationcomplete', () => {
+            this.introTutPlaying = false;
+            this.countdownPhase = 'done';
+            this.startGame();
+            this.spawnGraceTimer = TUNING.COUNTDOWN_SPAWN_DELAY;
+            this.tweens.add({
+              targets: this.preStartSprite!,
+              alpha: 0,
+              duration: 1000,
+              onComplete: () => { this.preStartSprite?.setVisible(false); },
+            });
+          });
+
+          // Fade black overlay + cursor out, reveal music UI
+          this.musicPlayer.revealForGameplay();
+          this._titleAnimStop();
+          this.titleLoopSprite.setVisible(false);
+          this.playerSystem.reset();
+          const fadeDur = TUNING.COUNTDOWN_DELAY * 1000;
+          this.tweens.add({ targets: this.blackOverlay, alpha: 0, duration: fadeDur });
+          this.tweens.add({ targets: this.cursorMain, alpha: 0, duration: fadeDur });
+          if (this.cursorStroke) {
+            this.tweens.add({ targets: this.cursorStroke, alpha: 0, duration: fadeDur });
+          }
+        } else if (nextIndex >= TUNING.COUNTDOWN_FRAMES - 1) {
+          // Past "2" — cutscene is playing, just wait
           this.countdownPhase = 'cutscene';
           this.countdownPhaseTimer = 0;
           this.countdownSprite.setVisible(false);
-          this.blackOverlay.setVisible(false);
         } else {
-          // Show next number
+          // Show next number (5, 4, 3)
           this.countdownIndex = nextIndex;
           this.countdownPhaseTimer = 0;
           this.countdownPhase = 'animate';
@@ -2786,6 +2580,8 @@ export class GameScene extends Phaser.Scene {
     this.debugPreStartOverlay.setVisible(false);
     this.reflectionSystem.setVisible(false);
     this.musicPlayer.resetForTitle();
+    this.stopCountdownAudio(); // Clean up HTML5 Audio if still playing
+    this.countdownAudioEl = null; // Force re-prime on next tutorial
 
     // Clean up tutorial
     this.tutorialPhase = 'done';
@@ -2897,12 +2693,18 @@ export class GameScene extends Phaser.Scene {
     const biosOverlay = document.getElementById('boot-overlay');
     if (biosOverlay && !biosOverlay.classList.contains('hidden')) return;
     if ((window as any).__swipeLock) return;
-    // Block all input during intro-to-tutorial cutscene (unskippable)
+    // Block all input during unskippable cutscenes (intro-to-tutorial, pre-start)
     if (this.introTutPlaying) return;
     if (this.state === GameState.TUTORIAL || this.state === GameState.TITLE || this.state === GameState.STARTING) {
       this.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
+      // Eagerly resume AudioContext in user gesture — iOS Safari suspends it when no
+      // WebAudio sources are active (title music uses HTML5 Audio, not WebAudio).
+      // Without this, countdown-music.play() fires into a suspended context and is silent.
+      const ctx = (this.sound as any).context as AudioContext | undefined;
+      if (ctx?.state === 'suspended') ctx.resume();
     }
     if (this.state === GameState.TUTORIAL) {
+      this.primeCountdownAudio(); // Bless HTML5 Audio in gesture context for iOS
       this.tutorialAdvance = true;
     } else if (this.state === GameState.TITLE) {
       this.anyInputPressed = true;
@@ -3166,11 +2968,42 @@ export class GameScene extends Phaser.Scene {
     this.countdownPhase = 'delay';
     this.countdownSprite.setVisible(false);
 
+    // Mobile: play countdown audio via primed HTML5 Audio (Phaser WebAudio is unreliable on iOS).
+    // The element was "blessed" by a user gesture during tutorial taps (see primeCountdownAudio).
+    if (GAME_MODE.isPhoneMode && this.countdownAudioEl) {
+      this.countdownAudioEl.currentTime = 0;
+      this.countdownAudioEl.volume = TUNING.MUSIC_VOL_COUNTDOWN;
+      this.countdownAudioEl.play().catch(() => {});
+      console.log('[GameScene] countdown HTML5 Audio started');
+    }
+
     // Test mode: fast countdown — inject tap on next frame to skip
     if (TEST_MODE.active && TEST_MODE.fastCountdown) {
       this.time.delayedCall(100, () => {
         this.anyInputPressed = true;
       });
+    }
+  }
+
+  /** Prime an HTML5 Audio element for countdown music. MUST be called from a user gesture.
+   *  iOS Safari requires the first .play() to happen inside a gesture handler. */
+  private primeCountdownAudio(): void {
+    if (this.countdownAudioEl || !GAME_MODE.isPhoneMode) return;
+    const a = new Audio('assets/audio/music/hell_girl_countdown.mp3');
+    a.loop = false; // Play once, never restart
+    a.volume = 0;
+    a.play().then(() => {
+      a.pause(); // Blessed — can be .play()'d from non-gesture code now
+      console.log('[GameScene] countdown audio primed');
+    }).catch(() => {});
+    this.countdownAudioEl = a;
+  }
+
+  /** Stop the HTML5 countdown audio (mobile). */
+  private stopCountdownAudio(): void {
+    if (this.countdownAudioEl) {
+      this.countdownAudioEl.pause();
+      this.countdownAudioEl.currentTime = 0;
     }
   }
 

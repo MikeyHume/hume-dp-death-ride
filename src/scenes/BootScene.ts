@@ -96,12 +96,20 @@ export class BootScene extends Phaser.Scene {
       this.load.image('start-loop-00', 'assets/start/start_loop/DP_Death_Ride_Title_Loop00.jpg');
     }
 
-    if (!GAME_MODE.mobileMode) {
-      // Desktop-only cutscene sequences (pre-start + intro-to-tut)
-      for (let i = 0; i < PRE_START_FRAME_COUNT; i++) {
-        const idx = String(i).padStart(5, '0');
+    // Pre-start cutscene sequence (46 frames)
+    // Desktop: full-res PNGs from v02/ (1924×1076)
+    // Mobile: half-res JPGs from v02_mobile/ (962×538, ~68MB VRAM — safe on 4GB phones)
+    for (let i = 0; i < PRE_START_FRAME_COUNT; i++) {
+      const idx = String(i).padStart(5, '0');
+      if (GAME_MODE.mobileMode) {
+        this.load.image(`pre-start-${idx}`, `assets/cutscenes/pre_start/v02_mobile/pre_start_v02__${idx}.jpg`);
+      } else {
         this.load.image(`pre-start-${idx}`, `assets/cutscenes/pre_start/v02/pre_start_v02__${idx}.png`);
       }
+    }
+
+    if (!GAME_MODE.mobileMode) {
+      // Desktop: full-res intro-to-tutorial
       for (let i = 0; i < INTRO_TO_TUT_FRAME_COUNT; i++) {
         const idx = String(i).padStart(5, '0');
         this.load.image(`intro-tut-${idx}`, `assets/cutscenes/intro_to_tut/v3/intro_to_tut_v03__${idx}.jpg`);
@@ -400,13 +408,12 @@ export class BootScene extends Phaser.Scene {
       });
     }
 
-    if (!GAME_MODE.mobileMode) {
-      const preStartFrames: Phaser.Types.Animations.AnimationFrame[] = [];
-      for (let i = 0; i < PRE_START_FRAME_COUNT; i++) {
-        preStartFrames.push({ key: `pre-start-${String(i).padStart(5, '0')}` });
-      }
-      this.anims.create({ key: 'pre-start-cutscene', frames: preStartFrames, frameRate: 12, repeat: 0 });
+    // Pre-start cutscene animation (all platforms — mobile uses half-res JPGs)
+    const preStartFrames: Phaser.Types.Animations.AnimationFrame[] = [];
+    for (let i = 0; i < PRE_START_FRAME_COUNT; i++) {
+      preStartFrames.push({ key: `pre-start-${String(i).padStart(5, '0')}` });
     }
+    this.anims.create({ key: 'pre-start-cutscene', frames: preStartFrames, frameRate: 12, repeat: 0 });
 
     // Intro-to-tutorial cutscene animation (desktop: 27-frame sequence, mobile: single frame)
     const introTutFrameCount = INTRO_TO_TUT_FRAME_COUNT;
