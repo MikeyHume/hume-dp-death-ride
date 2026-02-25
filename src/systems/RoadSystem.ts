@@ -1,87 +1,103 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
 
-// Brightness threshold for extracting road lines from the texture.
-// Pixels above this (0-255) are kept; below become transparent.
-const ROAD_LINES_BRIGHTNESS_THRESHOLD = 80;
+const ROAD_FRAMES = 6;   // number of segments in road spritesheet
+const FRAME_W = 2048;     // each frame's pixel width
+const FRAME_H = 534;      // each frame's pixel height
 
 export class RoadSystem {
-  private roadTile: Phaser.GameObjects.TileSprite;
-  private linesTile: Phaser.GameObjects.TileSprite;
-  private tileScaleFactor: number;
+  private roadContainer: Phaser.GameObjects.Container;
+  private linesContainer: Phaser.GameObjects.Container;
+  private roadSprites: Phaser.GameObjects.Sprite[] = [];
+  private linesSprites: Phaser.GameObjects.Sprite[] = [];
+  private spriteW: number;   // on-screen width of one sprite (after scale)
+  private scaleVal: number;  // uniform scale applied to each sprite
+  private nextFrame: number = 0; // next frame index to assign when wrapping
 
   constructor(scene: Phaser.Scene) {
     const roadHeight = TUNING.ROAD_BOTTOM_Y - TUNING.ROAD_TOP_Y;
     const roadCenterY = (TUNING.ROAD_TOP_Y + TUNING.ROAD_BOTTOM_Y) / 2;
 
-    // Road surface — scale image to fit road height, tile horizontally
-    const srcImg = scene.textures.get('road-img').getSourceImage() as HTMLImageElement;
-    this.tileScaleFactor = roadHeight / srcImg.height;
+    // Uniform scale so each segment fills road height at native aspect ratio
+    this.scaleVal = roadHeight / FRAME_H;
+    this.spriteW = FRAME_W * this.scaleVal;
 
-    this.roadTile = scene.add.tileSprite(
-      TUNING.GAME_WIDTH / 2, roadCenterY,
-      TUNING.GAME_WIDTH, roadHeight,
-      'road-img'
-    );
-    this.roadTile.setTileScale(this.tileScaleFactor, this.tileScaleFactor);
+    // How many sprites needed to cover the screen + 1 buffer
+    const count = Math.ceil(TUNING.GAME_WIDTH / this.spriteW) + 2;
 
-    // Extract bright pixels (lines) into a separate texture
-    const w = srcImg.naturalWidth || srcImg.width;
-    const h = srcImg.naturalHeight || srcImg.height;
-    const offscreen = document.createElement('canvas');
-    offscreen.width = w;
-    offscreen.height = h;
-    const ctx = offscreen.getContext('2d')!;
-    ctx.drawImage(srcImg, 0, 0, w, h);
-    const imgData = ctx.getImageData(0, 0, w, h);
-    const px = imgData.data;
-
-    for (let i = 0; i < px.length; i += 4) {
-      const brightness = px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114;
-      if (brightness < ROAD_LINES_BRIGHTNESS_THRESHOLD) {
-        px[i + 3] = 0; // make dark pixels transparent
-      }
+    // Road container — left-edge aligned (origin 0,0.5) for precise tiling
+    this.roadContainer = scene.add.container(0, 0);
+    for (let i = 0; i < count; i++) {
+      const s = scene.add.sprite(i * this.spriteW, roadCenterY, 'road-img', i % ROAD_FRAMES);
+      s.setScale(this.scaleVal);
+      s.setOrigin(0, 0.5);
+      this.roadSprites.push(s);
+      this.roadContainer.add(s);
     }
+    this.nextFrame = count % ROAD_FRAMES;
 
-    ctx.putImageData(imgData, 0, 0);
-    const linesTex = scene.textures.createCanvas('road-lines', w, h)!;
-    linesTex.getContext().drawImage(offscreen, 0, 0);
-    linesTex.refresh();
-
-    // Lines overlay — sits on top of road, same scroll, NOT hue-shifted
-    this.linesTile = scene.add.tileSprite(
-      TUNING.GAME_WIDTH / 2, roadCenterY,
-      TUNING.GAME_WIDTH, roadHeight,
-      'road-lines'
-    );
-    this.linesTile.setTileScale(this.tileScaleFactor, this.tileScaleFactor);
-    this.linesTile.setDepth(this.roadTile.depth + 0.005);
+    // Lines container (same positioning, slightly higher depth)
+    this.linesContainer = scene.add.container(0, 0);
+    for (let i = 0; i < count; i++) {
+      const s = scene.add.sprite(i * this.spriteW, roadCenterY, 'road-lines', i % ROAD_FRAMES);
+      s.setScale(this.scaleVal);
+      s.setOrigin(0, 0.5);
+      this.linesSprites.push(s);
+      this.linesContainer.add(s);
+    }
+    this.linesContainer.setDepth(0.005);
   }
 
-  /** Reset tile scroll to a deterministic position. offsetX is in screen pixels. */
-  resetScroll(offsetX: number = 0): void {
-    const tileX = offsetX / this.tileScaleFactor;
-    this.roadTile.tilePositionX = tileX;
-    this.linesTile.tilePositionX = tileX;
+  resetScroll(_offsetX: number = 0): void {
+    // Reset sprite positions to initial layout
+    for (let i = 0; i < this.roadSprites.length; i++) {
+      const x = i * this.spriteW;
+      this.roadSprites[i].x = x;
+      this.roadSprites[i].setFrame(i % ROAD_FRAMES);
+      this.linesSprites[i].x = x;
+      this.linesSprites[i].setFrame(i % ROAD_FRAMES);
+    }
+    this.nextFrame = this.roadSprites.length % ROAD_FRAMES;
   }
 
   update(currentSpeed: number, dt: number): void {
-    // Scroll in texture-space (divide by scale so pixel speed matches world speed)
-    const scroll = (currentSpeed * dt) / this.tileScaleFactor;
-    this.roadTile.tilePositionX += scroll;
-    this.linesTile.tilePositionX += scroll;
+    const scrollPx = currentSpeed * dt;
+
+    // Shift all sprites left
+    for (let i = 0; i < this.roadSprites.length; i++) {
+      this.roadSprites[i].x -= scrollPx;
+      this.linesSprites[i].x -= scrollPx;
+    }
+
+    // Wrap: if leftmost sprite's right edge is fully off-screen left, move to right end
+    while (this.roadSprites[0].x + this.spriteW < 0) {
+      const rs = this.roadSprites.shift()!;
+      const ls = this.linesSprites.shift()!;
+      const lastR = this.roadSprites[this.roadSprites.length - 1];
+
+      rs.x = lastR.x + this.spriteW;
+      rs.setFrame(this.nextFrame);
+      ls.x = rs.x;
+      ls.setFrame(this.nextFrame);
+
+      this.nextFrame = (this.nextFrame + 1) % ROAD_FRAMES;
+      this.roadSprites.push(rs);
+      this.linesSprites.push(ls);
+    }
   }
 
   setVisible(visible: boolean): void {
-    this.roadTile.setVisible(visible);
-    this.linesTile.setVisible(visible);
+    this.roadContainer.setVisible(visible);
+    this.linesContainer.setVisible(visible);
   }
 
-  getRoadTile(): Phaser.GameObjects.TileSprite { return this.roadTile; }
-  getLinesTile(): Phaser.GameObjects.TileSprite { return this.linesTile; }
+  /** Return road container for BitmapMask usage in ReflectionSystem. */
+  getRoadTile(): Phaser.GameObjects.Container { return this.roadContainer; }
+  /** Return lines container. */
+  getLinesTile(): Phaser.GameObjects.Container { return this.linesContainer; }
 
   destroy(): void {
-    this.roadTile.destroy();
-    this.linesTile.destroy();
+    this.roadContainer.destroy(true);
+    this.linesContainer.destroy(true);
   }
 }

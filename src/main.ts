@@ -14,18 +14,17 @@ if (simProfile) {
   // Override the exported DEVICE_PROFILE properties in-place
   Object.assign(DEVICE_PROFILE, simProfile);
   GAME_MODE.mobileMode = true; // Simulating a mobile device
-  GAME_MODE.quality = simProfile.tier === 'phone-low' ? 'low' : 'medium';
+  GAME_MODE.renderTier = simProfile.tier;
 }
 
 // Set phone mode flag after device profile is finalized (incl. simulation override)
 GAME_MODE.isPhoneMode = isPhoneTier(DEVICE_PROFILE.tier);
 
-// Lite mode: ALL phones skip heavy animation spritesheets to stay within VRAM budget.
-// Full textures = ~151MB VRAM. iPhone 12 Mini (A14, 4GB) and Xs (A12, 4GB) both OOM-crash.
-// iOS doesn't expose RAM, and 4GB/6GB phones share screen fingerprints, so we can't
-// distinguish at runtime. Safe default: liteMode for all phones. Override with ?lite=0.
+// Lite mode: previously required on phones to prevent OOM from ~88MB of animation textures.
+// renderScale now reduces framebuffer by 4x (1920×1080→960×540), freeing enough VRAM headroom.
+// Disabled by default. Use ?lite=1 to force-enable if OOM issues resurface.
 const liteParam = new URLSearchParams(location.search).get('lite');
-GAME_MODE.liteMode = liteParam === '0' ? false : GAME_MODE.isPhoneMode;
+GAME_MODE.liteMode = liteParam === '1';
 
 // Expose device profile globally for debugging + WebDriver inspection
 (window as any).__deviceProfile = DEVICE_PROFILE;
@@ -108,12 +107,19 @@ handleCallback().then((wasCallback) => {
   const adaptiveW = GAME_MODE.isPhoneMode ? TUNING.GAME_WIDTH : rawAdaptiveW;
   GAME_MODE.canvasWidth = adaptiveW;
   GAME_MODE.contentOffsetX = (adaptiveW - TUNING.GAME_WIDTH) / 2;
-  console.log(`[main] adaptive canvas: ${adaptiveW}x${TUNING.GAME_HEIGHT} (offset=${GAME_MODE.contentOffsetX.toFixed(0)}, viewport=${vpW}x${vpH})`);
+  // ── Render resolution scaling ────────────────────────────────
+  // On weak devices, render at lower internal resolution (e.g. 960×540 for phone-low).
+  // Camera zoom = renderScale keeps game coordinates at 1920×1080.
+  const rs = DEVICE_PROFILE.renderScale;
+  GAME_MODE.renderScale = rs;
+  const renderW = Math.round(adaptiveW * rs);
+  const renderH = Math.round(TUNING.GAME_HEIGHT * rs);
+  console.log(`[main] adaptive canvas: ${adaptiveW}x${TUNING.GAME_HEIGHT} → render ${renderW}x${renderH} (scale=${rs}, offset=${GAME_MODE.contentOffsetX.toFixed(0)}, viewport=${vpW}x${vpH})`);
 
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.WEBGL,
-    width: GAME_MODE.canvasWidth,
-    height: TUNING.GAME_HEIGHT,
+    width: renderW,
+    height: renderH,
     parent: 'game-container',
     backgroundColor: '#000000',
     scene: [BootScene],

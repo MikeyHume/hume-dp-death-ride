@@ -42,7 +42,7 @@ const BUILDINGS_MID_OFFSET_Y = 10;     // layer 5: vertical offset
 const BUILDINGS_FRONT_SCALE = 1.0;    // layer 6: buildings-front
 const BUILDINGS_FRONT_OFFSET_Y = 10;   // layer 6: vertical offset
 const BUILDINGS_BACK_OFFSET_Y = 0;    // layer 7: buildings-back vertical offset
-const RAILING_SCALE = 6;            // layer 1: railing (1.0 = fill width, >1 = bigger)
+const RAILING_DISPLAY_H = 62;        // target railing display height in game pixels
 const RAILING_OFFSET_Y = -58;           // layer 1: vertical offset
 const RAILING_DEPTH = 2;              // layer 1: depth (must be above road at 0)
 
@@ -196,37 +196,23 @@ export class ParallaxSystem {
         this.textureKeys.push('buildings-front');
         this.scrollCompensation.push(1 / scale);
       } else if (i === 0) {
-        // Layer 1: railing image, bottom-aligned at road top, rendered above road
-        // Source image may exceed GPU max texture size, so downsample to a safe width
+        // Layer 1: railing, bottom-aligned at road top, rendered above road
+        // Full mode: spritesheet (9 frames × 2048×100) — use frame 0 at native resolution
+        // Lite mode: single image (2048×11) — tile at uniform scale
         const tex = scene.textures.get('railing');
-        const srcImg = tex.getSourceImage() as HTMLImageElement;
-        const imgW = srcImg.width;
-        const imgH = srcImg.height;
-        const maxW = 4096;
-        let texKey = 'railing';
-        let usedW = imgW;
-        let usedH = imgH;
-        if (imgW > maxW) {
-          // Downsample onto a canvas texture
-          usedH = Math.round(imgH * (maxW / imgW));
-          usedW = maxW;
-          const canvasTex = scene.textures.createCanvas('railing-safe', usedW, usedH);
-          const ctx = canvasTex!.getContext();
-          ctx.drawImage(srcImg, 0, 0, usedW, usedH);
-          canvasTex!.refresh();
-          texKey = 'railing-safe';
-        }
-        const baseScale = TUNING.GAME_WIDTH / usedW;
-        const scale = baseScale * RAILING_SCALE;
-        const scaledH = usedH * scale;
+        const isSpritesheet = tex.frameTotal > 2; // spritesheets have __BASE + N frames
+        const frameH = isSpritesheet ? 100 : (tex.getSourceImage() as HTMLImageElement).height;
+        const texKey = 'railing';
+        const scale = RAILING_DISPLAY_H / frameH;
         const adjBottom = bottomY + RAILING_OFFSET_Y;
 
         const tile = scene.add.tileSprite(
           TUNING.GAME_WIDTH / 2,
-          adjBottom - scaledH / 2, // bottom-aligned at adjusted bottomY
+          adjBottom - RAILING_DISPLAY_H / 2, // bottom-aligned at adjusted bottomY
           TUNING.GAME_WIDTH,
-          scaledH,
-          texKey
+          RAILING_DISPLAY_H,
+          texKey,
+          isSpritesheet ? 0 : undefined
         );
         tile.setTileScale(scale, scale);
         tile.setDepth(RAILING_DEPTH);

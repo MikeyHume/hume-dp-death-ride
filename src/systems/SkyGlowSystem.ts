@@ -46,7 +46,7 @@ export class SkyGlowSystem {
   // PreFX ColorMatrix instances for hue rotation
   private skyFx: Phaser.FX.ColorMatrix | null = null;
   private layerFx: (Phaser.FX.ColorMatrix | null)[] = [];
-  private roadFx: Phaser.FX.ColorMatrix | null = null;
+  private roadFxList: Phaser.FX.ColorMatrix[] = [];
 
   // Hue angle tween state (degrees)
   private tweenTarget = { angle: 0 };
@@ -71,9 +71,13 @@ export class SkyGlowSystem {
     }
   }
 
-  /** Add the road tile to the hue rotation group (call after RoadSystem is created). */
-  setRoadTile(road: Phaser.GameObjects.TileSprite): void {
-    this.roadFx = road.preFX?.addColorMatrix() ?? null;
+  /** Add the road container's sprites to the hue rotation group (call after RoadSystem is created).
+   *  NOTE: preFX on individual sequential sprites causes framebuffer alignment gaps between tiles.
+   *  Road hue is intentionally skipped — sky + parallax layers carry the hue shift, and the road's
+   *  dark color means the missing hue rotation is imperceptible. */
+  setRoadTile(_roadContainer: Phaser.GameObjects.Container): void {
+    // No-op: applying preFX ColorMatrix to individual sprites in a tiled strip
+    // causes each sprite to render through its own FBO, introducing sub-pixel seams.
   }
 
   /**
@@ -228,9 +232,9 @@ export class SkyGlowSystem {
         if (normalized !== 0) fx.hue(normalized);
       }
     }
-    if (this.roadFx) {
-      this.roadFx.reset();
-      if (normalized !== 0) this.roadFx.hue(normalized);
+    for (const fx of this.roadFxList) {
+      fx.reset();
+      if (normalized !== 0) fx.hue(normalized);
     }
   }
 

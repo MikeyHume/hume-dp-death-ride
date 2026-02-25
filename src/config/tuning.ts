@@ -169,6 +169,9 @@ export const TUNING = {
   REFLECTION_TINT_SATURATION: 0.7,  // saturation of the tinted color (0 = grayscale, 1 = vivid)
   REFLECTION_TINT_MIX: 0.5,         // blend: 0 = original colors, 1 = full monochromatic tint
 
+  // Reflection RT update rate (skip-frame rendering)
+  REFLECTION_RT_SKIP: 2,            // redraw object/mask RTs every Nth frame (1=every frame, 2=half, 3=third)
+
   // Puddle road overlay
   PUDDLE_ROAD_OPACITY: 0.4,        // road texture opacity inside puddle holes (0 = fully transparent, 1 = solid)
 

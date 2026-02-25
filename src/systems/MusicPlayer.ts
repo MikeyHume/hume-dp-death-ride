@@ -55,6 +55,7 @@ export class MusicPlayer {
   private phoneBackdropP: Phaser.GameObjects.Rectangle | null = null;  // Phaser backdrop (CRT-rendered)
   private phoneCollapsedTopPct: string = '';   // saved collapsed-state top %
   private phoneCollapsedRightPct: string = ''; // saved collapsed-state right %
+  private mobileTitleAudio: HTMLAudioElement | null = null; // local audio for title track on phones
 
   // Phaser sprites that mirror HTML buttons (rendered through CRT shader)
   private btnSprites: Phaser.GameObjects.Image[] = [];
@@ -157,6 +158,13 @@ export class MusicPlayer {
     scene.events.on('spotify-auth-changed', () => this.onSpotifyAuthChanged());
   }
 
+  /** Reset playlist state so title music and countdown audio work on replay. */
+  resetForTitle(): void {
+    this.playlistStarted = false;
+    this.titleTrackPlaying = false;
+    this.titlePlaylistLoaded = false;
+  }
+
   /** Start the in-game title music. Call from a user gesture handler. */
   startTitleMusic(): void {
     if (TEST_MODE.active && TEST_MODE.skipMusic) return;
@@ -179,6 +187,15 @@ export class MusicPlayer {
       this.applyUserVolume();
       // Start YouTube video muted as visual companion in WMP
       this.startMutedYTVideo();
+      return;
+    }
+
+    // Phone mode: use local audio file (HTML5 Audio works after touchstart unlock,
+    // YouTube iframe requires its own gesture-context play which we can't guarantee)
+    if (GAME_MODE.isPhoneMode) {
+      this.titleTrackPlaying = true;
+      this.source = 'youtube'; // keep source as youtube for UI consistency
+      this.playTitleAudioLocal();
       return;
     }
 
@@ -208,6 +225,34 @@ export class MusicPlayer {
     setTimeout(() => {
       try { this.ytPlayer.unMute(); this.applyUserVolume(); } catch {}
     }, 500);
+  }
+
+  /** Play title track via local audio file (phones only — bypasses YT iframe gesture issues). */
+  private playTitleAudioLocal(): void {
+    // Reuse the audio element pre-primed during touchstart gesture (index.html),
+    // or create a new one as fallback. iOS requires first .play() in a gesture context.
+    const primed = (window as any).__mobileTitleAudio as HTMLAudioElement | undefined;
+    const audio = primed || new Audio('assets/audio/music/Rythem_Songs/DEATHPIXIE - RED MALIBU.mp3');
+    audio.loop = true;
+    audio.volume = Math.min(1, this.userVolume * TUNING.MUSIC_VOL_MASTER);
+    audio.currentTime = 0; // restart from beginning (primed version was playing silent)
+    this.mobileTitleAudio = audio;
+
+    // Show thumbnail
+    const s = TUNING.MUSIC_UI_THUMB_SCALE;
+    this.thumbnailImg.src = TUNING.INTRO_TRACK_THUMBNAIL;
+    this.thumbnailImg.style.width = `${YT_THUMB_WIDTH * s}px`;
+    this.thumbnailImg.style.height = `${YT_THUMB_HEIGHT * s}px`;
+    this.thumbnailImg.style.display = 'block';
+
+    // Primed element is already playing (volume was 0 from touchstart) — just set volume.
+    // Non-primed: try to play (may fail without gesture).
+    if (!primed) {
+      audio.play().catch(() => {
+        const retry = () => { audio.play().catch(() => {}); };
+        document.addEventListener('touchstart', retry, { once: true });
+      });
+    }
   }
 
   /** Start the YouTube title video muted (visual-only companion for Spotify playback). */
@@ -857,9 +902,13 @@ export class MusicPlayer {
       return;
     }
 
-    // Stop streaming title track
+    // Stop streaming title track (all sources including mobile local audio)
     if (this.titleTrackPlaying) {
       this.titleTrackPlaying = false;
+      if (this.mobileTitleAudio) {
+        this.mobileTitleAudio.pause();
+        this.mobileTitleAudio = null;
+      }
       if (this.source === 'spotify' && this.spotifyPlayer) {
         this.spotifyPlayer.pause();
       } else if (this.ytPlayer) {
@@ -888,6 +937,9 @@ export class MusicPlayer {
     }
 
     // Play countdown audio first, crossfade Spotify in before it ends
+    // Resume iOS audio context (may be suspended if play() called outside gesture handler)
+    const ctx1 = (this.scene.sound as any).context as AudioContext | undefined;
+    if (ctx1?.state === 'suspended') ctx1.resume();
     if (this.scene.cache.audio.exists('countdown-music')) {
       this.countdownMusic = this.scene.sound.add('countdown-music', { loop: false, volume: TUNING.MUSIC_VOL_COUNTDOWN });
       this.countdownMusic.play();
@@ -970,6 +1022,9 @@ export class MusicPlayer {
 
   /** Play countdown audio, then start YT playlist when both countdown and API are ready. */
   private startYTWithCountdown(): void {
+    // Resume iOS audio context (may be suspended if play() called outside gesture handler)
+    const ctx2 = (this.scene.sound as any).context as AudioContext | undefined;
+    if (ctx2?.state === 'suspended') ctx2.resume();
     if (this.scene.cache.audio.exists('countdown-music')) {
       this.countdownMusic = this.scene.sound.add('countdown-music', { loop: false, volume: TUNING.MUSIC_VOL_COUNTDOWN });
       this.countdownMusic.play();
@@ -1071,6 +1126,8 @@ export class MusicPlayer {
 
   private startYTPlaylist(): void {
     if (!this.ytPlayer) return;
+    // Stop local title audio if it was playing (phone mode)
+    if (this.mobileTitleAudio) { this.mobileTitleAudio.pause(); this.mobileTitleAudio = null; }
     this.source = 'youtube';
     this.titleTrackPlaying = false;
     this.ytPlayer.unMute();
@@ -1309,6 +1366,11 @@ export class MusicPlayer {
           this.muteBtnSprite.setTexture(m ? 'ui-muted' : 'ui-unmuted');
         });
       }
+    } else if (this.mobileTitleAudio && this.titleTrackPlaying) {
+      // Phone local audio mute toggle
+      this.mobileTitleAudio.muted = !this.mobileTitleAudio.muted;
+      this.muteBtnImg.src = this.mobileTitleAudio.muted ? 'ui/muted.png' : 'ui/unmuted.png';
+      this.muteBtnSprite.setTexture(this.mobileTitleAudio.muted ? 'ui-muted' : 'ui-unmuted');
     } else if (this.ytPlayer && (this.titleTrackPlaying || this.playlistStarted || this.titlePlaylistLoaded)) {
       // Toggle YouTube mute
       if (this.ytPlayer.isMuted()) {
@@ -1332,6 +1394,9 @@ export class MusicPlayer {
       const pos = this.spotifyPlayer.getPositionSync();
       this.syncYTVideoToSpotify(pos.current);
       return pos;
+    }
+    if (this.mobileTitleAudio && this.titleTrackPlaying) {
+      return { current: this.mobileTitleAudio.currentTime || 0, duration: this.mobileTitleAudio.duration || 0 };
     }
     if (this.source === 'youtube' && this.ytPlayer && (this.titleTrackPlaying || this.playlistStarted || this.titlePlaylistLoaded)) {
       try {
@@ -1379,6 +1444,7 @@ export class MusicPlayer {
     } else if (this.source === 'youtube' && this.ytPlayer) {
       this.ytPlayer.setVolume(Math.round(scaled * 100));
     }
+    if (this.mobileTitleAudio) this.mobileTitleAudio.volume = scaled;
     if (this.previewAudio) this.previewAudio.volume = scaled;
   }
 
@@ -1927,6 +1993,7 @@ export class MusicPlayer {
     if (this.spotifyPlayer) {
       this.spotifyPlayer.destroy();
     }
+    if (this.mobileTitleAudio) { this.mobileTitleAudio.pause(); this.mobileTitleAudio = null; }
     this.humePlayer.destroy();
     this.canvasOverlay.remove();
     const ytEl = document.getElementById('yt-player');

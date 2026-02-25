@@ -41,6 +41,41 @@ export const CRT_TUNING = {
   rageDistortion: 0,           // runtime value (driven by GameScene — do not edit)
 };
 
+// ── CRT test profiles (URL param: ?crt_profile=NAME) ──────────
+const CRT_PROFILES: Record<string, Partial<typeof CRT_TUNING>> = {
+  'no-bloom':    { bloomStrength: 0 },
+  'no-beam':     { beamFocus: 0 },
+  'lean':        { bloomStrength: 0, beamFocus: 0 },
+  'essential':   { bloomStrength: 0, beamFocus: 0, chromaAberration: 0, convergenceError: 0 },
+  'scan-mask':   { bloomStrength: 0, beamFocus: 0, chromaAberration: 0, convergenceError: 0,
+                   noiseAmount: 0, jitterAmount: 0, colorBleed: 0 },
+  'passthrough': { scanlineIntensity: 0, scanlineRollSpeed: 0, maskStrength: 0,
+                   beamFocus: 0, convergenceError: 0, bloomStrength: 0,
+                   curvature: 0, cornerDarkening: 0, chromaAberration: 0, colorBleed: 0,
+                   saturation: 1.0, gamma: 1.0, brightness: 1.0,
+                   noiseAmount: 0, jitterAmount: 0, vignette: 0 },
+};
+
+// Apply profile/individual overrides at module load
+if (typeof window !== 'undefined') {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const profile = params.get('crt_profile');
+    if (profile && profile in CRT_PROFILES) {
+      Object.assign(CRT_TUNING, CRT_PROFILES[profile]);
+    }
+    // Individual overrides: ?crt_bloomStrength=0&crt_beamFocus=0.5
+    for (const [key, val] of params) {
+      if (key.startsWith('crt_') && key !== 'crt_profile') {
+        const prop = key.slice(4);
+        if (prop in CRT_TUNING && typeof (CRT_TUNING as any)[prop] === 'number') {
+          (CRT_TUNING as any)[prop] = parseFloat(val);
+        }
+      }
+    }
+  } catch { /* SSR safety */ }
+}
+
 /** Convert maskType string to shader uniform float */
 export function maskTypeToFloat(type: typeof CRT_TUNING.maskType): number {
   switch (type) {

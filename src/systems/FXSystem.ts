@@ -68,10 +68,10 @@ export class FXSystem {
   }
 
   private updateSpeedLines(dt: number, playerSpeed: number, roadSpeed: number): void {
-    const quality = GAME_MODE.quality;
+    const tier = GAME_MODE.renderTier;
 
-    // Low quality: skip speed lines entirely
-    if (quality === 'low') {
+    // Phone-low / gen-mobile: skip speed lines entirely
+    if (tier === 'phone-low' || tier === 'gen-mobile') {
       for (let i = 0; i < this.speedLines.length; i++) {
         this.speedLines[i].setAlpha(0);
       }
@@ -85,7 +85,7 @@ export class FXSystem {
 
     for (let i = 0; i < this.speedLines.length; i++) {
       const line = this.speedLines[i];
-      if (quality === 'medium' && i % 2 !== 0) {
+      if (tier === 'phone-high' && i % 2 !== 0) {
         line.setAlpha(0);
         continue;
       }

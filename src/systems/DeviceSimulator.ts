@@ -59,12 +59,10 @@ export function initSimulation(): DeviceProfile | null {
     const genProfile: DeviceProfile = {
       tier: 'gen-mobile' as DeviceTier,
       label: 'GEN Mobile (simulated)',
-      crt: false,
-      reflections: false,
-      carCount: 2,
-      parallaxLayers: 6,
-      maxParallelLoads: 2,
-      musicUIScale: 1.3,
+      crt: true, reflections: true, carCount: 2,
+      parallaxLayers: 6, maxParallelLoads: 2, musicUIScale: 1.3,
+      titleAnimLevel: 35, renderScale: 0.5,
+      reflectionRTScale: 0.35, reflectionTexScale: 0.15, reflectionSkip: 3,
     };
     // Create a synthetic device for the info bar
     const genDevice: DeviceSpec = {
@@ -183,32 +181,37 @@ function buildProfileFromSpec(spec: DeviceSpec): DeviceProfile {
     case 'phone-high':
       return {
         tier: 'phone-high', label: `${spec.name} (sim)`,
-        crt: true, reflections: true, carCount: 3,
-        parallaxLayers: 8, maxParallelLoads: 2, musicUIScale: 1.4,
+        crt: true, reflections: true, carCount: 2,
+        parallaxLayers: 6, maxParallelLoads: 2, musicUIScale: 1.4, titleAnimLevel: 25,
+        renderScale: 0.75, reflectionRTScale: 0.5, reflectionTexScale: 0.2, reflectionSkip: 2,
       };
     case 'gen-mobile':
       return {
         tier: 'gen-mobile', label: `${spec.name} (sim)`,
-        crt: false, reflections: false, carCount: 2,
-        parallaxLayers: 6, maxParallelLoads: 2, musicUIScale: 1.3,
+        crt: true, reflections: true, carCount: 2,
+        parallaxLayers: 6, maxParallelLoads: 2, musicUIScale: 1.3, titleAnimLevel: 35,
+        renderScale: 0.5, reflectionRTScale: 0.35, reflectionTexScale: 0.15, reflectionSkip: 3,
       };
     case 'phone-low':
       return {
         tier: 'phone-low', label: `${spec.name} (sim)`,
-        crt: false, reflections: false, carCount: 0,
-        parallaxLayers: 8, maxParallelLoads: 2, musicUIScale: 1.2,
+        crt: true, reflections: true, carCount: 1,
+        parallaxLayers: 8, maxParallelLoads: 2, musicUIScale: 1.2, titleAnimLevel: 35,
+        renderScale: 0.5, reflectionRTScale: 0.25, reflectionTexScale: 0.1, reflectionSkip: 4,
       };
     case 'tablet':
       return {
         tier: 'tablet', label: `${spec.name} (sim)`,
         crt: true, reflections: true, carCount: 5,
-        parallaxLayers: 8, maxParallelLoads: 4, musicUIScale: 1.0,
+        parallaxLayers: 8, maxParallelLoads: 4, musicUIScale: 1.0, titleAnimLevel: 0,
+        renderScale: 1.0, reflectionRTScale: 0.5, reflectionTexScale: 0.2, reflectionSkip: 1,
       };
     default:
       return {
         tier: 'desktop', label: `${spec.name} (sim)`,
         crt: true, reflections: true, carCount: 5,
-        parallaxLayers: 8, maxParallelLoads: 32, musicUIScale: 1.0,
+        parallaxLayers: 8, maxParallelLoads: 32, musicUIScale: 1.0, titleAnimLevel: 0,
+        renderScale: 1.0, reflectionRTScale: 0.5, reflectionTexScale: 0.2, reflectionSkip: 1,
       };
   }
 }

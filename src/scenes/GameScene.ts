@@ -32,6 +32,7 @@ import { fetchBeatData, getDominantColor } from '../systems/MusicCatalogService'
 import { CourseRunner, loadCourseData, CourseData } from '../systems/CourseRunner';
 import { SongSelectScreen } from '../ui/SongSelectScreen';
 import { TEST_MODE } from '../util/testMode';
+import { TITLE_LOOP_FRAME_COUNT, TITLE_START_FRAME_COUNT } from './BootScene';
 
 enum GameState {
   TITLE,
@@ -114,7 +115,7 @@ export class GameScene extends Phaser.Scene {
   private parallaxSystem!: ParallaxSystem;
   private roadSystem!: RoadSystem;
   private obstacleSystem!: ObstacleSystem;
-  private reflectionSystem!: ReflectionSystem | null;
+  private reflectionSystem!: ReflectionSystem;
   private skyGlowSystem!: SkyGlowSystem;
   private lastBeatTrackId: string | null = null;
   private rhythmMode = false;
@@ -157,16 +158,16 @@ export class GameScene extends Phaser.Scene {
   private timeDilation!: TimeDilationSystem;
   private wasDilating: boolean = false;
 
-  // Custom cursor (rendered under CRT)
+  // Custom cursor (rendered under CRT) — desktop only, null on touch devices
   private cursorStroke?: Phaser.GameObjects.Image;
-  private cursorMain!: Phaser.GameObjects.Image;
-  private crosshair!: Phaser.GameObjects.Image;
+  private cursorMain?: Phaser.GameObjects.Image;
+  private crosshair?: Phaser.GameObjects.Image;
   private crosshairActive = false;          // true when crosshair mode is on (gameplay)
   private crosshairHiddenByWMP = false;     // true when crosshair was faded out for WMP
   private cursorOverUI: boolean = false;
   private globalCursorX = 0;
   private globalCursorY = 0;
-  private htmlCursor!: HTMLDivElement;  // HTML cursor overlay (renders above everything incl. iframe)
+  private htmlCursor?: HTMLDivElement;  // HTML cursor overlay (renders above everything incl. iframe)
 
   // Weekly seed
   private weekKey!: string;
@@ -222,8 +223,73 @@ export class GameScene extends Phaser.Scene {
   private startHoldText!: Phaser.GameObjects.Text;
   private startHoldBlinkTween: Phaser.Tweens.Tween | null = null;
 
-  // Title loop animation
+  // Title loop animation — manual performance.now()-based frame stepping
+  // Bypasses Phaser's animation timer for smoother playback (37% less judder on iPhone)
   private titleLoopSprite!: Phaser.GameObjects.Sprite;
+  private _titleAnimPlaying = false;
+  private _titleAnimFrame = 0;
+  private _titleAnimLastTime = 0;
+  private _titleAnimFrameCount = 0;
+  private _titleAnimFps = 12;
+  private _titleAnimLoop = true;
+  private _titleAnimSheet: 'loop' | 'play' = 'loop';
+  private _titleAnimOnComplete: (() => void) | null = null;
+  private animLevelText: Phaser.GameObjects.Text | null = null;
+
+  /** True if title animation frames were loaded (desktop always, mobile with ?anim_level=N). */
+  private get titleAnimEnabled(): boolean {
+    return !GAME_MODE.mobileMode || (window as any).__animLevel != null;
+  }
+
+  /** Start manual frame-stepping animation (bypasses Phaser anim timer for smoother playback). */
+  private _titleAnimPlay(sheet: 'loop' | 'play'): void {
+    this._titleAnimSheet = sheet;
+    this._titleAnimFrame = 0;
+    this._titleAnimFrameCount = sheet === 'loop' ? TITLE_LOOP_FRAME_COUNT : TITLE_START_FRAME_COUNT;
+    this._titleAnimLoop = sheet === 'loop';
+    this._titleAnimFps = 12;
+    this._titleAnimPlaying = true;
+    this._titleAnimLastTime = performance.now();
+    this._titleAnimOnComplete = null;
+    const texKey = sheet === 'loop' ? 'loop-sheet' : 'play-sheet';
+    this.titleLoopSprite.setTexture(texKey, 0);
+  }
+
+  /** Stop manual frame-stepping animation. */
+  private _titleAnimStop(): void {
+    this._titleAnimPlaying = false;
+    this._titleAnimOnComplete = null;
+  }
+
+  /** Register a one-time completion callback (for play-once animations like title-start). */
+  private _titleAnimOnceComplete(cb: () => void): void {
+    this._titleAnimOnComplete = cb;
+  }
+
+  /** Called every frame from update() — advances animation frame using performance.now(). */
+  private _titleAnimUpdate(): void {
+    if (!this._titleAnimPlaying) return;
+    const now = performance.now();
+    const elapsed = now - this._titleAnimLastTime;
+    const frameDuration = 1000 / this._titleAnimFps;
+    if (elapsed >= frameDuration) {
+      const steps = Math.floor(elapsed / frameDuration);
+      this._titleAnimLastTime += steps * frameDuration; // carry remainder
+      if (this._titleAnimLoop) {
+        this._titleAnimFrame = (this._titleAnimFrame + steps) % this._titleAnimFrameCount;
+      } else {
+        this._titleAnimFrame = Math.min(this._titleAnimFrame + steps, this._titleAnimFrameCount - 1);
+        if (this._titleAnimFrame >= this._titleAnimFrameCount - 1) {
+          this._titleAnimPlaying = false;
+          const cb = this._titleAnimOnComplete;
+          this._titleAnimOnComplete = null;
+          if (cb) cb();
+          return;
+        }
+      }
+      this.titleLoopSprite.setFrame(this._titleAnimFrame);
+    }
+  }
 
   // UI layers
   private hudLabel!: Phaser.GameObjects.Text;
@@ -436,20 +502,16 @@ export class GameScene extends Phaser.Scene {
     this.roadSystem = new RoadSystem(this);
     this.skyGlowSystem.setRoadTile(this.roadSystem.getRoadTile());
     this.obstacleSystem = new ObstacleSystem(this, this.weekSeed);
-    // Reflections gated by device profile — render textures cost ~16MB VRAM
-    if (DEVICE_PROFILE.reflections) {
-      this.reflectionSystem = new ReflectionSystem(this, this.parallaxSystem, this.obstacleSystem.getPool(), this.roadSystem.getRoadTile());
-      this.reflectionSystem?.setLinesTile(this.roadSystem.getLinesTile());
-    } else {
-      this.reflectionSystem = null;
-    }
+    // Reflections on all tiers — quality scaled via DeviceProfile (reflectionRTScale/Skip)
+    this.reflectionSystem = new ReflectionSystem(this, this.parallaxSystem, this.obstacleSystem.getPool(), this.roadSystem.getRoadTile());
+    this.reflectionSystem.setLinesTile(this.roadSystem.getLinesTile());
     this.pickupSystem = new PickupSystem(this);
     this.rocketSystem = new RocketSystem(this, this.obstacleSystem);
 
     this.shieldSystem = new ShieldSystem(this);
-    this.reflectionSystem?.setPickupPool(this.pickupSystem.getPool());
-    this.reflectionSystem?.setShieldPool(this.shieldSystem.getPool());
-    this.reflectionSystem?.setRocketPool(this.rocketSystem.getPool());
+    this.reflectionSystem.setPickupPool(this.pickupSystem.getPool());
+    this.reflectionSystem.setShieldPool(this.shieldSystem.getPool());
+    this.reflectionSystem.setRocketPool(this.rocketSystem.getPool());
 
     // Wire obstacle system to spawn pickups behind CRASH obstacles
     this.obstacleSystem.onPickupSpawn = (x: number, y: number) => {
@@ -488,7 +550,7 @@ export class GameScene extends Phaser.Scene {
     this.difficultySystem = new DifficultySystem();
     this.inputSystem = new InputSystem(this);
     this.playerSystem = new PlayerSystem(this, this.inputSystem);
-    this.reflectionSystem?.setPlayerSprite(this.playerSystem.getSprite());
+    this.reflectionSystem.setPlayerSprite(this.playerSystem.getSprite());
     this.scoreSystem = new ScoreSystem();
     this.fxSystem = new FXSystem(this);
     this.audioSystem = new AudioSystem(this);
@@ -544,7 +606,8 @@ export class GameScene extends Phaser.Scene {
 
     // --- Performance monitor + orientation lock ---
     this.perfSystem = new PerfSystem();
-    if (GAME_MODE.mobileMode) {
+    if (GAME_MODE.mobileMode && !GAME_MODE.isPhoneMode) {
+      // Tablets use Phaser overlay; phones use HTML rotate-back overlay (index.html)
       this.orientationOverlay = new OrientationOverlay(this);
     }
 
@@ -569,7 +632,7 @@ export class GameScene extends Phaser.Scene {
     this.musicPlayer.onWMPOpen(() => {
       if (this.profilePopup.isOpen()) this.profilePopup.close();
       // Fade out crosshair while WMP is open
-      if (this.crosshairActive && !this.crosshairHiddenByWMP) {
+      if (this.crosshair && this.crosshairActive && !this.crosshairHiddenByWMP) {
         this.crosshairHiddenByWMP = true;
         this.tweens.killTweensOf(this.crosshair);
         this.tweens.add({ targets: this.crosshair, alpha: 0, duration: 200 });
@@ -577,7 +640,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.musicPlayer.onWMPClose(() => {
       // Restore crosshair if it was active before WMP opened
-      if (this.crosshairHiddenByWMP && this.crosshairActive) {
+      if (this.crosshair && this.crosshairHiddenByWMP && this.crosshairActive) {
         this.crosshairHiddenByWMP = false;
         this.tweens.killTweensOf(this.crosshair);
         this.tweens.add({ targets: this.crosshair, alpha: 1, duration: 200 });
@@ -623,14 +686,24 @@ export class GameScene extends Phaser.Scene {
     }).setDepth(9999).setScrollFactor(0).setVisible(false);
 
     // --- Title loop animation (fullscreen, behind title text) ---
+    // Spritesheet: 'loop-sheet' with manual frame stepping; fallback: static 'start-loop-00'
+    const titleTexKey = this.titleAnimEnabled ? 'loop-sheet' : 'start-loop-00';
     this.titleLoopSprite = this.add.sprite(
       TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
-      'start-loop-00'
+      titleTexKey, this.titleAnimEnabled ? 0 : undefined
     ).setDepth(199);
-    // Scale to fill screen
-    const frameTex = this.textures.get('start-loop-00');
-    const frameW = frameTex.getSourceImage().width;
-    const frameH = frameTex.getSourceImage().height;
+    // Scale spritesheet frame (or static image) to fill screen
+    let frameW: number, frameH: number;
+    if (this.titleAnimEnabled) {
+      // Spritesheet frame dimensions are known from the sheet info
+      const frame = this.titleLoopSprite.texture.get(0);
+      frameW = frame.width;
+      frameH = frame.height;
+    } else {
+      const frameTex = this.textures.get('start-loop-00');
+      frameW = frameTex.getSourceImage().width;
+      frameH = frameTex.getSourceImage().height;
+    }
     this.titleLoopSprite.setDisplaySize(
       TUNING.GAME_WIDTH,
       TUNING.GAME_WIDTH * (frameH / frameW) // maintain aspect ratio
@@ -642,8 +715,25 @@ export class GameScene extends Phaser.Scene {
         TUNING.GAME_HEIGHT
       );
     }
-    if (!GAME_MODE.mobileMode) this.titleLoopSprite.play('title-loop');
-    // Mobile: static first frame (no animation)
+    if (this.titleAnimEnabled) this._titleAnimPlay('loop');
+    // Mobile without ?anim_level: static first frame (no animation)
+
+    // --- Anim level debug overlay (visible when ?anim_level=N) ---
+    const __al = (window as any).__animLevel;
+    if (__al !== null && __al !== undefined) {
+      const sc = 1.0 - __al * 0.02;
+      const aw = Math.max(2, Math.round(1920 * sc));
+      const ah = Math.max(2, Math.round(1080 * sc));
+      const awE = aw % 2 === 0 ? aw : aw + 1;
+      const ahE = ah % 2 === 0 ? ah : ah + 1;
+      const vram = (awE * ahE * 4 * 27 / 1024 / 1024).toFixed(0);
+      this.animLevelText = this.add.text(
+        TUNING.GAME_WIDTH - 20, 20,
+        `ANIM L${String(__al).padStart(2, '0')} | ${awE}x${ahE} | ~${vram}MB VRAM\n27f @ 12fps`,
+        { fontSize: '22px', color: '#00ffff', fontFamily: 'monospace',
+          backgroundColor: '#000000', padding: { x: 10, y: 6 } }
+      ).setOrigin(1, 0).setDepth(99999).setScrollFactor(0).setAlpha(0.85);
+    }
 
     // --- Title screen ---
     this.titleContainer = this.add.container(0, 0).setDepth(200);
@@ -1019,6 +1109,10 @@ export class GameScene extends Phaser.Scene {
             this.tutorialSkipBtn.setVisible(false);
             this.tutorialSkipBtn.setTintFill(0xffffff);
             this.tutorialSkipBtn.setAlpha(SKIP_BTN_PULSE_MAX);
+            // Guard: if tutorial already completed during the 500ms button fade
+            // (e.g. tap also advanced rage_wait → rage_black → enterStarting),
+            // don't overwrite the countdown's black overlay with alpha 0.
+            if (this.state !== GameState.TUTORIAL || this.tutorialPhase === 'done') return;
             this.tutorialPhase = 'skip_fade';
             this.tutorialTimer = 0;
             this.blackOverlay.setVisible(true).setAlpha(0);
@@ -1034,7 +1128,7 @@ export class GameScene extends Phaser.Scene {
     // Katana slash VFX sprite (hidden until activated)
     this.slashSprite = this.add.sprite(0, 0, 'slash-vfx');
     this.slashSprite.setVisible(false).setDepth(4);
-    this.reflectionSystem?.setSlashSprite(this.slashSprite);
+    this.reflectionSystem.setSlashSprite(this.slashSprite);
     this.slashActiveTimer = 0;
     this.slashCooldownTimer = 0;
 
@@ -1049,8 +1143,10 @@ export class GameScene extends Phaser.Scene {
       color: '#ffffff',
     }).setOrigin(0.5).setDepth(1000).setScrollFactor(0).setVisible(false);
 
-    // --- CRT post-processing (gated by device profile) ---
-    if (DEVICE_PROFILE.crt) {
+    // --- CRT post-processing (gated by device profile, ?crt=0/1 overrides) ---
+    const crtParam = new URLSearchParams(location.search).get('crt');
+    const crtOn = crtParam === '0' ? false : crtParam === '1' ? true : DEVICE_PROFILE.crt;
+    if (crtOn) {
       this.cameras.main.setPostPipeline(CRTPipeline);
     }
     this.cameras.main.setPostPipeline(DamageFlashPipeline);
@@ -1058,92 +1154,103 @@ export class GameScene extends Phaser.Scene {
     // --- Adaptive canvas: center 1920px game content in the wider viewport ---
     this.cameras.main.setScroll(-GAME_MODE.contentOffsetX, 0);
 
-    // --- Custom cursor (under CRT shader) ---
-    this.game.canvas.style.cursor = 'none';
-    document.body.style.cursor = 'none';
-    const cursorTex = this.textures.get('cursor').getSourceImage();
-    const aspect = cursorTex.width / cursorTex.height;
-    const curH = TUNING.CURSOR_SIZE;
-    const curW = curH * aspect;
-    if (TUNING.CURSOR_STROKE_W > 0) {
-      const strokeH = curH + TUNING.CURSOR_STROKE_W * 2;
-      const strokeW = strokeH * aspect;
-      this.cursorStroke = this.add.image(0, 0, 'cursor')
-        .setDisplaySize(strokeW, strokeH)
-        .setTintFill(TUNING.CURSOR_STROKE_COLOR)
-        .setDepth(TUNING.CURSOR_DEPTH)
-        .setScrollFactor(0);
-    }
-    this.cursorMain = this.add.image(0, 0, 'cursor')
-      .setDisplaySize(curW, curH)
-      .setTintFill(TUNING.CURSOR_TINT)
-      .setDepth(TUNING.CURSOR_DEPTH + 1)
-      .setScrollFactor(0);
+    // --- renderScale: zoom camera to map 1920×1080 world onto smaller canvas ---
+    // Origin(0,0) makes zoom scale from top-left: screen = worldPos * zoom.
+    // At renderScale=0.5 on a 960×540 canvas, world (1920,1080) → screen (960,540).
+    this.cameras.main.originX = 0;
+    this.cameras.main.originY = 0;
+    this.cameras.main.setZoom(GAME_MODE.renderScale);
 
-    // Crosshair cursor (shown during gameplay only, same depth as main cursor)
-    const chTex = this.textures.get('crosshair').getSourceImage();
-    const chAspect = chTex.width / chTex.height;
-    const chH = TUNING.CURSOR_SIZE * TUNING.CROSSHAIR_SCALE;
-    const chW = chH * chAspect;
-    this.crosshair = this.add.image(0, 0, 'crosshair')
-      .setDisplaySize(chW, chH)
-      .setTintFill(0xff0000)
-      .setDepth(TUNING.CURSOR_DEPTH + 1)
-      .setScrollFactor(0)
-      .setVisible(false);
-
-    // --- HTML cursor overlay (renders above everything including iframe) ---
-    this.htmlCursor = document.createElement('div');
-    Object.assign(this.htmlCursor.style, {
-      position: 'fixed', pointerEvents: 'none', zIndex: '999999', display: 'none',
-    });
-    const htmlCursorImg = new Image();
-    htmlCursorImg.onload = () => {
-      const cc = (window as any).__cursorConfig || { size: 48, strokeW: 0, tint: 0xff0000, strokeColor: 0x000000 };
-      const aspect = htmlCursorImg.naturalWidth / htmlCursorImg.naturalHeight;
-      const h = cc.size;
-      const sw = cc.strokeW;
-      const tintHex = '#' + cc.tint.toString(16).padStart(6, '0');
-      const strokeHex = '#' + cc.strokeColor.toString(16).padStart(6, '0');
-      const mask = '-webkit-mask-image:url(ui/cursor.png);mask-image:url(ui/cursor.png);' +
-        '-webkit-mask-size:contain;mask-size:contain;' +
-        '-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;' +
-        '-webkit-mask-position:center;mask-position:center;' +
-        'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);';
-      if (sw > 0) {
-        const sH = h + sw * 2;
-        const sW = Math.round(sH * aspect);
-        const strokeDiv = document.createElement('div');
-        strokeDiv.style.cssText = mask + 'width:' + sW + 'px;height:' + sH + 'px;background:' + strokeHex + ';';
-        this.htmlCursor.appendChild(strokeDiv);
+    // --- Custom cursor (under CRT shader) — desktop only ---
+    if (!GAME_MODE.mobileMode) {
+      this.game.canvas.style.cursor = 'none';
+      document.body.style.cursor = 'none';
+      const cursorTex = this.textures.get('cursor').getSourceImage();
+      const aspect = cursorTex.width / cursorTex.height;
+      const curH = TUNING.CURSOR_SIZE;
+      const curW = curH * aspect;
+      if (TUNING.CURSOR_STROKE_W > 0) {
+        const strokeH = curH + TUNING.CURSOR_STROKE_W * 2;
+        const strokeW = strokeH * aspect;
+        this.cursorStroke = this.add.image(0, 0, 'cursor')
+          .setDisplaySize(strokeW, strokeH)
+          .setTintFill(TUNING.CURSOR_STROKE_COLOR)
+          .setDepth(TUNING.CURSOR_DEPTH)
+          .setScrollFactor(0);
       }
-      const mainW = Math.round(h * aspect);
-      const mainDiv = document.createElement('div');
-      mainDiv.style.cssText = mask + 'width:' + mainW + 'px;height:' + h + 'px;background:' + tintHex + ';';
-      this.htmlCursor.appendChild(mainDiv);
-    };
-    htmlCursorImg.src = 'ui/cursor.png';
-    document.body.appendChild(this.htmlCursor);
+      this.cursorMain = this.add.image(0, 0, 'cursor')
+        .setDisplaySize(curW, curH)
+        .setTintFill(TUNING.CURSOR_TINT)
+        .setDepth(TUNING.CURSOR_DEPTH + 1)
+        .setScrollFactor(0);
 
-    // Global cursor tracking (works even when HTML overlays capture pointer events)
-    const updateCursorFromEvent = (clientX: number, clientY: number) => {
-      // Don't show GameScene cursor while BIOS overlay is visible
-      const bios = document.getElementById('boot-overlay');
-      if (bios && !bios.classList.contains('hidden')) return;
-      const rect = this.game.canvas.getBoundingClientRect();
-      const cx = clientX + TUNING.CURSOR_OFFSET_X;
-      const cy = clientY + TUNING.CURSOR_OFFSET_Y;
-      this.globalCursorX = ((cx - rect.left) / rect.width) * TUNING.GAME_WIDTH;
-      this.globalCursorY = ((cy - rect.top) / rect.height) * TUNING.GAME_HEIGHT;
-      // Position HTML cursor at offset
-      this.htmlCursor.style.display = '';
-      this.htmlCursor.style.left = cx + 'px';
-      this.htmlCursor.style.top = cy + 'px';
-    };
-    document.addEventListener('mousemove', (e) => updateCursorFromEvent(e.clientX, e.clientY));
-    // Touch/pointer events for mobile cursor tracking
-    document.addEventListener('pointerdown', (e) => updateCursorFromEvent(e.clientX, e.clientY));
-    document.addEventListener('pointermove', (e) => updateCursorFromEvent(e.clientX, e.clientY));
+      // Crosshair cursor (shown during gameplay only, same depth as main cursor)
+      const chTex = this.textures.get('crosshair').getSourceImage();
+      const chAspect = chTex.width / chTex.height;
+      const chH = TUNING.CURSOR_SIZE * TUNING.CROSSHAIR_SCALE;
+      const chW = chH * chAspect;
+      this.crosshair = this.add.image(0, 0, 'crosshair')
+        .setDisplaySize(chW, chH)
+        .setTintFill(0xff0000)
+        .setDepth(TUNING.CURSOR_DEPTH + 1)
+        .setScrollFactor(0)
+        .setVisible(false);
+    }
+
+    // --- HTML cursor overlay (renders above everything including iframe) — desktop only ---
+    if (!GAME_MODE.mobileMode) {
+      this.htmlCursor = document.createElement('div');
+      Object.assign(this.htmlCursor.style, {
+        position: 'fixed', pointerEvents: 'none', zIndex: '999999', display: 'none',
+      });
+      const htmlCursorImg = new Image();
+      htmlCursorImg.onload = () => {
+        const cc = (window as any).__cursorConfig || { size: 48, strokeW: 0, tint: 0xff0000, strokeColor: 0x000000 };
+        const aspect = htmlCursorImg.naturalWidth / htmlCursorImg.naturalHeight;
+        const h = cc.size;
+        const sw = cc.strokeW;
+        const tintHex = '#' + cc.tint.toString(16).padStart(6, '0');
+        const strokeHex = '#' + cc.strokeColor.toString(16).padStart(6, '0');
+        const mask = '-webkit-mask-image:url(ui/cursor.png);mask-image:url(ui/cursor.png);' +
+          '-webkit-mask-size:contain;mask-size:contain;' +
+          '-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;' +
+          '-webkit-mask-position:center;mask-position:center;' +
+          'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);';
+        if (sw > 0) {
+          const sH = h + sw * 2;
+          const sW = Math.round(sH * aspect);
+          const strokeDiv = document.createElement('div');
+          strokeDiv.style.cssText = mask + 'width:' + sW + 'px;height:' + sH + 'px;background:' + strokeHex + ';';
+          this.htmlCursor!.appendChild(strokeDiv);
+        }
+        const mainW = Math.round(h * aspect);
+        const mainDiv = document.createElement('div');
+        mainDiv.style.cssText = mask + 'width:' + mainW + 'px;height:' + h + 'px;background:' + tintHex + ';';
+        this.htmlCursor!.appendChild(mainDiv);
+      };
+      htmlCursorImg.src = 'ui/cursor.png';
+      document.body.appendChild(this.htmlCursor);
+
+      // Global cursor tracking (works even when HTML overlays capture pointer events)
+      const updateCursorFromEvent = (clientX: number, clientY: number) => {
+        // Don't show GameScene cursor while BIOS overlay is visible
+        const bios = document.getElementById('boot-overlay');
+        if (bios && !bios.classList.contains('hidden')) return;
+        const rect = this.game.canvas.getBoundingClientRect();
+        const cx = clientX + TUNING.CURSOR_OFFSET_X;
+        const cy = clientY + TUNING.CURSOR_OFFSET_Y;
+        this.globalCursorX = ((cx - rect.left) / rect.width) * TUNING.GAME_WIDTH;
+        this.globalCursorY = ((cy - rect.top) / rect.height) * TUNING.GAME_HEIGHT;
+        // Position HTML cursor at offset
+        this.htmlCursor!.style.display = '';
+        this.htmlCursor!.style.left = cx + 'px';
+        this.htmlCursor!.style.top = cy + 'px';
+      };
+      document.addEventListener('mousemove', (e) => updateCursorFromEvent(e.clientX, e.clientY));
+      // Touch/pointer events for mobile cursor tracking
+      document.addEventListener('pointerdown', (e) => updateCursorFromEvent(e.clientX, e.clientY));
+      document.addEventListener('pointermove', (e) => updateCursorFromEvent(e.clientX, e.clientY));
+    }
 
     // CRT debug overlay (DOM element — not affected by CRT shader)
     this.crtDebugEl = document.createElement('pre');
@@ -1190,8 +1297,16 @@ export class GameScene extends Phaser.Scene {
     // Signal boot overlay that the start screen is ready
     (window as any).__bootOverlay?.markStartScreenReady?.();
 
-    // Attempt to autoplay title music — wait for BIOS beep to finish first
-    if (bootOverlay?.waitForBeep) {
+    // Start title music — timing depends on platform:
+    if (GAME_MODE.isPhoneMode) {
+      // Mobile: music starts AFTER swipe-to-fullscreen completes (first sound user hears)
+      if ((window as any).__mobileSwipeComplete) {
+        this.tryAutoplayMusic();
+      } else {
+        (window as any).__onMobileSwipeComplete = () => this.tryAutoplayMusic();
+      }
+    } else if (bootOverlay?.waitForBeep) {
+      // Desktop/tablet: music starts after BIOS beep finishes
       bootOverlay.waitForBeep(() => this.tryAutoplayMusic());
     } else {
       this.tryAutoplayMusic();
@@ -1224,19 +1339,19 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard?.addKey(hotkey.key).on('down', () => {
         if (!this.debugMasterEnabled || !hotkey.active || this.debugPanelOpen) return;
         this.parallaxSystem.toggleLayer(layerIdx);
-        this.reflectionSystem?.toggleLayer(layerIdx);
+        this.reflectionSystem.toggleLayer(layerIdx);
       });
     }
     // Sky toggle (key 8)
     this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleSky.key).on('down', () => {
       if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.toggleSky.active || this.debugPanelOpen) return;
       this.parallaxSystem.toggleSky();
-      this.reflectionSystem?.toggleSky();
+      this.reflectionSystem.toggleSky();
     });
     // Reflection mask toggle (M)
     this.input.keyboard?.addKey(DEBUG_HOTKEYS.toggleRefMask.key).on('down', () => {
       if (!this.debugMasterEnabled || !DEBUG_HOTKEYS.toggleRefMask.active || this.debugPanelOpen) return;
-      this.reflectionSystem?.toggleMask();
+      this.reflectionSystem.toggleMask();
     });
     // Freeze frame toggle (T)
     this.input.keyboard?.addKey(DEBUG_HOTKEYS.freezeFrame.key).on('down', () => {
@@ -1267,7 +1382,7 @@ export class GameScene extends Phaser.Scene {
       this.obstacleSystem.setVisible(v);
       this.pickupSystem.setVisible(v);
       this.shieldSystem.setVisible(v);
-      this.reflectionSystem?.setVisible(v);
+      this.reflectionSystem.setVisible(v);
       for (let i = 0; i < this.warningPool.length; i++) {
         this.warningPool[i].circle.setVisible(v);
         this.warningPool[i].preview.setVisible(v);
@@ -1676,26 +1791,33 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Custom cursor follows pointer (uses global tracking to work over HTML overlays)
-    this.cursorMain.setPosition(this.globalCursorX, this.globalCursorY);
+    this.cursorMain?.setPosition(this.globalCursorX, this.globalCursorY);
     this.cursorStroke?.setPosition(this.globalCursorX, this.globalCursorY);
-    this.crosshair.setPosition(this.globalCursorX, this.globalCursorY);
+    this.crosshair?.setPosition(this.globalCursorX, this.globalCursorY);
 
     // Debug freeze — stop all game logic, cursor still tracks
     if (this.debugFrozen) return;
+
+    // Manual frame stepping for title animations (performance.now()-based, bypasses Phaser anim timer)
+    this._titleAnimUpdate();
 
     // Fade cursor only when over the YouTube iframe (can't render Phaser on top of HTML video)
     const overIframe = this.musicPlayer.isCursorOverIframe();
     if (overIframe !== this.cursorOverUI) {
       this.cursorOverUI = overIframe;
       const alpha = overIframe ? 0 : 1;
-      this.tweens.killTweensOf(this.cursorMain);
-      this.tweens.add({ targets: this.cursorMain, alpha, duration: 200 });
+      if (this.cursorMain) {
+        this.tweens.killTweensOf(this.cursorMain);
+        this.tweens.add({ targets: this.cursorMain, alpha, duration: 200 });
+      }
       if (this.cursorStroke) {
         this.tweens.killTweensOf(this.cursorStroke);
         this.tweens.add({ targets: this.cursorStroke, alpha, duration: 200 });
       }
-      this.tweens.killTweensOf(this.crosshair);
-      this.tweens.add({ targets: this.crosshair, alpha, duration: 200 });
+      if (this.crosshair) {
+        this.tweens.killTweensOf(this.crosshair);
+        this.tweens.add({ targets: this.crosshair, alpha, duration: 200 });
+      }
     }
 
     // Z-order: hide WMP iframe when profile popup is in front
@@ -1756,6 +1878,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.inputSystem.update(dt);
+
+    // Phone: HTML rotate-back overlay pauses gameplay (music continues)
+    if (GAME_MODE.isPhoneMode && (window as any).__rotateBackActive) return;
+
+    // Tablet: Phaser orientation overlay
     if (this.orientationOverlay) {
       this.orientationOverlay.update();
       if (this.orientationOverlay.isPaused()) return;
@@ -2252,7 +2379,7 @@ export class GameScene extends Phaser.Scene {
     // ── Performance metrics (stress testing) ───────────────────
     s.fps = Math.round(this.game.loop.actualFps);
     s.fpsAvg = Math.round(this.perfSystem.getFps());
-    s.qualityTier = this.perfSystem.getQuality();
+    s.qualityTier = this.perfSystem.getRenderTier();
     s.features.crt = this.crtEnabled && DEVICE_PROFILE.crt;
     s.features.reflections = !!this.reflectionSystem;
     s.features.carCount = DEVICE_PROFILE.carCount;
@@ -2276,6 +2403,12 @@ export class GameScene extends Phaser.Scene {
     if (this.gameModeOpen) return;
     // Block title input during swipe-to-fullscreen overlay (title still animates)
     if ((window as any).__swipeLock) return;
+
+    // Fallback: if mobile swipe completed but music never started, retry every frame
+    // (startTitleMusic has its own guard — safe to call repeatedly, it no-ops if already playing)
+    if (GAME_MODE.isPhoneMode && (window as any).__mobileSwipeComplete) {
+      this.tryAutoplayMusic();
+    }
 
     // Button hover highlighting
     const pointer = this.input.activePointer;
@@ -2539,15 +2672,15 @@ export class GameScene extends Phaser.Scene {
       this.countdownPhase = 'done';
       this.countdownSprite.setVisible(false);
       this.tweens.killTweensOf(this.blackOverlay);
-      this.tweens.killTweensOf(this.cursorMain);
+      if (this.cursorMain) this.tweens.killTweensOf(this.cursorMain);
       if (this.cursorStroke) this.tweens.killTweensOf(this.cursorStroke);
       if (this.preStartSprite) this.tweens.killTweensOf(this.preStartSprite);
       this.blackOverlay.setAlpha(0).setVisible(false);
-      this.cursorMain.setAlpha(0);
+      this.cursorMain?.setAlpha(0);
       if (this.cursorStroke) this.cursorStroke.setAlpha(0);
       this.preStartSprite?.stop();
       this.preStartSprite?.setVisible(false);
-      this.titleLoopSprite.stop();
+      this._titleAnimStop();
       this.titleLoopSprite.setVisible(false);
       this.musicPlayer.skipCountdownAudio();
       this.musicPlayer.revealForGameplay();
@@ -2582,7 +2715,7 @@ export class GameScene extends Phaser.Scene {
         // When "2" finishes animating, start the cutscene + fade black + reveal music UI
         if (this.countdownIndex === TUNING.COUNTDOWN_FRAMES - 2) {
           this.musicPlayer.revealForGameplay();
-          this.titleLoopSprite.stop();
+          this._titleAnimStop();
           this.titleLoopSprite.setVisible(false);
           this.playerSystem.reset();
           if (this.preStartSprite) {
@@ -2651,7 +2784,8 @@ export class GameScene extends Phaser.Scene {
     this.setCrosshairMode(false);
     this.elapsed = 0;
     this.debugPreStartOverlay.setVisible(false);
-    this.reflectionSystem?.setVisible(false);
+    this.reflectionSystem.setVisible(false);
+    this.musicPlayer.resetForTitle();
 
     // Clean up tutorial
     this.tutorialPhase = 'done';
@@ -2664,7 +2798,7 @@ export class GameScene extends Phaser.Scene {
     this.tutorialSkipBtn.setVisible(false);
 
     // Restore cursor visibility
-    this.cursorMain.setVisible(true).setAlpha(1);
+    this.cursorMain?.setVisible(true).setAlpha(1);
     this.cursorStroke?.setVisible(true).setAlpha(1);
 
     // Hide mobile touch cursor (green triangle) during title
@@ -2693,7 +2827,7 @@ export class GameScene extends Phaser.Scene {
     this.fxSystem.reset();
     this.audioSystem.silenceEngine();
     this.rageZoomProgress = 0;
-    this.cameras.main.setZoom(1);
+    this.cameras.main.setZoom(GAME_MODE.renderScale);
     this.cameras.main.setScroll(-GAME_MODE.contentOffsetX, 0);
     this.adjustHudForZoom(1);
     this.pickupSystem.reset();
@@ -2744,7 +2878,7 @@ export class GameScene extends Phaser.Scene {
     this.parallaxSystem.setVisible(true);
     this.skyGlowSystem.setVisible(true);
     this.titleLoopSprite.setVisible(true);
-    if (!GAME_MODE.mobileMode) this.titleLoopSprite.play('title-loop');
+    if (this.titleAnimEnabled) this._titleAnimPlay('loop');
     this.titleContainer.setVisible(true);
 
     // Show music player in compact mode on title
@@ -2789,12 +2923,8 @@ export class GameScene extends Phaser.Scene {
     // Test mode: skip tutorial entirely (TITLE → STARTING)
     if (TEST_MODE.active && TEST_MODE.skipTutorial) {
       this.titleContainer.setVisible(false);
-      if (!GAME_MODE.mobileMode) {
-        this.titleLoopSprite.stop();
-        this.titleLoopSprite.setVisible(false);
-      } else {
-        this.titleLoopSprite.setVisible(false);
-      }
+      this._titleAnimStop();
+      this.titleLoopSprite.setVisible(false);
       this.enterStarting();
       return;
     }
@@ -2802,14 +2932,14 @@ export class GameScene extends Phaser.Scene {
     this.titleContainer.setVisible(false);
 
     // Switch from loop to play-once start animation (fire-and-forget visual underneath)
-    if (!GAME_MODE.mobileMode) {
-      this.titleLoopSprite.play('title-start');
-      this.titleLoopSprite.once('animationcomplete', () => {
-        this.titleLoopSprite.stop();
+    if (this.titleAnimEnabled) {
+      this._titleAnimPlay('play');
+      this._titleAnimOnceComplete(() => {
+        this._titleAnimStop();
         this.titleLoopSprite.setVisible(false);
       });
     } else {
-      // Mobile: no title-start animation — just hide immediately
+      // No title-start animation loaded — just hide immediately
       this.titleLoopSprite.setVisible(false);
     }
 
@@ -3007,18 +3137,20 @@ export class GameScene extends Phaser.Scene {
     // Ensure black overlay is fully visible behind countdown numbers
     this.blackOverlay.setVisible(true).setAlpha(1);
     this.titleContainer.setVisible(false);
-    this.titleLoopSprite.stop();
+    this._titleAnimStop();
     this.titleLoopSprite.setVisible(false);
     this.musicPlayer.setVisible(false);
 
     // Fade cursor away during countdown (returns on resetToTitle)
-    this.tweens.killTweensOf(this.cursorMain);
-    this.tweens.add({ targets: this.cursorMain, alpha: 0, duration: 400 });
+    if (this.cursorMain) {
+      this.tweens.killTweensOf(this.cursorMain);
+      this.tweens.add({ targets: this.cursorMain, alpha: 0, duration: 400 });
+    }
     if (this.cursorStroke) {
       this.tweens.killTweensOf(this.cursorStroke);
       this.tweens.add({ targets: this.cursorStroke, alpha: 0, duration: 400 });
     }
-    this.htmlCursor.style.display = 'none';
+    if (this.htmlCursor) this.htmlCursor.style.display = 'none';
 
     // Fade out profile HUD during countdown
     this.tweens.add({
@@ -3045,25 +3177,25 @@ export class GameScene extends Phaser.Scene {
   private setCrosshairMode(enabled: boolean): void {
     this.crosshairActive = enabled;
     this.crosshairHiddenByWMP = false;
-    this.tweens.killTweensOf(this.crosshair);
+    if (this.crosshair) this.tweens.killTweensOf(this.crosshair);
     if (enabled) {
-      // Mobile: hide all cursors during gameplay (no crosshair or pointer cursor)
+      // Mobile: no cursors at all on touch devices
       if (GAME_MODE.mobileMode) {
-        this.crosshair.setVisible(false).setAlpha(0);
-        this.cursorMain.setVisible(false);
+        this.crosshair?.setVisible(false).setAlpha(0);
+        this.cursorMain?.setVisible(false);
         if (this.cursorStroke) this.cursorStroke.setVisible(false);
-        this.htmlCursor.style.display = 'none';
+        if (this.htmlCursor) this.htmlCursor.style.display = 'none';
       } else {
-        this.crosshair.setVisible(true).setAlpha(0);
-        this.tweens.add({ targets: this.crosshair, alpha: 1, duration: 1500 });
-        this.cursorMain.setVisible(false);
+        this.crosshair?.setVisible(true).setAlpha(0);
+        if (this.crosshair) this.tweens.add({ targets: this.crosshair, alpha: 1, duration: 1500 });
+        this.cursorMain?.setVisible(false);
         if (this.cursorStroke) this.cursorStroke.setVisible(false);
       }
     } else {
-      this.crosshair.setVisible(false).setAlpha(0);
-      // Mobile: also hide pointer cursor on non-gameplay screens (title will show it via resetToTitle)
+      this.crosshair?.setVisible(false).setAlpha(0);
+      // Desktop: restore pointer cursor
       if (!GAME_MODE.mobileMode) {
-        this.cursorMain.setVisible(true);
+        this.cursorMain?.setVisible(true);
         if (this.cursorStroke) this.cursorStroke.setVisible(true);
       }
     }
@@ -3326,7 +3458,7 @@ export class GameScene extends Phaser.Scene {
       TUNING.SPRITE_OFFSET_PARALLAX_7,
     ]);
     this.parallaxSystem.setSkyOffsetX(TUNING.SPRITE_OFFSET_SKY);
-    this.reflectionSystem?.setVisible(true);
+    this.reflectionSystem.setVisible(true);
     this.playerSystem.reset();
     if (this.spectatorMode) this.playerSystem.setSpectator(true);
     this.playerSystem.setVisible(true);
@@ -3356,7 +3488,7 @@ export class GameScene extends Phaser.Scene {
     this.scoreSystem.reset();
     this.fxSystem.reset();
     this.titleContainer.setVisible(false);
-    this.titleLoopSprite.stop();
+    this._titleAnimStop();
     this.titleLoopSprite.setVisible(false);
     this.deathContainer.setVisible(false);
     this.highlightRank = 0;
@@ -3392,7 +3524,7 @@ export class GameScene extends Phaser.Scene {
     this.rageTimer = 0;
     this.rageZoomProgress = 0;
     this.roadSpeedBonus = 0;
-    this.cameras.main.setZoom(1);
+    this.cameras.main.setZoom(GAME_MODE.renderScale);
     this.cameras.main.setScroll(-GAME_MODE.contentOffsetX, 0);
     this.adjustHudForZoom(1);
     this.audioSystem.setDistortion(0);
@@ -3582,7 +3714,7 @@ export class GameScene extends Phaser.Scene {
       this.roadSystem.update(0, dt);
       this.parallaxSystem.update(0, dt);
       this.skyGlowSystem.update(dt, this.musicPlayer.getPlaybackPosition().current);
-      this.reflectionSystem?.update(0, dt);
+      this.reflectionSystem.update(0, dt);
       return;
     }
     // Ramp from 0 to base speed over START_HOLD_RAMP seconds after hold release
@@ -3955,7 +4087,7 @@ export class GameScene extends Phaser.Scene {
     this.skyGlowSystem.update(hDt, this.musicPlayer.getPlaybackPosition().current);
     this.skyGlowSystem.setRage(this.rageTimer > 0);
     this.roadSystem.update(roadSpeed, hDt);
-    this.reflectionSystem?.update(roadSpeed, hDt);
+    this.reflectionSystem.update(roadSpeed, hDt);
 
     // Lane collision highlights
     const collY = this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y;
@@ -4014,7 +4146,7 @@ export class GameScene extends Phaser.Scene {
       for (let i = 0; i < this.laneHighlights.length; i++) {
         this.laneHighlights[i].setVisible(false);
       }
-      this.reflectionSystem?.setVisible(false);
+      this.reflectionSystem.setVisible(false);
     }
 
     // CRT debug overlay
@@ -4371,43 +4503,45 @@ export class GameScene extends Phaser.Scene {
     this.warningPillPoolUsed = 0;
   }
 
-  /** Adjust all scrollFactor(0) HUD elements so they stay pinned during camera zoom */
-  private adjustHudForZoom(zoom: number): void {
-    this.profileHud.adjustForZoom(zoom);
-    const cx = this.cameras.main.width / 2;
-    const cy = this.cameras.main.height / 2;
-    const invZ = 1 / zoom;
-    // hudLabel original position: (canvasWidth/2, 20)
-    this.hudLabel.setScale(invZ);
-    this.hudLabel.setPosition(
-      cx + (GAME_MODE.canvasWidth / 2 - cx) * invZ,
-      cy + (20 - cy) * invZ,
-    );
-    // hudHighScore original position: (canvasWidth/2, 50)
-    this.hudHighScore.setScale(invZ);
-    this.hudHighScore.setPosition(
-      cx + (GAME_MODE.canvasWidth / 2 - cx) * invZ,
-      cy + (50 - cy) * invZ,
-    );
+  /** Adjust all scrollFactor(0) HUD elements so they stay pinned during camera zoom.
+   *  @param rageMultiplier 1.0 = no rage, >1 = zoomed in. Compensates for rage zoom only,
+   *  NOT for renderScale (renderScale is the base zoom and should affect HUD normally). */
+  private adjustHudForZoom(rageMultiplier: number): void {
+    this.profileHud.adjustForZoom(rageMultiplier);
+    // With camera origin(0,0): screen = worldPos * absoluteZoom.
+    // To keep HUD at its base-zoom screen position during rage:
+    //   worldPos' = targetWorldPos / rageMultiplier, scale' = 1 / rageMultiplier
+    const invR = 1 / rageMultiplier;
+    // hudLabel target position: (canvasWidth/2, 20)
+    this.hudLabel.setScale(invR);
+    this.hudLabel.setPosition(GAME_MODE.canvasWidth / 2 * invR, 20 * invR);
+    // hudHighScore target position: (canvasWidth/2, 50)
+    this.hudHighScore.setScale(invR);
+    this.hudHighScore.setPosition(GAME_MODE.canvasWidth / 2 * invR, 50 * invR);
   }
 
-  /** Apply camera zoom + scroll to create rage focal-length effect */
+  /** Apply camera zoom + scroll to create rage focal-length effect.
+   *  Camera uses origin(0,0) so zoom scales from top-left: screen = (world - scroll) * zoom.
+   *  Base zoom = renderScale; rage multiplies on top. */
   private applyRageZoom(): void {
+    const rs = GAME_MODE.renderScale;
     if (this.rageZoomProgress <= 0) {
-      this.cameras.main.setZoom(1);
+      this.cameras.main.setZoom(rs);
       this.cameras.main.setScroll(-GAME_MODE.contentOffsetX, 0);
       this.adjustHudForZoom(1);
       return;
     }
     // Ease in/out for smooth feel
     const t = this.rageZoomProgress * this.rageZoomProgress * (3 - 2 * this.rageZoomProgress); // smoothstep
-    const zoom = 1 + (TUNING.RAGE_ZOOM_LEVEL - 1) * t;
-    this.cameras.main.setZoom(zoom);
-    this.adjustHudForZoom(zoom);
+    const rageMultiplier = 1 + (TUNING.RAGE_ZOOM_LEVEL - 1) * t;
+    const absoluteZoom = rs * rageMultiplier;
+    this.cameras.main.setZoom(absoluteZoom);
+    this.adjustHudForZoom(rageMultiplier);
 
     // Compute desired camera center in world coordinates
-    const halfVisW = TUNING.GAME_WIDTH / (2 * zoom);
-    const halfVisH = TUNING.GAME_HEIGHT / (2 * zoom);
+    // With origin(0,0): visible width = renderW / absoluteZoom = GAME_WIDTH / rageMultiplier
+    const halfVisW = TUNING.GAME_WIDTH / (2 * rageMultiplier);
+    const halfVisH = TUNING.GAME_HEIGHT / (2 * rageMultiplier);
 
     // X: center on player, Y: lock bottom of road to bottom of screen
     let centerX = this.playerSystem.getX();
@@ -4417,8 +4551,8 @@ export class GameScene extends Phaser.Scene {
     centerX = Math.max(halfVisW, Math.min(TUNING.GAME_WIDTH - halfVisW, centerX));
     centerY = Math.max(halfVisH, Math.min(TUNING.GAME_HEIGHT - halfVisH, centerY));
 
-    // Convert world center to scroll (accounting for adaptive canvas offset)
-    this.cameras.main.setScroll(centerX - TUNING.GAME_WIDTH / 2 - GAME_MODE.contentOffsetX, centerY - TUNING.GAME_HEIGHT / 2);
+    // With origin(0,0): scroll = worldCenter - halfVisible
+    this.cameras.main.setScroll(centerX - halfVisW - GAME_MODE.contentOffsetX, centerY - halfVisH);
   }
 
   // Color palettes for score popups by interaction type
@@ -4688,14 +4822,14 @@ export class GameScene extends Phaser.Scene {
     this.state = GameState.DYING;
     this.autoSubmitted = false;
     this.debugPreStartOverlay.setVisible(false);
-    this.reflectionSystem?.setVisible(false);
+    this.reflectionSystem.setVisible(false);
 
     // Mobile: hide all cursors on death/high score screen
     if (GAME_MODE.mobileMode) {
-      this.cursorMain.setVisible(false);
+      this.cursorMain?.setVisible(false);
       if (this.cursorStroke) this.cursorStroke.setVisible(false);
-      this.crosshair.setVisible(false);
-      this.htmlCursor.style.display = 'none';
+      this.crosshair?.setVisible(false);
+      if (this.htmlCursor) this.htmlCursor.style.display = 'none';
     }
 
     // Reset time dilation and restore music rate
@@ -4720,7 +4854,7 @@ export class GameScene extends Phaser.Scene {
 
     // Reset camera zoom before death transition
     this.rageZoomProgress = 0;
-    this.cameras.main.setZoom(1);
+    this.cameras.main.setZoom(GAME_MODE.renderScale);
     this.cameras.main.setScroll(-GAME_MODE.contentOffsetX, 0);
     this.adjustHudForZoom(1);
 

@@ -27,6 +27,22 @@ This rule is mandatory for all future restarts.
 
 ---
 
+## Locked-In Protection Protocol (Permanent)
+
+Every feature marked **[LOCKED]** in `GAME_FLOW.md` or listed in the **Perfect Items** table is protected code. This applies to **all Claudes** working on any hume project that touches this codebase.
+
+1. **Never alter locked code** unless absolutely necessary to fulfill a direct user request.
+2. **If you must alter locked code:**
+   - Document WHAT you changed and WHY in the Changes Log below
+   - Test the altered feature AND all features that share files with it
+   - Testing must be **2x as strict** — verify the full flow twice, check for regressions
+   - Flag the change to Mikey: "I modified locked code in [file] for [reason]"
+3. **Mikey can request changes** to locked sections — but the same 2x testing rule applies.
+4. **Reference `GAME_FLOW.md`** for the bug history of each locked phase — know what broke before so you don't repeat it.
+5. **Cross-Claude awareness:** If P (PC Claude) modifies locked code, notify M (MacClaude) via Slack with the change details. If M modifies locked code, notify P the same way. Neither Claude should learn about locked-code changes by surprise.
+
+---
+
 ## Document Summary Protocol (All Documents — Permanent)
 
 Every document in this project (and all hume projects) follows a summary-first pattern to save context window space and reading time.
@@ -618,3 +634,5 @@ File: `DP Moto Brief.txt` — Located at: `c:\Users\mikey\Claude_Playground\dp_m
 | CRT Filter | Post-processing CRT scanline/warp shader | `CRTPipeline.ts`, `crtTuning.ts` | 2026-02-18 |
 | Transition Animations | All screen transition animations throughout the game flow | `GameScene.ts` | 2026-02-18 |
 | CRT Hover Proxy System | Proxy objects outside Phaser pass hover state through CRT filter to in-game objects | `GameScene.ts`, `MusicPlayer.ts`, `ProfileHud.ts` | 2026-02-18 |
+| Swipe-to-Fullscreen | 3-phase mobile flow: BIOS auto-dismiss → solid black "SWIPE UP" overlay (blocks all input except vertical swipe) → Safari chrome hides → page locks position:static + overflow:hidden → controls unlock. Body stays position:static (NOT fixed) so Safari doesn't re-show chrome. Game canvas gets pointer-events:none during swipe. 300ms unlock delay drains queued taps. | `index.html` (CSS #swipe-overlay, showSwipeOverlay/hideSwipeOverlay/onSwipeScroll, dismissOverlay trigger), `GameScene.ts` (__swipeLock checks at keyboard handler, updateTitle, handleScreenTap) | 2026-02-24 |
+| liteMode (All Phones) | ALL phone tiers skip heavy animation spritesheets (~88MB VRAM savings). Prevents OOM crash on 4GB devices (iPhone 12 Mini, Xs). BootScene generates procedural textures for skipped assets. | `src/main.ts` (GAME_MODE.liteMode), `src/scenes/BootScene.ts` (lite gates), `src/util/device.ts` (isPhoneTier) | 2026-02-24 |

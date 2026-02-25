@@ -306,14 +306,15 @@ export class CRTPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline 
 
   onPreRender(): void {
     const t = CRT_TUNING;
-    const quality = GAME_MODE.quality;
+    const tier = GAME_MODE.renderTier;
 
     this.set1f('uTime', this.game.loop.time / 1000);
     this.set2f('uResolution', this.renderer.width, this.renderer.height);
 
-    // Scanlines
+    // Scanlines — reduced density on weakest tiers
     this.set1f('uScanlineIntensity', t.scanlineIntensity);
-    this.set1f('uScanlineDensity', quality === 'low' ? 270 : t.scanlineDensity);
+    this.set1f('uScanlineDensity',
+      (tier === 'phone-low' || tier === 'gen-mobile') ? 270 : t.scanlineDensity);
     this.set1f('uScanlineRollSpeed', t.scanlineRollSpeed);
 
     // Mask
@@ -326,8 +327,11 @@ export class CRTPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline 
     this.set1f('uBeamFocus', t.beamFocus);
     this.set1f('uConvergenceError', t.convergenceError);
 
-    // Bloom — reduced on medium, disabled on low
-    const bloomMul = quality === 'low' ? 0 : quality === 'medium' ? 0.5 : 1;
+    // Bloom — scaled per tier: full → 0.75 → 0.5 → 0 → 0
+    const bloomMul = tier === 'desktop' ? 1
+      : tier === 'tablet' ? 0.75
+      : tier === 'phone-high' ? 0.5
+      : 0;  // gen-mobile + phone-low: no bloom (GPU expensive)
     this.set1f('uBloomStrength', t.bloomStrength * bloomMul);
     this.set1f('uBloomRadius', t.bloomRadius);
     this.set1f('uBloomThreshold', t.bloomThreshold);
@@ -343,8 +347,11 @@ export class CRTPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline 
     this.set1f('uGamma', t.gamma);
     this.set1f('uBrightness', t.brightness);
 
-    // Noise — reduced on medium, disabled on low
-    const noiseMul = quality === 'low' ? 0 : quality === 'medium' ? 0.5 : 1;
+    // Noise — scaled per tier: full → 0.75 → 0.5 → 0 → 0
+    const noiseMul = tier === 'desktop' ? 1
+      : tier === 'tablet' ? 0.75
+      : tier === 'phone-high' ? 0.5
+      : 0;  // gen-mobile + phone-low: no noise (GPU expensive)
     this.set1f('uNoiseAmount', t.noiseAmount * noiseMul);
     this.set1f('uNoiseSpeed', t.noiseSpeed);
     this.set1f('uJitterAmount', t.jitterAmount);

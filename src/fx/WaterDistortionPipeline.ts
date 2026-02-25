@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
+import { GAME_MODE } from '../config/gameMode';
 
 const FRAG_SHADER = `
 precision mediump float;
@@ -122,7 +123,7 @@ export class WaterDistortionPipeline extends Phaser.Renderer.WebGL.Pipelines.Pos
     this.set1f('uGain', TUNING.REFLECTION_TURB_GAIN);
     this.set1f('uYAmount', TUNING.REFLECTION_TURB_Y_AMOUNT);
 
-    // Color tint (hue converted from degrees to 0-1 range)
+    // Color tint — free on mobile GPU (confirmed via shader stress test)
     this.set1f('uTintHue', TUNING.REFLECTION_TINT_HUE / 360);
     this.set1f('uTintSaturation', TUNING.REFLECTION_TINT_SATURATION);
     this.set1f('uTintMix', TUNING.REFLECTION_TINT_MIX);

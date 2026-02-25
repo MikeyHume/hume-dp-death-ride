@@ -35,7 +35,7 @@
       font-style: normal;
       font-display: block;
     }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
     html, body {
       width: 100%;
       height: 100dvh;           /* dynamic viewport — tracks actual visible area on iOS */
@@ -231,11 +231,11 @@
       93%  { opacity: 1; }
       100% { opacity: 1; }
     }
-    /* Swipe-to-fullscreen overlay — shown on phones AFTER title screen is visible */
+    /* Swipe-to-fullscreen overlay — shown on phones AFTER rotation + assets loaded */
     #swipe-overlay {
       display: none;
       position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
+      inset: 0;
       z-index: 10000;
       background: #000;
       pointer-events: none; /* let touches pass through to body for scrolling */
@@ -243,25 +243,246 @@
       align-items: center;
       justify-content: center;
       gap: 12px;
+      animation: bios-flicker var(--bios-flicker-speed) infinite alternate;
     }
     #swipe-overlay[data-active="true"] { display: flex; }
+    /* CRT scanlines */
+    #swipe-overlay::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0,0,0,var(--bios-scanline-opacity)) 0px,
+        rgba(0,0,0,var(--bios-scanline-opacity)) 1px,
+        transparent 1px,
+        transparent var(--bios-scanline-gap)
+      );
+      pointer-events: none;
+      z-index: 2;
+    }
+    /* CRT vignette */
+    #swipe-overlay::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center,
+        transparent var(--bios-vignette-start),
+        rgba(0,0,0,var(--bios-vignette-opacity)) 100%);
+      pointer-events: none;
+      z-index: 2;
+    }
     #swipe-overlay-text {
       font-family: var(--bios-title-font);
       font-size: clamp(24px, 5vw, 48px);
       color: var(--bios-color);
       text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow), 0 0 2px var(--bios-color);
       animation: enter-blink 1350ms infinite;
+      z-index: 1;
     }
     #swipe-overlay-arrow {
       font-size: clamp(18px, 4vw, 36px);
       color: var(--bios-color);
       text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow);
       animation: swipe-bounce 1s ease-in-out infinite;
+      z-index: 1;
     }
     @keyframes swipe-bounce {
       0%, 100% { transform: translateY(0); opacity: 0.7; }
       50% { transform: translateY(-12px); opacity: 1; }
     }
+
+    /* Rotation prompt — shown on phones in portrait BEFORE anything else (Phase 1 of mobile boot) */
+    #rotation-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100001;
+      background: #000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      animation: bios-flicker var(--bios-flicker-speed) infinite alternate;
+    }
+    #rotation-overlay[data-active="true"] { display: flex; }
+    /* CRT scanlines */
+    #rotation-overlay::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0,0,0,var(--bios-scanline-opacity)) 0px,
+        rgba(0,0,0,var(--bios-scanline-opacity)) 1px,
+        transparent 1px,
+        transparent var(--bios-scanline-gap)
+      );
+      pointer-events: none;
+      z-index: 2;
+    }
+    /* CRT vignette */
+    #rotation-overlay::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center,
+        transparent var(--bios-vignette-start),
+        rgba(0,0,0,var(--bios-vignette-opacity)) 100%);
+      pointer-events: none;
+      z-index: 2;
+    }
+    #rotation-overlay-text {
+      font-family: var(--bios-title-font);
+      font-size: clamp(32px, 8vw, 72px);
+      color: var(--bios-color);
+      text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow),
+                   0 0 2px var(--bios-color);
+      text-align: center;
+      line-height: 1.4;
+      padding: 0 24px;
+      animation: bios-jitter var(--bios-jitter-speed) infinite alternate;
+      z-index: 1;
+    }
+
+    /* Mobile loading overlay — neutral loading screen during asset loading (both orientations) */
+    #mobile-loading-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100001;
+      background: #000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      animation: bios-flicker var(--bios-flicker-speed) infinite alternate;
+    }
+    #mobile-loading-overlay[data-active="true"] { display: flex; }
+    /* CRT scanlines */
+    #mobile-loading-overlay::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0,0,0,var(--bios-scanline-opacity)) 0px,
+        rgba(0,0,0,var(--bios-scanline-opacity)) 1px,
+        transparent 1px,
+        transparent var(--bios-scanline-gap)
+      );
+      pointer-events: none;
+      z-index: 2;
+    }
+    /* CRT vignette */
+    #mobile-loading-overlay::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center,
+        transparent var(--bios-vignette-start),
+        rgba(0,0,0,var(--bios-vignette-opacity)) 100%);
+      pointer-events: none;
+      z-index: 2;
+    }
+    #mobile-loading-text {
+      font-family: var(--bios-title-font);
+      font-size: clamp(20px, 5vw, 40px);
+      color: var(--bios-color);
+      text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow),
+                   0 0 2px var(--bios-color);
+      text-align: center;
+      animation: enter-blink 1350ms infinite;
+      z-index: 1;
+    }
+    #mobile-loading-bar-wrap {
+      width: 60%;
+      max-width: 320px;
+      height: 14px;
+      border: 1px solid var(--bios-color);
+      background: #111;
+      box-shadow: 0 0 6px var(--bios-glow);
+      overflow: hidden;
+      animation: bios-jitter var(--bios-jitter-speed) infinite alternate;
+      z-index: 1;
+    }
+    #mobile-loading-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--bios-color);
+      box-shadow: inset 0 0 4px var(--bios-glow-bright);
+      transition: width 0.15s linear;
+    }
+
+    /* Rotate-back overlay — shown AFTER boot when user rotates to portrait (69% opacity) */
+    #rotate-back-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100001;
+      background: #000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      animation: bios-flicker var(--bios-flicker-speed) infinite alternate;
+    }
+    #rotate-back-overlay[data-active="true"] { display: flex; }
+    #rotate-back-overlay::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0,0,0,var(--bios-scanline-opacity)) 0px,
+        rgba(0,0,0,var(--bios-scanline-opacity)) 1px,
+        transparent 1px,
+        transparent var(--bios-scanline-gap)
+      );
+      pointer-events: none;
+      z-index: 2;
+    }
+    #rotate-back-overlay::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center,
+        transparent var(--bios-vignette-start),
+        rgba(0,0,0,var(--bios-vignette-opacity)) 100%);
+      pointer-events: none;
+      z-index: 2;
+    }
+    #rotate-back-overlay .rb-rotate-text {
+      font-family: var(--bios-title-font);
+      font-size: clamp(32px, 8vw, 72px);
+      color: var(--bios-color);
+      text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow),
+                   0 0 2px var(--bios-color);
+      text-align: center;
+      line-height: 1.4;
+      padding: 0 24px;
+      animation: bios-jitter var(--bios-jitter-speed) infinite alternate;
+      z-index: 1;
+    }
+    #rotate-back-overlay .rb-swipe-text {
+      display: none;
+      font-family: var(--bios-title-font);
+      font-size: clamp(24px, 5vw, 48px);
+      color: var(--bios-color);
+      text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow), 0 0 2px var(--bios-color);
+      animation: enter-blink 1350ms infinite;
+      z-index: 1;
+    }
+    #rotate-back-overlay .rb-swipe-arrow {
+      display: none;
+      font-size: clamp(18px, 4vw, 36px);
+      color: var(--bios-color);
+      text-shadow: 0 0 var(--bios-glow-radius) var(--bios-glow);
+      animation: swipe-bounce 1s ease-in-out infinite;
+      z-index: 1;
+    }
+    #rotate-back-overlay[data-mode="swipe"] .rb-rotate-text { display: none; }
+    #rotate-back-overlay[data-mode="swipe"] .rb-swipe-text { display: block; }
+    #rotate-back-overlay[data-mode="swipe"] .rb-swipe-arrow { display: block; }
 
     /* iPad Preview Mode (desktop debug: press I) */
     html.ipad-preview {
@@ -281,6 +502,56 @@
   </style>
 </head>
 <body>
+  <!-- DEBUG: visible error overlay for mobile testing -->
+  <div id="err-overlay" style="display:none;position:fixed;top:0;left:0;right:0;z-index:999999;background:rgba(255,0,0,0.9);color:#fff;font:12px monospace;padding:8px;max-height:40vh;overflow:auto;word-break:break-all"></div>
+  <!-- FPS counter — neon green, bold, bottom-left, above everything -->
+  <div id="fps-counter" style="position:fixed;bottom:8px;left:8px;z-index:999999;font:bold 18px monospace;color:#39ff14;text-shadow:0 0 6px #39ff14,0 0 2px #000;pointer-events:none"></div>
+  <script>
+    (function() {
+      var fpsEl = document.getElementById('fps-counter');
+      var frames = 0, lastTime = performance.now();
+      function fpsLoop() {
+        frames++;
+        var now = performance.now();
+        if (now - lastTime >= 500) {
+          fpsEl.textContent = Math.round(frames * 1000 / (now - lastTime)) + ' FPS';
+          frames = 0;
+          lastTime = now;
+        }
+        requestAnimationFrame(fpsLoop);
+      }
+      requestAnimationFrame(fpsLoop);
+    })();
+
+    window.__errLog = [];
+    window.onerror = function(msg, src, line, col) {
+      var e = line + ':' + col + ' ' + msg;
+      window.__errLog.push(e);
+      var el = document.getElementById('err-overlay');
+      if (el) { el.style.display = 'block'; el.textContent = window.__errLog.join('\n'); }
+    };
+  </script>
+
+  <!-- Rotation prompt — shown on phones in portrait BEFORE anything else (Phase 1 of mobile boot) -->
+  <div id="rotation-overlay">
+    <div id="rotation-overlay-text">this isn't tik tok...<br>rotate your shit</div>
+  </div>
+
+  <!-- Mobile loading overlay — shown during asset loading before rotation/swipe phase -->
+  <div id="mobile-loading-overlay">
+    <div id="mobile-loading-text">. . . loading . . .</div>
+    <div id="mobile-loading-bar-wrap">
+      <div id="mobile-loading-bar-fill"></div>
+    </div>
+  </div>
+
+  <!-- Rotate-back overlay — shown after boot when user rotates to portrait -->
+  <div id="rotate-back-overlay">
+    <div class="rb-rotate-text">this isn't tik tok...<br>rotate your shit</div>
+    <div class="rb-swipe-text">SWIPE UP</div>
+    <div class="rb-swipe-arrow">&#x25B2;</div>
+  </div>
+
   <!-- BIOS boot overlay — renders instantly before any JS -->
   <div id="boot-overlay" data-testid="bios-overlay">
     <!-- Device debug banner — bottom-left, tiny text -->
@@ -359,7 +630,7 @@
       var hh = String(now.getHours()).padStart(2, '0');
       var mi = String(now.getMinutes()).padStart(2, '0');
       var ss = String(now.getSeconds()).padStart(2, '0');
-      var verNum = '0.00.72';
+      var verNum = '0.00.99';
       var versionText = 'last saved [ ' + dd + ' : ' + monthName + ' : ' + yyyy + ' ]  [ ' + hh + ' : ' + mi + ' : ' + ss + ' ]';
       // Set title line version dynamically
       var titleLine = document.getElementById('bios-title-line');
@@ -424,19 +695,19 @@
     var biosStarted = true;  // start BIOS immediately (no terminal phase)
     var readyForEnter = false;  // true once loading bar finishes
 
-    // Click sound during BIOS overlay
-    var biosClickAudio = new Audio('assets/audio/sfx/mouse click.mp3');
-    biosClickAudio.volume = 1.0;
-    overlay.addEventListener('pointerdown', function() {
-      biosClickAudio.currentTime = 0;
-      biosClickAudio.play().catch(function() {});
-    });
+    // ── Mobile: hide BIOS content, show loading overlay during asset loading ──
+    var mobileLoadingFill = document.getElementById('mobile-loading-bar-fill');
+    if (isMobileBIOS && !isTestMode) {
+      bootContent.style.display = 'none';
+      document.getElementById('mobile-loading-overlay').setAttribute('data-active', 'true');
+    }
 
-    // Boot-up sound — try autoplay, fallback to mousemove, then click/key
-    var bootupAudio = new Audio('assets/audio/sfx/old_bootup.mp3');
-    bootupAudio.volume = 1.0;
-    bootupAudio.loop = false;
-    var bootAudioStarted = false;
+    // ── Boot audio (desktop/tablet only — mobile gets dead silence) ──
+    var biosClickAudio = null;
+    var bootupAudio = null;
+    var bootAudioStarted = true; // default true so mobile skips fallback listeners
+
+    // Define at outer scope so dismissOverlay's removeEventListener calls are safe
     function tryPlayBootAudio() {
       if (bootAudioStarted) return;
       bootupAudio.play().then(function() {
@@ -446,13 +717,29 @@
         document.removeEventListener('keydown', tryPlayBootAudio);
       }).catch(function() {});
     }
-    // Attempt 1: autoplay immediately
-    tryPlayBootAudio();
-    // Attempt 2: on mouse move
-    document.addEventListener('mousemove', tryPlayBootAudio);
-    // Attempt 3: on click or keypress
-    document.addEventListener('pointerdown', tryPlayBootAudio);
-    document.addEventListener('keydown', tryPlayBootAudio);
+
+    if (!isMobileBIOS) {
+      // Click sound during BIOS overlay
+      biosClickAudio = new Audio('assets/audio/sfx/mouse click.mp3');
+      biosClickAudio.volume = 1.0;
+      overlay.addEventListener('pointerdown', function() {
+        biosClickAudio.currentTime = 0;
+        biosClickAudio.play().catch(function() {});
+      });
+
+      // Boot-up sound — try autoplay, fallback to mousemove, then click/key
+      bootupAudio = new Audio('assets/audio/sfx/old_bootup.mp3');
+      bootupAudio.volume = 1.0;
+      bootupAudio.loop = false;
+      bootAudioStarted = false;
+      // Attempt 1: autoplay immediately
+      tryPlayBootAudio();
+      // Attempt 2: on mouse move
+      document.addEventListener('mousemove', tryPlayBootAudio);
+      // Attempt 3: on click or keypress
+      document.addEventListener('pointerdown', tryPlayBootAudio);
+      document.addEventListener('keydown', tryPlayBootAudio);
+    }
 
     // Dismiss handler — any key or tap after [ENTER] prompt is shown
     var guideMode = false; // debug guide mode blocks dismiss
@@ -512,7 +799,7 @@
 
     var revealed = 0;
     var targetProgress = 0;
-    var typingDone = false;
+    var typingDone = isMobileBIOS ? true : false; // mobile: no typewriter, skip gate
     var loadingDone = false;
     var dismissed = false;
     var dripScheduled = false;
@@ -575,6 +862,7 @@
     }
 
     function fadeOutBootAudio() {
+      if (!bootupAudio) return; // mobile: no boot audio
       var start = bootupAudio.volume;
       var dur = 500; // ms
       var step = 16;
@@ -591,10 +879,9 @@
       }, step);
     }
 
-    // BIOS complete chime — plays when loading finishes
-    var biosCompleteAudio = new Audio('assets/audio/sfx/bios complete loading.mp3');
-    biosCompleteAudio.volume = 1.0;
-    var beepDone = false;
+    // BIOS complete chime (desktop/tablet only — mobile has no beep)
+    var biosCompleteAudio = null;
+    var beepDone = isMobileBIOS ? true : false; // mobile: beep is "done" immediately
     var beepCallback = null;
 
     function onBeepFinished() {
@@ -602,30 +889,30 @@
       beepDone = true;
       if (beepCallback) beepCallback();
     }
-    biosCompleteAudio.addEventListener('ended', onBeepFinished, { once: true });
-    biosCompleteAudio.addEventListener('error', onBeepFinished, { once: true });
+
+    if (!isMobileBIOS) {
+      biosCompleteAudio = new Audio('assets/audio/sfx/bios complete loading.mp3');
+      biosCompleteAudio.volume = 1.0;
+      biosCompleteAudio.addEventListener('ended', onBeepFinished, { once: true });
+      biosCompleteAudio.addEventListener('error', onBeepFinished, { once: true });
+    }
 
     function tryDismiss() {
       if (readyForEnter || !typingDone || !loadingDone) return;
       readyForEnter = true;
 
       if (isMobileBIOS && !isTestMode) {
-        // Phone: no [ENTER] prompt — auto-dismiss after beep (or immediately if audio blocked).
-        // iOS blocks audio.play() without a prior user gesture. If user didn't tap during BIOS,
-        // the beep can't play — dismiss immediately instead of waiting forever.
-        var autoDismiss = function() { if (!dismissed) dismissOverlay(); };
-        biosCompleteAudio.play().then(function() {
-          // Beep is playing — wait for it to finish, then dismiss
-          biosCompleteAudio.addEventListener('ended', autoDismiss, { once: true });
-          biosCompleteAudio.addEventListener('error', autoDismiss, { once: true });
-        }).catch(function() {
-          // Audio blocked (no user gesture) — dismiss immediately
-          onBeepFinished();
-          autoDismiss();
-        });
+        // Phone: hide loading overlay, signal assets ready, let orientation watcher handle transition
+        document.getElementById('mobile-loading-overlay').removeAttribute('data-active');
+        window.__mobileAssetsReady = true;
+        handleOrientationUpdate();
       } else {
-        // Desktop/tablet: play beep + show [ENTER] prompt
-        biosCompleteAudio.play().catch(function() { onBeepFinished(); });
+        // Desktop/tablet (or test mode): play beep + show [ENTER] prompt
+        if (biosCompleteAudio) {
+          biosCompleteAudio.play().catch(function() { onBeepFinished(); });
+        } else {
+          onBeepFinished(); // mobile test mode: no audio, fire callback immediately
+        }
         enterPrompt.style.display = 'block';
       }
     }
@@ -655,6 +942,12 @@
       document.body.style.overflow = 'auto';
       document.body.style.height = 'auto';
 
+      // ── iOS audio unlock on touchstart — finger-down IS a user gesture ──
+      document.addEventListener('touchstart', function swipeTouchUnlock() {
+        doAudioUnlock();
+        document.removeEventListener('touchstart', swipeTouchUnlock);
+      }, { once: true });
+
       // Listen for scroll — ONLY way to dismiss
       window.addEventListener('scroll', onSwipeScroll, { passive: true });
     }
@@ -677,6 +970,30 @@
       var gc = document.getElementById('game-container');
       if (gc) gc.style.pointerEvents = '';
 
+      // ── iOS audio unlock (backup — touchstart already unlocked, this is belt-and-suspenders) ──
+      doAudioUnlock();
+
+      // ── Signal GameScene to start title music NOW ──
+      window.__mobileSwipeComplete = true;
+      if (window.__onMobileSwipeComplete) {
+        window.__onMobileSwipeComplete();
+      } else {
+        // Safety net: callback not registered yet (shouldn't happen, but retry)
+        var retryCount = 0;
+        var retryInterval = setInterval(function() {
+          retryCount++;
+          if (window.__onMobileSwipeComplete) {
+            window.__onMobileSwipeComplete();
+            clearInterval(retryInterval);
+          } else if (retryCount >= 30) { // give up after 3s
+            clearInterval(retryInterval);
+          }
+        }, 100);
+      }
+
+      // Mark boot sequence complete — orientation watcher stops, in-game Phaser overlay takes over
+      mobileBootDone = true;
+
       // Delay unlock — prevents queued taps from instantly triggering title actions
       setTimeout(function() { window.__swipeLock = false; }, 300);
     }
@@ -687,20 +1004,8 @@
       }
     }
 
-    function dismissOverlay() {
-      if (dismissed) return;
-      dismissed = true;
-
-      // ── Kill ALL BIOS audio ──────────────────────────────────
-      // Stop boot-up sound immediately + remove lingering listeners
-      fadeOutBootAudio();
-      document.removeEventListener('mousemove', tryPlayBootAudio);
-      document.removeEventListener('pointerdown', tryPlayBootAudio);
-      document.removeEventListener('keydown', tryPlayBootAudio);
-      // Hard-stop boot audio in case fade didn't work (iOS audio was never unlocked)
-      try { bootupAudio.pause(); bootupAudio.currentTime = 0; } catch(e) {}
-
-      // ── iOS audio unlock (best effort — works if called from user gesture) ──
+    // ── iOS audio unlock helper — must be called from a user gesture ──
+    function doAudioUnlock() {
       try {
         var unlockCtx = new (window.AudioContext || window.webkitAudioContext)();
         unlockCtx.resume().then(function() { unlockCtx.close(); });
@@ -726,6 +1031,24 @@
           setTimeout(function() { try { window.__ytPlayer.pauseVideo(); } catch(e) {} }, 50);
         }
       } catch(e) {}
+    }
+
+    function dismissOverlay() {
+      if (dismissed) return;
+      dismissed = true;
+
+      // ── Kill ALL BIOS audio ──────────────────────────────────
+      fadeOutBootAudio();
+      document.removeEventListener('mousemove', tryPlayBootAudio);
+      document.removeEventListener('pointerdown', tryPlayBootAudio);
+      document.removeEventListener('keydown', tryPlayBootAudio);
+      try { if (bootupAudio) { bootupAudio.pause(); bootupAudio.currentTime = 0; } } catch(e) {}
+
+      // Desktop/tablet: unlock audio now (BIOS dismiss IS the user gesture)
+      // Mobile: audio unlock happens later in hideSwipeOverlay (swipe IS the user gesture)
+      if (!isMobileBIOS) {
+        doAudioUnlock();
+      }
 
       // Fullscreen API — works on iPad, silently fails on iPhone
       try {
@@ -746,14 +1069,207 @@
       setTimeout(function() {
         overlay.classList.add('hidden');
         if (bootCursor && bootCursor.parentNode) bootCursor.parentNode.removeChild(bootCursor);
-        // Phone: show swipe-to-fullscreen overlay now that title screen is visible
-        if (isMobileBIOS && !isTestMode) {
-          showSwipeOverlay();
-        }
+        // Mobile: swipe overlay is handled by the orientation watcher (showSwipeFromRotation)
+        // Desktop/tablet: no swipe overlay
       }, 320);
     }
 
-    // Start the drip immediately
+    // ---- MOBILE ORIENTATION WATCHER ----
+    // Continuously watches orientation during the entire pre-game phase:
+    //   Portrait → show rotation overlay, hide swipe, lock scroll
+    //   Landscape → hide rotation, show swipe overlay, enable scroll
+    // Stops watching once the swipe completes (in-game Phaser overlay takes over)
+    var mobileBootDone = false;  // true after swipe completes — stop watching
+    var bootOverlayDismissed = false; // true after first landscape — one-shot BIOS dismiss
+    var swipeShowing = false; // tracks whether swipe overlay is currently active
+    window.__mobileAssetsReady = false;
+
+    function isLandscapeNow() {
+      return window.innerWidth > window.innerHeight;
+    }
+
+    // Lazy-cached DOM refs for fast toggling (elements may not exist at parse time)
+    var rotOverlay = document.getElementById('rotation-overlay');
+    var swpOverlay = null;
+    var gameContainerEl = null;
+    var scrollSpacerEl = null;
+    function ensureRefs() {
+      if (!swpOverlay) swpOverlay = document.getElementById('swipe-overlay');
+      if (!gameContainerEl) gameContainerEl = document.getElementById('game-container');
+      if (!scrollSpacerEl) scrollSpacerEl = document.getElementById('scroll-spacer');
+    }
+    var swipeScrollBound = false; // tracks if scroll listener is attached
+    var audioUnlockBound = false; // tracks if touchstart audio unlock is attached
+
+    function showRotationPrompt() {
+      ensureRefs();
+      rotOverlay.setAttribute('data-active', 'true');
+      swpOverlay.removeAttribute('data-active');
+      if (swipeScrollBound) { window.removeEventListener('scroll', onSwipeScroll); swipeScrollBound = false; }
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+      window.__swipeLock = true;
+      swipeShowing = false;
+    }
+
+    function showSwipeFromRotation() {
+      ensureRefs();
+      // Show swipe overlay FIRST (covers screen), then hide rotation
+      swpOverlay.setAttribute('data-active', 'true');
+      rotOverlay.removeAttribute('data-active');
+      window.__swipeLock = true;
+      if (gameContainerEl) gameContainerEl.style.pointerEvents = 'none';
+      scrollSpacerEl.style.display = 'block';
+      document.documentElement.style.position = 'static';
+      document.documentElement.style.overflow = 'auto';
+      document.body.style.position = 'static';
+      document.body.style.overflow = 'auto';
+      document.body.style.height = 'auto';
+
+      // Bind scroll listener once (or re-bind after removal)
+      if (!swipeScrollBound) {
+        window.addEventListener('scroll', onSwipeScroll, { passive: true });
+        swipeScrollBound = true;
+      }
+      // Bind audio unlock once — also prime title track audio in gesture context
+      if (!audioUnlockBound) {
+        audioUnlockBound = true;
+        document.addEventListener('touchstart', function swipeTouchUnlock() {
+          doAudioUnlock();
+          // Pre-create title track audio and play it silent — iOS requires first .play()
+          // to happen in a user gesture. Store globally for MusicPlayer to reuse.
+          if (!window.__mobileTitleAudio) {
+            var a = new Audio('assets/audio/music/Rythem_Songs/DEATHPIXIE - RED MALIBU.mp3');
+            a.loop = true;
+            a.volume = 0;
+            a.play().catch(function(){});
+            window.__mobileTitleAudio = a;
+          }
+          document.removeEventListener('touchstart', swipeTouchUnlock);
+        }, { once: true });
+      }
+
+      // First time reaching landscape: dismiss boot overlay behind swipe
+      if (!bootOverlayDismissed) {
+        bootOverlayDismissed = true;
+        dismissOverlay();
+      }
+      swipeShowing = true;
+    }
+
+    // ---- ROTATE-BACK STATE (post-boot) ----
+    // States: 'none' | 'rotate' | 'swipe'
+    var rotateBackEl = document.getElementById('rotate-back-overlay');
+    var rbState = 'none';
+    var rbScrollBound = false;
+    window.__rotateBackActive = false;
+
+    function onRbSwipeScroll() {
+      if (window.scrollY >= SWIPE_THRESHOLD) {
+        dismissRotateBack();
+      }
+    }
+
+    function showRotateBackRotate() {
+      // Portrait state: rotate text, no input, game paused
+      ensureRefs();
+      if (rbScrollBound) { window.removeEventListener('scroll', onRbSwipeScroll); rbScrollBound = false; }
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+      rotateBackEl.removeAttribute('data-mode');
+      rotateBackEl.style.pointerEvents = ''; // block all touch
+      rotateBackEl.setAttribute('data-active', 'true');
+      window.__rotateBackActive = true;
+      window.__swipeLock = true;
+      rbState = 'rotate';
+    }
+
+    function showRotateBackSwipe() {
+      // Landscape state after rotate-back: swipe text, scroll enabled for swipe gesture
+      ensureRefs();
+      rotateBackEl.setAttribute('data-mode', 'swipe');
+      rotateBackEl.style.pointerEvents = 'none'; // let touches through for scrolling
+      rotateBackEl.setAttribute('data-active', 'true');
+      window.__rotateBackActive = true;
+      window.__swipeLock = true;
+      if (gameContainerEl) gameContainerEl.style.pointerEvents = 'none';
+      scrollSpacerEl.style.display = 'block';
+      window.scrollTo(0, 0);
+      document.documentElement.style.position = 'static';
+      document.documentElement.style.overflow = 'auto';
+      document.body.style.position = 'static';
+      document.body.style.overflow = 'auto';
+      document.body.style.height = 'auto';
+      if (!rbScrollBound) {
+        window.addEventListener('scroll', onRbSwipeScroll, { passive: true });
+        rbScrollBound = true;
+      }
+      rbState = 'swipe';
+    }
+
+    function dismissRotateBack() {
+      // Swipe completed — hide everything, resume game
+      if (rbScrollBound) { window.removeEventListener('scroll', onRbSwipeScroll); rbScrollBound = false; }
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+      rotateBackEl.removeAttribute('data-active');
+      rotateBackEl.removeAttribute('data-mode');
+      rotateBackEl.style.pointerEvents = '';
+      if (gameContainerEl) gameContainerEl.style.pointerEvents = '';
+      window.__rotateBackActive = false;
+      rbState = 'none';
+      setTimeout(function() { window.__swipeLock = false; }, 300);
+    }
+
+    function handleOrientationUpdate() {
+      var landscape = window.innerWidth > window.innerHeight;
+
+      // POST-BOOT: rotate-back flow (rotate text → swipe text → dismiss)
+      if (mobileBootDone) {
+        if (!landscape) {
+          // Portrait: show rotate text (or stay on it)
+          if (rbState !== 'rotate') showRotateBackRotate();
+        } else {
+          // Landscape: if currently in rotate state, transition to swipe
+          if (rbState === 'rotate') {
+            showRotateBackSwipe();
+          }
+          // if rbState is 'none' or 'swipe', do nothing (swipe handles itself)
+        }
+        return;
+      }
+
+      // PRE-BOOT: rotation prompt ↔ swipe overlay toggling
+      if (!window.__mobileAssetsReady) return;
+      if (landscape && !swipeShowing) {
+        showSwipeFromRotation();
+      } else if (!landscape) {
+        showRotationPrompt();
+      }
+    }
+
+    if (isMobileBIOS && !isTestMode) {
+      // Primary: resize event (fires immediately on rotation with correct dimensions)
+      window.addEventListener('resize', handleOrientationUpdate);
+
+      // Backup: matchMedia change
+      try {
+        var mql = window.matchMedia('(orientation: landscape)');
+        var mqlHandler = function() { handleOrientationUpdate(); };
+        if (mql.addEventListener) mql.addEventListener('change', mqlHandler);
+        else if (mql.addListener) mql.addListener(mqlHandler);
+      } catch(e) {}
+
+      // Legacy: orientationchange (30ms delay — just enough for dimensions to update)
+      window.addEventListener('orientationchange', function() {
+        setTimeout(handleOrientationUpdate, 30);
+      });
+
+      // Initial check (user might already be in landscape)
+      handleOrientationUpdate();
+    }
+
+    // Start the drip immediately (desktop only — mobile has typingDone=true, skips drip)
     scheduleDrip(0);
 
     window.__bootOverlay = {
@@ -766,6 +1282,10 @@
         if (dismissed) return;
         targetProgress = p;
         if (!dripScheduled) scheduleDrip(0);
+        // Update mobile loading bar fill
+        if (mobileLoadingFill) {
+          mobileLoadingFill.style.width = Math.min(p * 100, 100) + '%';
+        }
       },
       markStartScreenReady: function() {
         if (loadingDone) return;
@@ -1071,7 +1591,7 @@
   })();
   </script>
 
-  <!-- Swipe-to-fullscreen overlay — shown on phones AFTER BIOS dismisses + title screen visible -->
+  <!-- Swipe-to-fullscreen overlay — shown on phones AFTER rotation + assets loaded -->
   <div id="swipe-overlay">
     <div id="swipe-overlay-text">SWIPE UP</div>
     <div id="swipe-overlay-arrow">&#x25B2;</div>

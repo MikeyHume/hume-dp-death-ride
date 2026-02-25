@@ -293,8 +293,8 @@ export class ObstacleSystem {
           TUNING.SPAWN_INTERVAL_MIN,
           difficultyFactor
         );
-        // Wider spacing on lower quality tiers for more reaction time
-        if (GAME_MODE.quality !== 'high') {
+        // Wider spacing on lower tiers for more reaction time
+        if (GAME_MODE.renderTier !== 'desktop' && GAME_MODE.renderTier !== 'tablet') {
           interval *= 1.15;
         }
         this.nextSpawnInterval = interval;
@@ -519,8 +519,8 @@ export class ObstacleSystem {
     // Clear any leftover FX from previous pooled use (e.g. enemy car glow)
     if (obs.preFX) obs.preFX.clear();
 
-    // Start animation for cars
-    if (type === ObstacleType.CAR) {
+    // Start animation for cars (if spritesheet anim exists)
+    if (type === ObstacleType.CAR && this.scene.anims.exists(`${textureKey}-drive`)) {
       obs.play(`${textureKey}-drive`);
     }
 

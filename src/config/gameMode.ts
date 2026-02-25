@@ -1,17 +1,15 @@
 import { detectMobileLike, detectDeviceProfile, isPhoneTier } from '../util/device';
-import type { DeviceProfile } from '../util/device';
-
-export type QualityTier = 'high' | 'medium' | 'low';
+import type { DeviceProfile, DeviceTier } from '../util/device';
 
 /** Detected device profile — drives all per-device optimizations. */
 export const DEVICE_PROFILE: DeviceProfile = detectDeviceProfile();
 
-/** Global mutable runtime state. Read by systems to branch on mobile/quality. */
+/** Global mutable runtime state. Read by systems to branch on mobile/tier. */
 export const GAME_MODE = {
   mobileMode: detectMobileLike(),
-  quality: (DEVICE_PROFILE.tier === 'desktop' ? 'high'
-    : DEVICE_PROFILE.tier === 'tablet' ? 'medium'
-    : 'low') as QualityTier, // phone-high/gen-mobile/phone-low → low (disables bloom + noise)
+  /** Active render tier — starts at DEVICE_PROFILE.tier, can be dynamically
+   *  downgraded/upgraded by PerfSystem based on measured FPS. */
+  renderTier: DEVICE_PROFILE.tier as DeviceTier,
   /** Actual canvas width (adaptive to viewport). Set in main.ts before game creation. */
   canvasWidth: 1920,
   /** X offset to center 1920px content in the wider canvas. = (canvasWidth - 1920) / 2 */
@@ -20,6 +18,8 @@ export const GAME_MODE = {
   isPhoneMode: false as boolean,  // set after DEVICE_PROFILE is finalized in main.ts
   /** True on phone-low tier — skips heavy animation spritesheets to stay within VRAM budget. */
   liteMode: false as boolean,     // set in main.ts after device profile is finalized
+  /** Internal render resolution scale (1.0=1920x1080, 0.5=960x540). Set in main.ts. */
+  renderScale: 1.0,
 };
 
 // Log detected device on boot (visible in Safari console + WebDriver)

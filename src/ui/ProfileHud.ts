@@ -307,16 +307,12 @@ export class ProfileHud {
   }
 
   /** Counter-scale and reposition so camera zoom doesn't push HUD off-screen */
-  adjustForZoom(zoom: number): void {
-    const cam = this.container.scene.cameras.main;
-    const cx = cam.width / 2;
-    const cy = cam.height / 2;
-    // Zoom scales around camera center — reverse-transform to keep HUD at its original screen position
-    this.container.setScale(HUD_SCALE / zoom);
-    this.container.setPosition(
-      cx + (HUD_ORIGIN_X - cx) / zoom,
-      cy + (HUD_ORIGIN_Y - cy) / zoom,
-    );
+  adjustForZoom(rageMultiplier: number): void {
+    // With camera origin(0,0): screen = worldPos * absoluteZoom.
+    // Compensate for rage zoom only (renderScale is the desired base zoom).
+    const invR = 1 / rageMultiplier;
+    this.container.setScale(HUD_SCALE * invR);
+    this.container.setPosition(HUD_ORIGIN_X * invR, HUD_ORIGIN_Y * invR);
   }
 
   setAvatarTexture(key: string): void {

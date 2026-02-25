@@ -45,6 +45,11 @@ export interface DeviceProfile {
   parallaxLayers: number;     // Number of parallax background layers
   maxParallelLoads: number;   // Loader concurrency
   musicUIScale: number;       // Music player popup scale on phones (1.0 = no extra scaling)
+  titleAnimLevel: number | null; // Title animation resolution level (0=full, 25=half, null=static)
+  renderScale: number;        // Internal render resolution multiplier (1.0=1920x1080, 0.5=960x540)
+  reflectionRTScale: number;  // Reflection RenderTexture resolution (0.5=960×540, 0.25=480×270)
+  reflectionTexScale: number; // Parallax reflection texture downscale (0.2=20%, 0.1=10%)
+  reflectionSkip: number;     // RT redraw interval (1=every frame, 2=half, 3=third, 4=quarter)
 }
 
 /** Default profiles per tier. */
@@ -58,6 +63,11 @@ const PROFILES: Record<DeviceTier, DeviceProfile> = {
     parallaxLayers: 8,
     maxParallelLoads: 32,
     musicUIScale: 1.0,
+    titleAnimLevel: 0,    // full-res originals
+    renderScale: 1.0,
+    reflectionRTScale: 0.5,
+    reflectionTexScale: 0.2,
+    reflectionSkip: 1,
   },
   'tablet': {
     tier: 'tablet',
@@ -68,36 +78,56 @@ const PROFILES: Record<DeviceTier, DeviceProfile> = {
     parallaxLayers: 8,
     maxParallelLoads: 4,
     musicUIScale: 1.0,
+    titleAnimLevel: 0,    // full-res originals
+    renderScale: 1.0,
+    reflectionRTScale: 0.5,
+    reflectionTexScale: 0.2,
+    reflectionSkip: 1,
   },
   'phone-high': {
     tier: 'phone-high',
     label: 'Phone High (A14+)',
     crt: true,
-    reflections: false,    // OFF — saves ~15.8 MB VRAM + 20-36 RT draws/frame + Water PostFX
-    carCount: 2,           // was 3 — each car skin ~1.8 MB mobile texture
-    parallaxLayers: 6,     // was 8 — drops 2 least-visible building layers
+    reflections: true,
+    carCount: 2,
+    parallaxLayers: 6,
     maxParallelLoads: 2,
     musicUIScale: 1.4,
+    titleAnimLevel: 25,   // 960x540 — tested smooth on 12 Mini with CRT
+    renderScale: 0.75,    // 1440x810 — A14+ can handle 75%
+    reflectionRTScale: 0.5,
+    reflectionTexScale: 0.2,
+    reflectionSkip: 2,
   },
   'gen-mobile': {
     tier: 'gen-mobile',
     label: 'GEN Mobile (unknown)',
-    crt: false,           // CRT is the #1 GPU killer — off for unknowns
-    reflections: false,   // Second heaviest — off for unknowns
-    carCount: 2,          // Some traffic (not 0 like phone-low, not 5 like desktop)
-    parallaxLayers: 6,    // Reduced from 8 but not gutted
+    crt: true,
+    reflections: true,    // ON — quality scaled via reflectionRTScale/Skip
+    carCount: 2,
+    parallaxLayers: 6,
     maxParallelLoads: 2,
     musicUIScale: 1.3,
+    titleAnimLevel: 35,   // 576x324 — conservative for unknowns
+    renderScale: 0.5,     // 960x540 — safe default for unknowns
+    reflectionRTScale: 0.35,
+    reflectionTexScale: 0.15,
+    reflectionSkip: 3,
   },
   'phone-low': {
     tier: 'phone-low',
     label: 'Phone Low (A12/A13)',
-    crt: false,       // CRT shader is too heavy for A12 — 15+ texture lookups per fragment
-    reflections: false,
-    carCount: 0,
+    crt: true,
+    reflections: true,    // ON — quality scaled via reflectionRTScale/Skip
+    carCount: 1,          // Bring back 1 car (was 0) — tiny 20% sprites
     parallaxLayers: 8,
     maxParallelLoads: 2,
     musicUIScale: 1.2,
+    titleAnimLevel: 35,  // 576x324 — tested 31 FPS on 12 Mini (no CRT)
+    renderScale: 0.5,    // 960x540 — 4x fewer pixels, targeting 30+ FPS
+    reflectionRTScale: 0.5,   // Same as desktop — start safe, reduce after testing
+    reflectionTexScale: 0.2,  // Same as desktop — start safe, reduce after testing
+    reflectionSkip: 3,        // Redraw every 3rd frame
   },
 };
 
