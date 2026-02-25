@@ -81,13 +81,11 @@ export class BootScene extends Phaser.Scene {
         const idx = String(i).padStart(5, '0');
         this.load.image(`intro-tut-${idx}`, `assets/cutscenes/intro_to_tut/v3/intro_to_tut_v03__${idx}.jpg`);
       }
-    } else if (!GAME_MODE.liteMode) {
-      // Mobile (non-lite): load first frame of title loop for static title background (7.9MB VRAM)
+    } else {
+      // Mobile (all): load first frame of title loop for static title background (7.9MB VRAM)
+      // This single frame is safe even on 4GB devices — liteMode saves ~88MB elsewhere
       this.load.image('start-loop-00', 'assets/start/start_loop/DP_Death_Ride_Title_Loop00.jpg');
       // Mobile: load compressed half-res first frame of intro-to-tutorial (745KB → 89KB)
-      this.load.image('intro-tut-00000', 'assets/cutscenes/intro_to_tut/v3_mobile/intro_to_tut_v03__00000.jpg');
-    } else {
-      // Lite mode: skip title frame (7.9MB), skip intro-tut (procedural placeholder in create)
       this.load.image('intro-tut-00000', 'assets/cutscenes/intro_to_tut/v3_mobile/intro_to_tut_v03__00000.jpg');
     }
     // Mobile: load half-res nearest-neighbor sprite sheets (_mobile suffix)
@@ -163,12 +161,9 @@ export class BootScene extends Phaser.Scene {
     this.load.image('obstacle-crash', 'assets/obstacles/road_barrier_01.png');
     this.load.image('obstacle-reflection-alt', 'assets/obstacles/road_barrier_01_reflection_alt.png');
     this.load.image('puddle-tex', 'assets/background/puddle example.png');
-    // Lite mode: skip heavy background images (road=24.4MB, railing=7.1MB, title=7.9MB)
-    // Procedural replacements created in create() for road/sky
-    if (!lite) {
-      this.load.image('road-img', 'assets/background/road.jpg');
-      this.load.image('railing', 'assets/background/railing_dark.jpg');
-    }
+    // Road + railing: mobile uses crushed copies (0.2MB VRAM vs 31.5MB)
+    this.load.image('road-img', lite ? 'assets/background/road_mobile.jpg' : 'assets/background/road.jpg');
+    this.load.image('railing', lite ? 'assets/background/railing_dark_mobile.jpg' : 'assets/background/railing_dark.jpg');
     this.load.image('sky-img', 'assets/background/sky.jpg');
     this.load.image('buildings-back', 'assets/background/buildings_back_row_dark.png');
     this.load.image('buildings-front', 'assets/background/buildings_Front_row_dark.png');
@@ -300,21 +295,6 @@ export class BootScene extends Phaser.Scene {
     // ── Lite mode: generate procedural replacements for skipped textures ──
     // These tiny textures prevent crashes when GameScene references missing keys
     if (GAME_MODE.liteMode) {
-      // Road: 256x128 dark gray with lane markings (replaces 12001x534 = 24.4MB)
-      const roadG = this.add.graphics();
-      roadG.fillStyle(0x333333); roadG.fillRect(0, 0, 256, 128);
-      roadG.fillStyle(0x888800); roadG.fillRect(0, 60, 256, 3); // center line
-      roadG.fillStyle(0x444444); roadG.fillRect(0, 30, 256, 1); roadG.fillRect(0, 90, 256, 1); // lane dividers
-      roadG.generateTexture('road-img', 256, 128);
-      roadG.destroy();
-
-      // Railing: 256x8 dark gray bar (replaces 18559x100 = 7.1MB)
-      const railG = this.add.graphics();
-      railG.fillStyle(0x222222); railG.fillRect(0, 0, 256, 8);
-      railG.fillStyle(0x444444); railG.fillRect(0, 0, 256, 1);
-      railG.generateTexture('railing', 256, 8);
-      railG.destroy();
-
       // Buildings-big: reuse buildings-front key (avoids duplicate 1920x163 load)
       if (!this.textures.exists('buildings-big')) {
         // Copy reference from buildings-front
@@ -322,13 +302,7 @@ export class BootScene extends Phaser.Scene {
         if (bfTex) this.textures.addImage('buildings-big', bfTex.getSourceImage() as HTMLImageElement);
       }
 
-      // Title frame: 4x4 black (replaces 1928x1076 = 7.9MB)
-      if (!this.textures.exists('start-loop-00')) {
-        const titleG = this.add.graphics();
-        titleG.fillStyle(0x000000); titleG.fillRect(0, 0, 4, 4);
-        titleG.generateTexture('start-loop-00', 4, 4);
-        titleG.destroy();
-      }
+      // Title frame: loaded for all mobile (no longer skipped in lite mode)
 
       // Player-attack: generate a minimal 1-frame spritesheet from player-ride frame 0
       if (!this.textures.exists('player-attack')) {
@@ -344,7 +318,7 @@ export class BootScene extends Phaser.Scene {
         }
       }
 
-      console.log('[boot] Lite mode: procedural textures created (road, railing, title, attack)');
+      console.log('[boot] Lite mode: procedural textures created (buildings-big, attack)');
     }
 
     // Frame sequence animations — desktop only (mobile uses static frames)

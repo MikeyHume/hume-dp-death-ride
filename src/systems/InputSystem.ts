@@ -95,7 +95,7 @@ export class InputSystem {
       0, ch,
       cw, ch / 2,
       TUNING.MOBILE_CURSOR_COLOR
-    ).setDepth(200).setScrollFactor(0).setAlpha(0.8);
+    ).setDepth(200).setScrollFactor(0).setAlpha(0.8).setVisible(false);
 
     const halfScreen = TUNING.GAME_WIDTH / 2;
     const halfH = TUNING.PLAYER_DISPLAY_HEIGHT / 2;
@@ -276,6 +276,11 @@ export class InputSystem {
   }
 
   /** Returns true on tap boost (JustDown Space on desktop, quick tap on mobile, or injected) */
+  /** Show/hide the green triangle cursor (mobile only). Hidden during TITLE/TUTORIAL. */
+  setCursorVisible(visible: boolean): void {
+    if (this.cursorGraphic) this.cursorGraphic.setVisible(visible);
+  }
+
   getSpeedTap(): boolean {
     // Injected speed tap (works on both desktop and mobile)
     if (this.injectedSpeedTap) {

@@ -2667,6 +2667,9 @@ export class GameScene extends Phaser.Scene {
     this.cursorMain.setVisible(true).setAlpha(1);
     this.cursorStroke?.setVisible(true).setAlpha(1);
 
+    // Hide mobile touch cursor (green triangle) during title
+    this.inputSystem.setCursorVisible(false);
+
     // Clean up any active game state
     this.countdownPhase = 'done';
     this.dyingPhase = 'done';
@@ -2999,6 +3002,8 @@ export class GameScene extends Phaser.Scene {
 
   private enterStarting(): void {
     this.state = GameState.STARTING;
+    // Show mobile cursor (green triangle) — gameplay is about to begin
+    this.inputSystem.setCursorVisible(true);
     // Ensure black overlay is fully visible behind countdown numbers
     this.blackOverlay.setVisible(true).setAlpha(1);
     this.titleContainer.setVisible(false);

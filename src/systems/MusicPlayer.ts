@@ -9,7 +9,7 @@ import { HumePlayerSystem } from './HumePlayerSystem';
 import { GAME_MODE, DEVICE_PROFILE } from '../config/gameMode';
 import { TEST_MODE } from '../util/testMode';
 
-const MUSIC_UI_SCALE = 1;             // uniform scale from upper-right corner
+const MUSIC_UI_SCALE = 0.5;            // uniform scale from upper-right corner (half size)
 const MUSIC_BTN_SCALE = 1.5;           // scale multiplier for control buttons group (anchor: bottom-right)
 const CROSSFADE_LEAD_S = 3.0;        // fade duration in seconds (audio audibly fades over this)
 const CROSSFADE_STARTUP_S = 2.0;    // estimated startup overhead for startPlaylist() (shuffle+play+skip+wait)
@@ -1660,7 +1660,7 @@ export class MusicPlayer {
         left: 'auto',
         right: this.phoneCollapsedRightPct,
         width: `${thumbW + 2 * 20}px`,
-        transform: 'scale(1)',
+        transform: `scale(${MUSIC_UI_SCALE})`,
         transformOrigin: 'top right',
         transition: `transform ${animMs}ms ease, width ${animMs}ms ease, top ${animMs}ms ease, right ${animMs}ms ease`,
         gap: '0px',
@@ -1731,7 +1731,7 @@ export class MusicPlayer {
           left: 'auto',
           right: this.phoneCollapsedRightPct,
           width: `${thumbW + 2 * 20}px`,
-          transform: 'scale(1)',
+          transform: `scale(${MUSIC_UI_SCALE})`,
           transformOrigin: 'top right',
           gap: '0px',
         });
