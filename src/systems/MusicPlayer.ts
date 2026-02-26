@@ -937,7 +937,7 @@ export class MusicPlayer {
         // Just set source and mute YouTube. GameScene will call startPlaylistNow() when countdown ends.
         this.source = 'spotify';
         if (this.ytPlayer) {
-          try { this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+          try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
         }
         return;
       }
@@ -1044,6 +1044,10 @@ export class MusicPlayer {
 
   private async startSpotifyPlaylist(): Promise<void> {
     if (!this.spotifyPlayer) return;
+    // Defensive: ensure YouTube is paused+muted before Spotify starts
+    if (this.ytPlayer) {
+      try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+    }
     const ok = await this.spotifyPlayer.startPlaylist();
     if (!ok) {
       console.warn('MusicPlayer: Spotify playlist start failed, falling back to YouTube');
@@ -1120,6 +1124,10 @@ export class MusicPlayer {
   /** Start the playlist music immediately (no countdown audio).
    *  Called by GameScene on mobile when the HTML5 Audio countdown ends. */
   startPlaylistNow(): void {
+    // Mute+pause YouTube before starting any playlist (prevents dual audio on mobile)
+    if (this.ytPlayer && this.ytReady) {
+      try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+    }
     if (this.source === 'spotify' && this.spotifyPlayer) {
       this.startSpotifyPlaylist();
     } else if (this.ytReady) {
