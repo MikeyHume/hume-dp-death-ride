@@ -289,8 +289,8 @@ export class MusicPlayer {
       return;
     }
 
-    // Always mute YouTube when it's a visual companion
-    try { this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+    // Pause + mute YouTube before loading companion video (prevents audio leak)
+    try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
 
     // Try catalog lookup (returns instantly if cache is warm)
     this.playbackCtrl.onSpotifyTrackChanged(
@@ -299,6 +299,7 @@ export class MusicPlayer {
       if (ytId && this.ytPlayer && this.ytReady) {
         // Exact match — load muted YouTube video
         try {
+          this.ytPlayer.pauseVideo();
           this.ytPlayer.loadVideoById({ videoId: ytId });
           this.ytPlayer.mute();
           this.ytPlayer.setVolume(0);
@@ -960,9 +961,9 @@ export class MusicPlayer {
     if (!this.spotifyPlayer) return;
     this.source = 'spotify';
 
-    // Mute YouTube — it will be used as visual companion (onTrackChanged triggers search)
+    // Pause + mute YouTube — it will be used as visual companion (onTrackChanged triggers search)
     if (this.ytPlayer) {
-      try { this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+      try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
     }
 
     // iOS Safari suspends AudioContext when no WebAudio sources are active.
