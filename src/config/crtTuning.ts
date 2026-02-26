@@ -1,12 +1,12 @@
 export const CRT_TUNING = {
   // ── Scanlines ──
   scanlineIntensity: 0.08,     // strength of scanline darkening (0 = off, 1 = fully dark lines) — secondary to mask
-  scanlineDensity: 540,        // number of scanlines across screen height (540 = one per 2px at 1080p)
+  scanlineDensity: 1080,       // number of scanlines across screen height (1080 = one per 1px at 1080p)
   scanlineRollSpeed: 0,      // slow vertical rolling bright band speed (0 = disabled)
 
   // ── Phosphor / Mask ──  (PRIMARY aesthetic — strong RGB stripe look)
   maskStrength: 0.69,          // RGB channel separation depth (0 = off, 1 = only active channel lit)
-  maskScale: 6.0,              // phosphorPitch — pixels per RGB triad (6 = 2px per subpixel at 1080p)
+  maskScale: 4.0,              // phosphorPitch — pixels per RGB triad (6 = 2px per subpixel at 1080p)
   maskGap: 0.25,               // grilleGap / blackLevel — dark gap width between phosphor stripes (0 = no gap, 1 = all gap)
   maskType: 'aperture_grille' as 'aperture_grille' | 'shadow_mask' | 'slot_mask',
 

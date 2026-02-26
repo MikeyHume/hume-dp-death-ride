@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
-import { DEVICE_PROFILE } from '../config/gameMode';
+import { DEVICE_PROFILE, GAME_MODE } from '../config/gameMode';
 import { ParallaxSystem } from './ParallaxSystem';
 import { ObstacleType } from './ObstacleSystem';
 
@@ -141,7 +141,7 @@ export class ReflectionSystem {
 
     // --- Create puddle mask (BitmapMask with RenderTexture, applied to ROAD) ---
     // Half-res RT scaled to 2x display — saves 75% fill rate
-    const rtW = Math.round(TUNING.GAME_WIDTH * RT_SCALE);
+    const rtW = Math.round(GAME_MODE.canvasWidth * RT_SCALE);
     const rtH = Math.round(TUNING.GAME_HEIGHT * RT_SCALE);
     this.maskRT = scene.add.renderTexture(0, 0, rtW, rtH);
     this.maskRT.setOrigin(0, 0);
@@ -177,7 +177,7 @@ export class ReflectionSystem {
     }
     this.puddleTileScale = roadH / roadFrame.cutHeight;
     this.puddleRoadOverlay = scene.add.tileSprite(
-      TUNING.GAME_WIDTH / 2, roadCY, TUNING.GAME_WIDTH, roadH, 'road-puddle-overlay'
+      TUNING.GAME_WIDTH / 2, roadCY, GAME_MODE.canvasWidth, roadH, 'road-puddle-overlay'
     );
     this.puddleRoadOverlay.setTileScale(this.puddleTileScale, this.puddleTileScale);
     this.puddleRoadOverlay.setDepth(0.01); // just above road (depth 0)

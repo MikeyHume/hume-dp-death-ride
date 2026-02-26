@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
+import { GAME_MODE } from '../config/gameMode';
 
 export class OrientationOverlay {
   private bg: Phaser.GameObjects.Rectangle;
@@ -8,13 +9,13 @@ export class OrientationOverlay {
 
   constructor(scene: Phaser.Scene) {
     this.bg = scene.add.rectangle(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
-      TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
+      GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2,
+      GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT,
       0x000000, 0.92
     ).setDepth(2000).setScrollFactor(0).setVisible(false);
 
     this.label = scene.add.text(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
+      GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2,
       "this isn't tik tok...\nrotate your shit", {
         fontSize: '48px',
         color: '#ff2a2a',

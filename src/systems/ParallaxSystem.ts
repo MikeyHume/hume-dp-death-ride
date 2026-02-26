@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
-import { DEVICE_PROFILE } from '../config/gameMode';
+import { DEVICE_PROFILE, GAME_MODE } from '../config/gameMode';
 
 // Layer definitions: bottom Y positions and speed factors
 // All layers extend from their bottomY up to Y=0 (top of screen)
@@ -70,7 +70,7 @@ export class ParallaxSystem {
     // --- Static background (layer 8): sky image, fill width + 10px taller, top-aligned ---
     this.staticBg = scene.add.image(TUNING.GAME_WIDTH / 2, 0, 'sky-img');
     this.staticBg.setOrigin(0.5, 0);
-    const skyBaseScale = TUNING.GAME_WIDTH / this.staticBg.width;
+    const skyBaseScale = GAME_MODE.canvasWidth / this.staticBg.width;
     const skyBaseH = this.staticBg.height * skyBaseScale;
     const skyScale = (skyBaseH + 10) / this.staticBg.height;
     this.staticBg.setScale(skyScale);
@@ -87,14 +87,14 @@ export class ParallaxSystem {
         const srcImg = tex.getSourceImage() as HTMLImageElement;
         const imgW = srcImg.width;
         const imgH = srcImg.height;
-        const scale = TUNING.GAME_WIDTH / imgW;
+        const scale = GAME_MODE.canvasWidth / imgW;
         const scaledH = imgH * scale;
         const adjBottom = bottomY + BUILDINGS_BACK_OFFSET_Y;
 
         const tile = scene.add.tileSprite(
           TUNING.GAME_WIDTH / 2,
           adjBottom - scaledH / 2, // bottom-aligned at adjusted bottomY
-          TUNING.GAME_WIDTH,
+          GAME_MODE.canvasWidth,
           scaledH,
           'buildings-back'
         );
@@ -109,7 +109,7 @@ export class ParallaxSystem {
         const srcImg = tex.getSourceImage() as HTMLImageElement;
         const imgW = srcImg.width;
         const imgH = srcImg.height;
-        const baseScale = TUNING.GAME_WIDTH / imgW;
+        const baseScale = GAME_MODE.canvasWidth / imgW;
         const scale = baseScale * BUILDINGS_BIG_SCALE;
         const scaledH = imgH * scale;
         const adjBottom = bottomY + BUILDINGS_BIG_OFFSET_Y;
@@ -117,7 +117,7 @@ export class ParallaxSystem {
         const tile = scene.add.tileSprite(
           TUNING.GAME_WIDTH / 2,
           adjBottom - scaledH / 2, // bottom-aligned at adjusted bottomY
-          TUNING.GAME_WIDTH,
+          GAME_MODE.canvasWidth,
           scaledH,
           'buildings-big'
         );
@@ -132,7 +132,7 @@ export class ParallaxSystem {
         const srcImg = tex.getSourceImage() as HTMLImageElement;
         const imgW = srcImg.width;
         const imgH = srcImg.height;
-        const baseScale = TUNING.GAME_WIDTH / imgW;
+        const baseScale = GAME_MODE.canvasWidth / imgW;
         const scale = baseScale * BUILDINGS_CLOSE_SCALE;
         const scaledH = imgH * scale;
         const adjBottom = bottomY + BUILDINGS_CLOSE_OFFSET_Y;
@@ -140,7 +140,7 @@ export class ParallaxSystem {
         const tile = scene.add.tileSprite(
           TUNING.GAME_WIDTH / 2,
           adjBottom - scaledH / 2, // bottom-aligned at adjusted bottomY
-          TUNING.GAME_WIDTH,
+          GAME_MODE.canvasWidth,
           scaledH,
           'buildings-front'
         );
@@ -155,7 +155,7 @@ export class ParallaxSystem {
         const srcImg = tex.getSourceImage() as HTMLImageElement;
         const imgW = srcImg.width;
         const imgH = srcImg.height;
-        const baseScale = TUNING.GAME_WIDTH / imgW;
+        const baseScale = GAME_MODE.canvasWidth / imgW;
         const scale = baseScale * BUILDINGS_MID_SCALE;
         const scaledH = imgH * scale;
         const adjBottom = bottomY + BUILDINGS_MID_OFFSET_Y;
@@ -163,7 +163,7 @@ export class ParallaxSystem {
         const tile = scene.add.tileSprite(
           TUNING.GAME_WIDTH / 2,
           adjBottom - scaledH / 2, // bottom-aligned at adjusted bottomY
-          TUNING.GAME_WIDTH,
+          GAME_MODE.canvasWidth,
           scaledH,
           'buildings-front'
         );
@@ -178,7 +178,7 @@ export class ParallaxSystem {
         const srcImg = tex.getSourceImage() as HTMLImageElement;
         const imgW = srcImg.width;
         const imgH = srcImg.height;
-        const baseScale = TUNING.GAME_WIDTH / imgW;
+        const baseScale = GAME_MODE.canvasWidth / imgW;
         const scale = baseScale * BUILDINGS_FRONT_SCALE;
         const scaledH = imgH * scale;
         const adjBottom = bottomY + BUILDINGS_FRONT_OFFSET_Y;
@@ -186,7 +186,7 @@ export class ParallaxSystem {
         const tile = scene.add.tileSprite(
           TUNING.GAME_WIDTH / 2,
           adjBottom - scaledH / 2, // bottom-aligned at adjusted bottomY
-          TUNING.GAME_WIDTH,
+          GAME_MODE.canvasWidth,
           scaledH,
           'buildings-front'
         );
@@ -209,7 +209,7 @@ export class ParallaxSystem {
         const tile = scene.add.tileSprite(
           TUNING.GAME_WIDTH / 2,
           adjBottom - RAILING_DISPLAY_H / 2, // bottom-aligned at adjusted bottomY
-          TUNING.GAME_WIDTH,
+          GAME_MODE.canvasWidth,
           RAILING_DISPLAY_H,
           texKey,
           isSpritesheet ? 0 : undefined
@@ -240,7 +240,7 @@ export class ParallaxSystem {
 
         const tile = scene.add.tileSprite(
           TUNING.GAME_WIDTH / 2, centerY,
-          TUNING.GAME_WIDTH, height,
+          GAME_MODE.canvasWidth, height,
           texKey
         );
         tile.setDepth(depth);

@@ -618,7 +618,7 @@
       var hh = String(now.getHours()).padStart(2, '0');
       var mi = String(now.getMinutes()).padStart(2, '0');
       var ss = String(now.getSeconds()).padStart(2, '0');
-      var verNum = '0.01.07';
+      var verNum = '0.01.32';
       window.__dpMotoVersion = verNum;
       var vLabel = document.getElementById('version-label');
       if (vLabel) vLabel.textContent = 'v' + verNum;
@@ -964,6 +964,10 @@
       // ── iOS audio unlock (backup — touchstart already unlocked, this is belt-and-suspenders) ──
       doAudioUnlock();
 
+      // Fade out version label after fullscreen lock
+      var vl = document.getElementById('version-label');
+      if (vl) { vl.style.transition = 'opacity 1s ease-out'; vl.style.opacity = '0'; }
+
       // ── Signal GameScene to start title music NOW ──
       window.__mobileSwipeComplete = true;
       if (window.__onMobileSwipeComplete) {
@@ -1057,6 +1061,11 @@
       document.removeEventListener('keydown', handleDismissKey);
       overlay.style.transition = 'opacity 0.3s ease-out';
       overlay.style.opacity = '0';
+      // Fade out version label (desktop — no swipe overlay follows)
+      if (!isMobileBIOS) {
+        var vl = document.getElementById('version-label');
+        if (vl) { vl.style.transition = 'opacity 1s ease-out'; vl.style.opacity = '0'; }
+      }
       setTimeout(function() {
         overlay.classList.add('hidden');
         if (bootCursor && bootCursor.parentNode) bootCursor.parentNode.removeChild(bootCursor);
@@ -1592,7 +1601,7 @@
   <!-- Scroll spacer — extends page height so Safari hides chrome on swipe-up (mobile only) -->
   <div id="scroll-spacer" style="display:none; height:200vh; width:1px; position:absolute; top:0; left:0;"></div>
   <!-- Phaser loaded via CDN to avoid Vite pre-bundling crash on iOS Safari -->
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js" crossorigin="anonymous"></script>
   <script type="module" src="/src/main.ts"></script>
 
   <!-- Edge swipe prevention — block Safari back/forward gestures near screen edges -->

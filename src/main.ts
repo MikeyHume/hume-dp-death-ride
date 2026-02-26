@@ -94,27 +94,41 @@ handleCallback().then((wasCallback) => {
   (window as any).__loaderConfig = { maxParallel, source: loaderSource, ios };
 
   // ── Adaptive canvas width ────────────────────────────────
-  // Make the Phaser canvas fill the entire viewport width so CRT covers
-  // black bars and UI (ProfileHud, MusicPlayer) can extend into them.
-  // Game content stays centered at 1920px via camera scroll.
-  // MOBILE CAP: On phones, Safari's address/tab bars shrink viewport height,
-  // inflating the ratio and creating huge canvases (e.g. 2723px on Xs).
-  // Cap to 1920 on phones — no CRT to cover bars, no benefit to wider canvas,
-  // and the 42% extra pixels push the A12 past its VRAM budget.
-  const vpW = window.innerWidth || document.documentElement.clientWidth || 1920;
-  const vpH = window.innerHeight || document.documentElement.clientHeight || 1080;
+  // Make the Phaser canvas fill the entire viewport width so visual systems
+  // (parallax, road, CRT) cover the full screen. Game content stays centered
+  // at 1920px via camera scroll + contentOffsetX.
+  // All devices get adaptive width — phones see more parallax/road on sides.
+  // Phones: use screen dimensions for landscape ratio. window.innerWidth/Height is
+  // unreliable — Safari chrome shrinks innerHeight, portrait boot gives wrong ratio.
+  // screen.width/height are always portrait-orientation on iOS, so max=landscape W.
+  let vpW: number, vpH: number;
+  if (GAME_MODE.isPhoneMode) {
+    vpW = Math.max(screen.width, screen.height);
+    vpH = Math.min(screen.width, screen.height);
+  } else {
+    vpW = window.innerWidth || document.documentElement.clientWidth || 1920;
+    vpH = window.innerHeight || document.documentElement.clientHeight || 1080;
+  }
   const rawAdaptiveW = Math.max(TUNING.GAME_WIDTH, Math.round(TUNING.GAME_HEIGHT * (vpW / vpH)));
-  const adaptiveW = GAME_MODE.isPhoneMode ? TUNING.GAME_WIDTH : rawAdaptiveW;
+  const adaptiveW = rawAdaptiveW;
   GAME_MODE.canvasWidth = adaptiveW;
   GAME_MODE.contentOffsetX = (adaptiveW - TUNING.GAME_WIDTH) / 2;
   // ── Render resolution scaling ────────────────────────────────
   // On weak devices, render at lower internal resolution (e.g. 960×540 for phone-low).
   // Camera zoom = renderScale keeps game coordinates at 1920×1080.
-  const rs = DEVICE_PROFILE.renderScale;
+  // VRAM budget cap: renderScale was tuned for 1920px width. Wider canvases (adaptive width)
+  // would exceed the tested VRAM budget. Auto-reduce renderScale so total pixel count stays
+  // within what was validated at 1920×1080 per device profile.
+  let rs = DEVICE_PROFILE.renderScale;
+  const budgetPixels = Math.round(TUNING.GAME_WIDTH * rs) * Math.round(TUNING.GAME_HEIGHT * rs);
+  const rawPixels = Math.round(adaptiveW * rs) * Math.round(TUNING.GAME_HEIGHT * rs);
+  if (rawPixels > budgetPixels && adaptiveW > TUNING.GAME_WIDTH) {
+    rs = rs * Math.sqrt(budgetPixels / rawPixels);
+  }
   GAME_MODE.renderScale = rs;
   const renderW = Math.round(adaptiveW * rs);
   const renderH = Math.round(TUNING.GAME_HEIGHT * rs);
-  console.log(`[main] adaptive canvas: ${adaptiveW}x${TUNING.GAME_HEIGHT} → render ${renderW}x${renderH} (scale=${rs}, offset=${GAME_MODE.contentOffsetX.toFixed(0)}, viewport=${vpW}x${vpH})`);
+  console.log(`[main] adaptive canvas: ${adaptiveW}x${TUNING.GAME_HEIGHT} → render ${renderW}x${renderH} (scale=${rs.toFixed(3)}, budget=${DEVICE_PROFILE.renderScale}, offset=${GAME_MODE.contentOffsetX.toFixed(0)}, viewport=${vpW}x${vpH})`);
 
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.WEBGL,

@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Anim Perf Test</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; color: #0f0; font-family: monospace; font-size: 14px; overflow: hidden; }
+  #overlay {
+    position: fixed; top: 0; left: 0; right: 0;
+    z-index: 999; padding: 8px 12px;
+    background: rgba(0,0,0,0.85);
+    font-family: monospace; font-size: 13px; color: #0f0;
+    pointer-events: none;
+  }
+  #overlay .warn { color: #f80; }
+  #overlay .val { color: #0ff; }
+  #overlay .good { color: #0f0; }
+  #overlay .bad { color: #f33; }
+  #game-container { width: 100vw; height: 100vh; }
+</style>
+</head>
+<body>
+<div id="overlay">
+  <div id="status">Loading...</div>
+  <div id="metrics" style="margin-top:4px;font-size:12px;"></div>
+</div>
+<div id="game-container"></div>
+
+<!-- Phaser via CDN (same as main game) -->
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+
+<script>
+(async () => {
+// ── URL Params ──
+const params = new URLSearchParams(location.search);
+const VARIANT = params.get('variant') || 'individual';       // individual | spritesheet | atlas | manual | manual-perf
+const SCALE = parseInt(params.get('scale') || '100', 10);    // 100 = full-res, 50 = half-res, 25 = quarter
+const CRT_ON = params.get('crt') === '1';
+const DURATION = parseInt(params.get('duration') || '15', 10); // seconds to measure
+const SETTLE = parseInt(params.get('settle') || '5', 10);      // seconds before measuring
+const FRAME_RATE = parseInt(params.get('fps') || '12', 10);    // animation frame rate
+const ADAPTIVE = params.get('adaptive') === '1';               // snap frameRate to clean game FPS divisor
+const FRAME_COUNT = 27;
+const TASK_ID = params.get('taskId') || null;
+
+const scaleSuffix = SCALE < 100 ? `_s${SCALE}` : '';
+const statusEl = document.getElementById('status');
+const metricsEl = document.getElementById('metrics');
+
+function setStatus(msg) { statusEl.textContent = msg; }
+function setMetrics(html) { metricsEl.innerHTML = html; }
+
+// ── CRT Shader (minimal version for testing) ──
+const CRT_FRAG = `
+precision mediump float;
+uniform sampler2D uMainSampler;
+varying vec2 outTexCoord;
+uniform float uTime;
+uniform vec2 uResolution;
+
+float hash(vec2 p) {
+    float h = dot(p, vec2(127.1, 311.7));
+    return fract(sin(h) * 43758.5453123);
+}
+
+void main() {
+    vec2 uv = outTexCoord;
+    vec3 color;
+
+    // RGB separation (3 lookups)
+    float ce = 0.5 / uResolution.x;
+    color.r = texture2D(uMainSampler, uv + vec2(ce, 0.0)).r;
+    color.g = texture2D(uMainSampler, uv).g;
+    color.b = texture2D(uMainSampler, uv - vec2(ce, 0.0)).b;
+
+    // Beam focus (4 lookups)
+    vec2 step = vec2(1.2 / uResolution.x, 0.0);
+    vec3 s1 = texture2D(uMainSampler, uv + step).rgb;
+    vec3 s2 = texture2D(uMainSampler, uv - step).rgb;
+    vec3 s3 = texture2D(uMainSampler, uv + step * 2.0).rgb;
+    vec3 s4 = texture2D(uMainSampler, uv - step * 2.0).rgb;
+    color = color * 0.4 + (s1 + s2) * 0.2 + (s3 + s4) * 0.1;
+
+    // Bloom (9 lookups)
+    vec3 bloom = vec3(0.0);
+    vec2 ts = (1.0 / uResolution) * 5.0;
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            vec2 off = vec2(float(x), float(y)) * ts;
+            vec3 s = texture2D(uMainSampler, uv + off).rgb;
+            float lum = dot(s, vec3(0.299, 0.587, 0.114));
+            bloom += s * max(lum - 0.25, 0.0);
+        }
+    }
+    color += bloom * (1.0 / 9.0);
+
+    // Scanlines
+    float scanPhase = uv.y * 540.0 * 3.14159265;
+    float scan = sin(scanPhase);
+    scan = scan * scan;
+    color *= 1.0 - 0.08 * (1.0 - scan);
+
+    // Mask (aperture grille)
+    vec2 px = uv * uResolution;
+    float maskScale = 6.0;
+    float subW = maskScale / 3.0;
+    float triPos = mod(px.x, maskScale);
+    float subIdx = floor(triPos / subW);
+    float dim = 0.31;
+    vec3 mask;
+    if (subIdx < 0.5)      mask = vec3(1.0, dim, dim);
+    else if (subIdx < 1.5) mask = vec3(dim, 1.0, dim);
+    else                   mask = vec3(dim, dim, 1.0);
+    color *= mask;
+
+    // Brightness + gamma
+    color *= 1.6;
+    color = pow(max(color, vec3(0.0)), vec3(1.0 / 1.15));
+
+    // Noise
+    float n = hash(uv * uResolution + vec2(uTime * 10.0)) * 2.0 - 1.0;
+    color += vec3(n * 0.02);
+
+    gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
+}
+`;
+
+class CRTTestPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline {
+  constructor(game) {
+    super({ game, name: 'CRTTestPipeline', fragShader: CRT_FRAG });
+  }
+  onPreRender() {
+    this.set1f('uTime', this.game.loop.time / 1000);
+    this.set2f('uResolution', this.renderer.width, this.renderer.height);
+  }
+}
+
+// ── Pre-fetch spritesheet info (needed before Phaser preload) ──
+let SHEET_INFO = null;
+if (VARIANT === 'spritesheet' || VARIANT === 'manual' || VARIANT === 'manual-perf') {
+  try {
+    const infoUrl = `assets/start/start_loop_sheet${scaleSuffix}_info.json`;
+    const res = await fetch(infoUrl);
+    SHEET_INFO = await res.json();
+  } catch (e) {
+    setStatus('ERROR: Cannot load sheet info. Run: node scripts/pack-spritesheet.mjs');
+  }
+}
+
+// ── Test Scene ──
+class AnimTestScene extends Phaser.Scene {
+  constructor() { super('AnimTestScene'); }
+
+  preload() {
+    setStatus(`Loading ${VARIANT} (scale=${SCALE}%, CRT=${CRT_ON ? 'ON' : 'OFF'})...`);
+
+    if (VARIANT === 'individual') {
+      // Load 27 individual images
+      for (let i = 0; i < FRAME_COUNT; i++) {
+        const idx = String(i).padStart(2, '0');
+        this.load.image(`frame-${idx}`, `assets/start/start_loop/DP_Death_Ride_Title_Loop${idx}.jpg`);
+      }
+    } else if (VARIANT === 'spritesheet' && SHEET_INFO) {
+      // Load single spritesheet in one request
+      this.load.spritesheet('loop-sheet', SHEET_INFO.url, {
+        frameWidth: SHEET_INFO.frameWidth,
+        frameHeight: SHEET_INFO.frameHeight,
+      });
+    } else if (VARIANT === 'atlas') {
+      // Load atlas (JSON + image)
+      const imgUrl = `assets/start/start_loop_sheet${scaleSuffix}.jpg`;
+      const jsonUrl = `assets/start/start_loop_sheet${scaleSuffix}.json`;
+      this.load.atlas('loop-atlas', imgUrl, jsonUrl);
+    } else if ((VARIANT === 'manual' || VARIANT === 'manual-perf') && SHEET_INFO) {
+      // Load spritesheet — but we'll manually step frames in update(), not use Phaser anims
+      this.load.spritesheet('loop-sheet', SHEET_INFO.url, {
+        frameWidth: SHEET_INFO.frameWidth,
+        frameHeight: SHEET_INFO.frameHeight,
+      });
+    }
+
+    this._loadStart = performance.now();
+  }
+
+  create() {
+    this._loadEnd = performance.now();
+    const loadTime = this._loadEnd - this._loadStart;
+
+    // CRT pipeline
+    if (CRT_ON) {
+      this.cameras.main.setPostPipeline(CRTTestPipeline);
+    }
+
+    const W = this.scale.width;
+    const H = this.scale.height;
+    let sprite;
+
+    if (VARIANT === 'individual') {
+      // Create animation from individual frames
+      const frames = [];
+      for (let i = 0; i < FRAME_COUNT; i++) {
+        frames.push({ key: `frame-${String(i).padStart(2, '0')}` });
+      }
+      this.anims.create({ key: 'test-loop', frames, frameRate: FRAME_RATE, repeat: -1 });
+      sprite = this.add.sprite(W / 2, H / 2, 'frame-00');
+      sprite.play('test-loop');
+
+    } else if (VARIANT === 'spritesheet' && SHEET_INFO) {
+      this._sheetInfo = SHEET_INFO;
+      this.anims.create({
+        key: 'test-loop',
+        frames: this.anims.generateFrameNumbers('loop-sheet', { start: 0, end: SHEET_INFO.frameCount - 1 }),
+        frameRate: FRAME_RATE,
+        repeat: -1,
+      });
+      sprite = this.add.sprite(W / 2, H / 2, 'loop-sheet', 0);
+      sprite.play('test-loop');
+
+    } else if (VARIANT === 'atlas') {
+      // Create animation from atlas frames
+      const frameNames = [];
+      for (let i = 0; i < FRAME_COUNT; i++) {
+        frameNames.push({ key: 'loop-atlas', frame: `start-loop-${String(i).padStart(2, '0')}` });
+      }
+      this.anims.create({ key: 'test-loop', frames: frameNames, frameRate: FRAME_RATE, repeat: -1 });
+      sprite = this.add.sprite(W / 2, H / 2, 'loop-atlas', 'start-loop-00');
+      sprite.play('test-loop');
+    } else if ((VARIANT === 'manual' || VARIANT === 'manual-perf') && SHEET_INFO) {
+      // Manual frame stepping — NO Phaser animation system
+      // Sprite sits on frame 0, we call setFrame() ourselves in update()
+      this._sheetInfo = SHEET_INFO;
+      sprite = this.add.sprite(W / 2, H / 2, 'loop-sheet', 0);
+      this._manualFrame = 0;
+      this._manualLastChange = performance.now();
+      this._manualAccum = 0; // accumulator for sub-frame timing (delta-based)
+      this._manualPerfLast = performance.now(); // for perf.now()-based timing
+    }
+
+    if (sprite) {
+      // Scale to fill screen
+      let fw, fh;
+      if ((VARIANT === 'spritesheet' || VARIANT.startsWith('manual')) && SHEET_INFO) {
+        fw = SHEET_INFO.frameWidth;
+        fh = SHEET_INFO.frameHeight;
+      } else if (VARIANT === 'atlas') {
+        const frame = sprite.texture.get('start-loop-00');
+        fw = frame.width;
+        fh = frame.height;
+      } else {
+        const srcImg = sprite.texture.getSourceImage();
+        fw = srcImg.width;
+        fh = srcImg.height;
+      }
+      sprite.setDisplaySize(W, W * (fh / fw));
+      if (sprite.displayHeight < H) sprite.setDisplaySize(H * (fw / fh), H);
+      this._sprite = sprite;
+      this._animReady = true;
+    }
+
+    this._startMeasure(loadTime);
+  }
+
+  _startMeasure(loadTime) {
+    this._loadTime = loadTime;
+    this._frameTimes = [];        // game loop frame durations (ms)
+    this._animFrameTimes = [];    // animation frame change timestamps (ms)
+    this._lastAnimFrame = -1;
+    this._measuring = false;
+    this._settleStart = performance.now();
+    this._measureStart = null;
+    this._done = false;
+    this._settleDeltas = [];      // collect deltas during settle to measure actual FPS
+    this._snappedFps = FRAME_RATE; // will be adjusted if adaptive
+
+    setStatus(`Settling ${SETTLE}s... (${VARIANT}, scale=${SCALE}%, CRT=${CRT_ON ? 'ON' : 'OFF'}${ADAPTIVE ? ', ADAPTIVE' : ''})`);
+  }
+
+  update(time, delta) {
+    if (this._done || !this._settleStart) return;
+
+    const now = performance.now();
+
+    // Wait for animation to be ready (spritesheet 2-phase load)
+    if (!this._animReady) return;
+
+    // ── Manual frame stepping (bypasses Phaser animation system entirely) ──
+    if (VARIANT === 'manual' && this._sprite) {
+      // Uses Phaser's delta param (derived from requestAnimationFrame timestamps)
+      const targetFps = this._snappedFps || FRAME_RATE;
+      const frameDuration = 1000 / targetFps;
+      this._manualAccum += delta;
+      if (this._manualAccum >= frameDuration) {
+        const steps = Math.floor(this._manualAccum / frameDuration);
+        this._manualFrame = (this._manualFrame + steps) % FRAME_COUNT;
+        this._sprite.setFrame(this._manualFrame);
+        this._manualAccum -= steps * frameDuration; // carry remainder
+      }
+    } else if (VARIANT === 'manual-perf' && this._sprite) {
+      // Uses performance.now() directly — completely independent of Phaser's time system
+      const perfNow = performance.now();
+      const targetFps = this._snappedFps || FRAME_RATE;
+      const frameDuration = 1000 / targetFps;
+      const elapsed = perfNow - this._manualPerfLast;
+      if (elapsed >= frameDuration) {
+        const steps = Math.floor(elapsed / frameDuration);
+        this._manualFrame = (this._manualFrame + steps) % FRAME_COUNT;
+        this._sprite.setFrame(this._manualFrame);
+        this._manualPerfLast += steps * frameDuration; // advance anchor, carry remainder
+      }
+    }
+
+    // Settle phase — collect frame deltas to measure actual FPS
+    if (!this._measuring) {
+      this._settleDeltas.push(delta);
+
+      if (now - this._settleStart > SETTLE * 1000) {
+        // Calculate actual game FPS from settle period
+        if ((ADAPTIVE || VARIANT === 'manual' || VARIANT === 'manual-perf') && this._settleDeltas.length > 30) {
+          const avgDelta = this._settleDeltas.reduce((a, b) => a + b, 0) / this._settleDeltas.length;
+          const actualFps = 1000 / avgDelta;
+
+          // Snap animation frameRate to cleanest divisor of actual game FPS
+          const idealInterval = actualFps / FRAME_RATE;
+          const snappedInterval = Math.round(idealInterval);
+          const snappedFps = actualFps / snappedInterval;
+
+          this._snappedFps = snappedFps;
+
+          // For non-manual variants, update Phaser's animation system
+          if (VARIANT !== 'manual' && VARIANT !== 'manual-perf') {
+            const anim = this.anims.get('test-loop');
+            if (anim) anim.frameRate = snappedFps;
+          }
+          // For manual variant, _snappedFps is read directly in the accumulator above
+
+          setStatus(`Measuring ${DURATION}s... (${VARIANT.startsWith('manual') ? VARIANT : 'adaptive'}: ${FRAME_RATE}→${snappedFps.toFixed(1)} fps, game=${actualFps.toFixed(0)} fps)`);
+        } else {
+          setStatus(`Measuring ${DURATION}s... (${VARIANT})`);
+        }
+
+        this._measuring = true;
+        this._measureStart = now;
+        this._frameTimes = [];
+        this._animFrameTimes = [];
+        this._lastAnimFrame = -1;
+      }
+      return;
+    }
+
+    // Measurement phase
+    this._frameTimes.push(delta);
+
+    // Track animation frame changes — works for both Phaser anims and manual
+    if (VARIANT === 'manual' || VARIANT === 'manual-perf') {
+      if (this._manualFrame !== this._lastAnimFrame) {
+        this._animFrameTimes.push(now);
+        this._lastAnimFrame = this._manualFrame;
+      }
+    } else if (this._sprite && this._sprite.anims) {
+      const currentFrame = this._sprite.anims.currentFrame?.index ?? -1;
+      if (currentFrame !== this._lastAnimFrame) {
+        this._animFrameTimes.push(now);
+        this._lastAnimFrame = currentFrame;
+      }
+    }
+
+    // Update live overlay
+    const elapsed = (now - this._measureStart) / 1000;
+    const avgFps = this._frameTimes.length / elapsed;
+    const remaining = Math.max(0, DURATION - elapsed);
+    setMetrics(
+      `FPS: <span class="val">${avgFps.toFixed(1)}</span> | ` +
+      `Frames: <span class="val">${this._frameTimes.length}</span> | ` +
+      `Anim changes: <span class="val">${this._animFrameTimes.length}</span> | ` +
+      `Remaining: <span class="val">${remaining.toFixed(1)}s</span>`
+    );
+
+    // Done
+    if (now - this._measureStart > DURATION * 1000) {
+      this._done = true;
+      this._finishMeasure();
+    }
+  }
+
+  _finishMeasure() {
+    const results = this._computeResults();
+    this._displayResults(results);
+    this._postResults(results);
+  }
+
+  _computeResults() {
+    const frameTimes = this._frameTimes;
+    const animTimes = this._animFrameTimes;
+
+    // Game loop stats
+    const avgDelta = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
+    const avgFps = 1000 / avgDelta;
+    const sortedDeltas = [...frameTimes].sort((a, b) => a - b);
+    const p1 = sortedDeltas[Math.floor(sortedDeltas.length * 0.01)];
+    const p99 = sortedDeltas[Math.floor(sortedDeltas.length * 0.99)];
+    const fpsVariance = Math.sqrt(
+      frameTimes.reduce((sum, d) => sum + (d - avgDelta) ** 2, 0) / frameTimes.length
+    );
+
+    // Animation frame duration stats
+    const animDurations = [];
+    for (let i = 1; i < animTimes.length; i++) {
+      animDurations.push(animTimes[i] - animTimes[i - 1]);
+    }
+
+    const targetFps = ADAPTIVE ? this._snappedFps : FRAME_RATE;
+    const idealAnimDuration = 1000 / targetFps;
+    let animAvgDuration = 0;
+    let animStdDev = 0;
+    let animJudder = 0;
+
+    if (animDurations.length > 0) {
+      animAvgDuration = animDurations.reduce((a, b) => a + b, 0) / animDurations.length;
+      animStdDev = Math.sqrt(
+        animDurations.reduce((sum, d) => sum + (d - animAvgDuration) ** 2, 0) / animDurations.length
+      );
+      // Judder = max deviation from ideal as percentage
+      animJudder = Math.max(...animDurations.map(d => Math.abs(d - idealAnimDuration))) / idealAnimDuration * 100;
+    }
+
+    // Effective animation FPS
+    const effectiveAnimFps = animDurations.length > 0
+      ? 1000 / animAvgDuration
+      : 0;
+
+    // Texture info
+    let texCount = 0;
+    let texW = 0, texH = 0;
+    if (VARIANT === 'individual') {
+      texCount = FRAME_COUNT;
+      const tex = this.textures.get('frame-00');
+      if (tex) { texW = tex.getSourceImage().width; texH = tex.getSourceImage().height; }
+    } else if (VARIANT === 'spritesheet' || VARIANT.startsWith('manual')) {
+      texCount = 1;
+      texW = this._sheetInfo?.sheetWidth || 0;
+      texH = this._sheetInfo?.sheetHeight || 0;
+    } else if (VARIANT === 'atlas') {
+      texCount = 1;
+      const tex = this.textures.get('loop-atlas');
+      if (tex) { texW = tex.getSourceImage().width; texH = tex.getSourceImage().height; }
+    }
+
+    const vramMB = (texCount * texW * texH * 4) / (1024 * 1024);
+
+    return {
+      variant: VARIANT,
+      scale: SCALE,
+      crt: CRT_ON,
+      frameRate: FRAME_RATE,
+      adaptive: ADAPTIVE,
+      snappedFps: ADAPTIVE ? parseFloat(this._snappedFps.toFixed(2)) : FRAME_RATE,
+      frameCount: FRAME_COUNT,
+      loadTimeMs: Math.round(this._loadTime),
+      // Game loop
+      gameFps: parseFloat(avgFps.toFixed(2)),
+      gameFpsVariance: parseFloat(fpsVariance.toFixed(2)),
+      gameDeltaAvg: parseFloat(avgDelta.toFixed(2)),
+      gameDeltaP1: parseFloat(p1.toFixed(2)),
+      gameDeltaP99: parseFloat(p99.toFixed(2)),
+      gameFrameCount: frameTimes.length,
+      // Animation
+      effectiveAnimFps: parseFloat(effectiveAnimFps.toFixed(2)),
+      animDurationAvg: parseFloat(animAvgDuration.toFixed(2)),
+      animDurationIdeal: parseFloat(idealAnimDuration.toFixed(2)),
+      animStdDev: parseFloat(animStdDev.toFixed(2)),
+      animJudder: parseFloat(animJudder.toFixed(1)),
+      animFrameChanges: animDurations.length,
+      animDurations: animDurations.map(d => parseFloat(d.toFixed(1))),
+      // GPU
+      textureCount: texCount,
+      textureSize: `${texW}x${texH}`,
+      vramMB: parseFloat(vramMB.toFixed(1)),
+      // Meta
+      duration: DURATION,
+      settle: SETTLE,
+      timestamp: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+    };
+  }
+
+  _displayResults(r) {
+    const judderClass = r.animJudder < 10 ? 'good' : r.animJudder < 25 ? 'warn' : 'bad';
+    const stddevClass = r.animStdDev < 5 ? 'good' : r.animStdDev < 15 ? 'warn' : 'bad';
+
+    setStatus(`DONE — ${VARIANT} (scale=${SCALE}%, CRT=${CRT_ON ? 'ON' : 'OFF'})`);
+    setMetrics(`
+      <div>Game FPS: <span class="val">${r.gameFps}</span> (variance: ${r.gameFpsVariance.toFixed(1)}ms)</div>
+      <div>Anim FPS: <span class="val">${r.effectiveAnimFps}</span> (target: ${FRAME_RATE})</div>
+      <div>Anim frame avg: <span class="val">${r.animDurationAvg.toFixed(1)}ms</span> (ideal: ${r.animDurationIdeal.toFixed(1)}ms)</div>
+      <div>Anim stddev: <span class="${stddevClass}">${r.animStdDev.toFixed(1)}ms</span></div>
+      <div>Judder: <span class="${judderClass}">${r.animJudder.toFixed(1)}%</span></div>
+      <div>Load time: <span class="val">${r.loadTimeMs}ms</span></div>
+      <div>Textures: <span class="val">${r.textureCount}</span> (${r.textureSize}, ${r.vramMB} MB VRAM)</div>
+    `);
+  }
+
+  async _postResults(results) {
+    // Post to agent relay if taskId provided
+    if (TASK_ID) {
+      try {
+        await fetch('/agent/result', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taskId: TASK_ID, ok: true, ...results }),
+        });
+      } catch (e) {
+        console.warn('Failed to post results to agent relay:', e);
+      }
+    }
+
+    // Also store in window for manual inspection
+    window.__animPerfResults = results;
+    console.log('Animation Performance Results:', JSON.stringify(results, null, 2));
+  }
+}
+
+// ── Launch Phaser ──
+const config = {
+  type: Phaser.WEBGL,
+  width: 1920,
+  height: 1080,
+  parent: 'game-container',
+  backgroundColor: '#000000',
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+  },
+  scene: AnimTestScene,
+  pipeline: CRT_ON ? { CRTTestPipeline } : undefined,
+  render: {
+    powerPreference: 'default',
+  },
+  loader: {
+    maxParallelDownloads: 32, // test with high concurrency, can override
+  },
+  fps: {
+    // Let the browser control frame rate via rAF
+  },
+};
+
+new Phaser.Game(config);
+})();
+</script>
+</body>
+</html>

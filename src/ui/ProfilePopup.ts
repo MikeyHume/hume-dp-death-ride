@@ -8,7 +8,8 @@ import { getCurrentWeekKey } from '../util/time';
 import { DisconnectModal } from './DisconnectModal';
 
 // ── Popup chrome ──
-const POPUP_W = 690;
+const isMobile = GAME_MODE.mobileMode;
+const POPUP_W = isMobile ? 1380 : 690;
 const POPUP_H = 900;
 const POPUP_DEPTH = 1400;
 const POPUP_RADIUS = 20;
@@ -45,7 +46,10 @@ const SPOTIFY_BTN_H = 80;
 const NAME_LABEL_OFFSET_Y = -90;                          // from HEADER_Y (aligns NAME top with avatar top)
 const NAME_BOX_OFFSET_Y = NAME_LABEL_OFFSET_Y + 46;
 const SPOTIFY_BTN_OFFSET_Y = AVATAR_RADIUS - SPOTIFY_BTN_H / 2;  // aligns spotify btn bottom with avatar bottom
-const SPOTIFY_CONTENT_SCALE =1.5;
+const SPOTIFY_BTN_CENTER_X = isMobile ? 0 : RIGHT_CENTER_X;
+const SPOTIFY_BTN_W_EFF = isMobile ? POPUP_W - 80 : RIGHT_BOX_W;
+const SPOTIFY_BTN_H_EFF = isMobile ? SPOTIFY_BTN_H * 3 : SPOTIFY_BTN_H;
+const SPOTIFY_CONTENT_SCALE = isMobile ? 4.5 : 1.5;
 
 // ── Name box ──
 const NAME_MAX_LENGTH = 10;
@@ -68,7 +72,10 @@ const SAVE_HINT_TEXT = 'login to spotify to\nsave your progress';
 const SAVE_HINT_COLOR = '#888888';
 
 // ── Scroll panel ──
-const SCROLL_AREA_TOP = HEADER_Y + AVATAR_RADIUS + 69;   // below avatar + hint gap
+const SPOTIFY_MOB_BTN_Y = HEADER_Y + AVATAR_RADIUS + 20 + SPOTIFY_BTN_H_EFF / 2;
+const SCROLL_AREA_TOP = isMobile
+  ? SPOTIFY_MOB_BTN_Y + SPOTIFY_BTN_H_EFF / 2 + 20
+  : HEADER_Y + AVATAR_RADIUS + 69;   // below avatar + hint gap
 const SCROLL_AREA_BOTTOM = POPUP_H / 2 - 120;            // above exit btn
 const SCROLL_PADDING_TOP = 30;
 const SCROLL_PADDING_RIGHT = 30;
@@ -116,16 +123,17 @@ const SCORES_RANK_X = POPUP_W / 2 - SCROLL_PADDING_RIGHT - SCORES_RIGHT_PAD - SC
 const SCORES_WEEK_X = -POPUP_W / 2 + SCROLL_PADDING_LEFT + SCORES_LEFT_PAD; // left edge — same padding as place numbers
 
 // ── Exit button ──
-const EXIT_Y = POPUP_H / 2 - 60;
-const EXIT_BTN_W = 200;
-const EXIT_BTN_H = 50;
+const EXIT_MOB_SCALE = isMobile ? 3 : 1;
+const EXIT_Y = POPUP_H / 2 - (isMobile ? 120 : 60);
+const EXIT_BTN_W = 200 * EXIT_MOB_SCALE;
+const EXIT_BTN_H = 50 * EXIT_MOB_SCALE;
 const EXIT_BTN_RADIUS = 10;
 const EXIT_BTN_BG = 0x442222;
 const EXIT_BTN_STROKE = 0xff4444;
 const EXIT_BTN_STROKE_ALPHA = 0.6;
 
 // ── Exit button text ──
-const EXIT_TEXT_FONT = '28px';
+const EXIT_TEXT_FONT = `${28 * EXIT_MOB_SCALE}px`;
 const EXIT_TEXT_COLOR = '#ff4444';
 
 // ── Spotify button ──
@@ -268,7 +276,7 @@ export class ProfilePopup {
     /* ---- Right side: Name ---- */
     const nameLabelY = avatarY + NAME_LABEL_OFFSET_Y;
     const nameBoxY = avatarY + NAME_BOX_OFFSET_Y;
-    this.spotifyBtnY = avatarY + SPOTIFY_BTN_OFFSET_Y;
+    this.spotifyBtnY = isMobile ? SPOTIFY_MOB_BTN_Y : avatarY + SPOTIFY_BTN_OFFSET_Y;
 
     this.container.add(
       scene.add.text(RIGHT_CENTER_X, nameLabelY, 'NAME', {
@@ -319,10 +327,9 @@ export class ProfilePopup {
     }).setOrigin(0, 0.5).setVisible(false);
     this.container.add(this.spotifyConnectedText);
 
-    // Scene-level hit zone for spotify button
-    this.spotifyHit = scene.add.zone(cx + RIGHT_CENTER_X, cy + this.spotifyBtnY, RIGHT_BOX_W, SPOTIFY_BTN_H)
-      .setDepth(POPUP_DEPTH + 2).setScrollFactor(0)
-      .setInteractive({ useHandCursor: true }).setVisible(false);
+    // Hit zone for spotify button (inside container for reliable mobile input)
+    this.spotifyHit = scene.add.zone(SPOTIFY_BTN_CENTER_X, this.spotifyBtnY, SPOTIFY_BTN_W_EFF, SPOTIFY_BTN_H_EFF)
+      .setInteractive({ useHandCursor: true });
     this.spotifyHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
     this.spotifyHit.on('pointerdown', async () => {
       this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
@@ -355,6 +362,7 @@ export class ProfilePopup {
         }
       }
     });
+    this.container.add(this.spotifyHit);
 
     /* ---- Save-progress hint (shown in scroll area when not connected) ---- */
     this.spotifySaveHint = scene.add.text(0, (SCROLL_AREA_TOP + SCROLL_AREA_BOTTOM) / 2, SAVE_HINT_TEXT, {
@@ -495,7 +503,6 @@ export class ProfilePopup {
     }
     this.backdrop.setVisible(true);
     this.container.setVisible(true);
-    this.spotifyHit.setVisible(true);
     this.scrollbarHit.setVisible(true);
     this.updateSpotifyButton();
     this.loadScoreData();
@@ -509,7 +516,6 @@ export class ProfilePopup {
     this.closedAt = Date.now();
     this.backdrop.setVisible(false);
     this.container.setVisible(false);
-    this.spotifyHit.setVisible(false);
     this.scrollbarHit.setVisible(false);
     this.scrollbarDragging = false;
     this.stopRainbow();
@@ -609,9 +615,9 @@ export class ProfilePopup {
     this.spotifyBg.clear();
     this.spotifyBg.fillStyle(connected ? SPOTIFY_BTN_BG_CONNECTED : SPOTIFY_BTN_BG_LOGIN, 1);
     this.spotifyBg.fillRoundedRect(
-      RIGHT_CENTER_X - RIGHT_BOX_W / 2,
-      this.spotifyBtnY - SPOTIFY_BTN_H / 2,
-      RIGHT_BOX_W, SPOTIFY_BTN_H, SPOTIFY_BTN_RADIUS,
+      SPOTIFY_BTN_CENTER_X - SPOTIFY_BTN_W_EFF / 2,
+      this.spotifyBtnY - SPOTIFY_BTN_H_EFF / 2,
+      SPOTIFY_BTN_W_EFF, SPOTIFY_BTN_H_EFF, SPOTIFY_BTN_RADIUS,
     );
 
     this.spotifySaveHint.setVisible(!connected);
@@ -621,7 +627,7 @@ export class ProfilePopup {
       this.spotifyConnectedText.setVisible(true);
       const logoW = this.spotifyLogo.width * this.spotifyLogo.scaleX;
       const totalW = logoW + SPOTIFY_LOGO_GAP + this.spotifyConnectedText.width;
-      const startX = RIGHT_CENTER_X - totalW / 2;
+      const startX = SPOTIFY_BTN_CENTER_X - totalW / 2;
       this.spotifyLogo.setPosition(startX, this.spotifyBtnY);
       this.spotifyConnectedText.setPosition(startX + logoW + SPOTIFY_LOGO_GAP, this.spotifyBtnY);
     } else {
@@ -629,7 +635,7 @@ export class ProfilePopup {
       this.spotifyConnectedText.setVisible(false);
       const logoW = this.spotifyLogo.width * this.spotifyLogo.scaleX;
       const comboW = this.spotifyLoginText.width + logoW;
-      const startX = RIGHT_CENTER_X - comboW / 2;
+      const startX = SPOTIFY_BTN_CENTER_X - comboW / 2;
       this.spotifyLoginText.setPosition(startX, this.spotifyBtnY);
       this.spotifyLogo.setPosition(startX + this.spotifyLoginText.width, this.spotifyBtnY);
     }

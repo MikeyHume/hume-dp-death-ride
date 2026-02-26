@@ -119,7 +119,7 @@ export class PlayerSystem {
         this.sprite.y = Phaser.Math.Clamp(
           this.sprite.y + arrowDir * TUNING.PLAYER_ARROW_SPEED * vDt,
           TUNING.ROAD_TOP_Y - TUNING.PLAYER_TOP_Y_EXTEND,
-          TUNING.ROAD_BOTTOM_Y - halfH
+          TUNING.ROAD_BOTTOM_Y - halfH - TUNING.PLAYER_BOTTOM_Y_INSET
         );
       }
     } else {

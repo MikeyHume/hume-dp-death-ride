@@ -46,8 +46,9 @@ enum GameState {
 }
 
 const NAME_MAX_LENGTH = 10;
-const SKIP_BTN_MARGIN_RIGHT = 90;    // px from right edge of screen
-const SKIP_BTN_MARGIN_BOTTOM = 56;   // px from bottom edge of screen
+const SKIP_BTN_SCALE = 1;          // skip button scale (0.5 = half, 1 = native, 2 = double
+const SKIP_BTN_MARGIN_RIGHT = 240;    // px from right edge of screen
+const SKIP_BTN_MARGIN_BOTTOM = 100;   // px from bottom edge of screen
 const SKIP_BTN_PULSE_MIN = 0.15;     // minimum alpha during pulse
 const SKIP_BTN_PULSE_MAX = 0.69;     // maximum alpha during pulse
 const SKIP_BTN_PULSE_DURATION = 1200; // ms for one fade-in or fade-out half-cycle
@@ -144,6 +145,10 @@ export class GameScene extends Phaser.Scene {
   private orientationOverlay: OrientationOverlay | null = null;
   private shieldSystem!: ShieldSystem;
   private timeDilation!: TimeDilationSystem;
+  private actionBtnTop!: Phaser.GameObjects.Sprite;
+  private actionBtnBottom!: Phaser.GameObjects.Sprite;
+  private sliderBar!: Phaser.GameObjects.Image;
+  private sliderKnob!: Phaser.GameObjects.Image;
   private wasDilating: boolean = false;
 
   // Custom cursor (rendered under CRT) — desktop only, null on touch devices
@@ -214,6 +219,7 @@ export class GameScene extends Phaser.Scene {
   // Title loop animation — manual performance.now()-based frame stepping
   // Bypasses Phaser's animation timer for smoother playback (37% less judder on iPhone)
   private titleLoopSprite!: Phaser.GameObjects.Sprite;
+  private titleRevealOverlay!: Phaser.GameObjects.Rectangle;
   private _titleAnimPlaying = false;
   private _titleAnimFrame = 0;
   private _titleAnimLastTime = 0;
@@ -344,6 +350,7 @@ export class GameScene extends Phaser.Scene {
   private pendingScore: number = 0;
   private pendingRank: number = 0;
   private nameKeyHandler: ((event: KeyboardEvent) => void) | null = null;
+  private nameHiddenInput: HTMLInputElement | null = null;
   private nameConfirmed: boolean = false;
   private autoSubmitted: boolean = false;
   private globalLeaderboardData: GlobalLeaderboardEntry[] | null = null;
@@ -356,6 +363,10 @@ export class GameScene extends Phaser.Scene {
   private emptyNameNoBtn!: Phaser.GameObjects.Text;
   private emptyNameVisible: boolean = false;
   private anyInputPressed: boolean = false;
+
+  // Widescreen side curtains (hide extra canvas width until gameplay reveal)
+  private curtainLeft: Phaser.GameObjects.Rectangle | null = null;
+  private curtainRight: Phaser.GameObjects.Rectangle | null = null;
 
   // Countdown (5→1 before gameplay)
   private countdownSprite!: Phaser.GameObjects.Sprite;
@@ -562,7 +573,7 @@ export class GameScene extends Phaser.Scene {
       const laneY = TUNING.ROAD_TOP_Y + laneH * i + laneH / 2;
       const highlight = this.add.rectangle(
         TUNING.GAME_WIDTH / 2, laneY,
-        TUNING.GAME_WIDTH, laneH,
+        GAME_MODE.canvasWidth, laneH,
         0xff0000, 0.1
       ).setDepth(0.5).setVisible(false);
       this.laneHighlights.push(highlight);
@@ -618,6 +629,62 @@ export class GameScene extends Phaser.Scene {
     // --- Profile HUD (Phaser-based, upper-left, affected by shaders) ---
     this.profileHud = new ProfileHud(this);
 
+    // --- Action Buttons (upper-right, independently positioned, spritesheet) ---
+    {
+      const dep = TUNING.ACTION_BTN_DEPTH;
+      const cw = GAME_MODE.canvasWidth;
+
+      // Create press animations (5 frames each, 12 fps, play once)
+      this.anims.create({ key: 'btn-rocket-press', frames: this.anims.generateFrameNumbers('btn-rocket', { start: 0, end: 4 }), frameRate: 12, repeat: 0 });
+      this.anims.create({ key: 'btn-slash-press', frames: this.anims.generateFrameNumbers('btn-slash', { start: 0, end: 4 }), frameRate: 12, repeat: 0 });
+
+      // Top button — rocket (gold/green)
+      const scTop = TUNING.ACTION_BTN_SCALE_TOP;
+      const topX = cw - TUNING.ACTION_BTN_PAD_RIGHT_TOP;
+      const topY = TUNING.ACTION_BTN_PAD_TOP_TOP;
+
+      this.actionBtnTop = this.add.sprite(topX, topY, 'btn-rocket', 0)
+        .setScale(scTop).setDepth(dep).setScrollFactor(0).setVisible(false)
+        .setInteractive({ useHandCursor: true });
+      this.actionBtnTop.on('pointerdown', () => {
+        this.actionBtnTop.play('btn-rocket-press');
+        this.actionBtnTop.once('animationcomplete', () => {
+          this.actionBtnTop.setFrame(0);
+        });
+        this.inputSystem.injectRocket();
+      });
+
+      // Bottom button — slash (red/blue)
+      const scBot = TUNING.ACTION_BTN_SCALE_BOT;
+      const botX = cw - TUNING.ACTION_BTN_PAD_RIGHT_BOT;
+      const botY = TUNING.ACTION_BTN_PAD_TOP_BOT;
+
+      this.actionBtnBottom = this.add.sprite(botX, botY, 'btn-slash', 0)
+        .setScale(scBot).setDepth(dep).setScrollFactor(0).setVisible(false)
+        .setInteractive({ useHandCursor: true });
+      this.actionBtnBottom.on('pointerdown', () => {
+        this.actionBtnBottom.play('btn-slash-press');
+        this.actionBtnBottom.once('animationcomplete', () => {
+          this.actionBtnBottom.setFrame(0);
+        });
+        this.inputSystem.injectAttack();
+      });
+    }
+
+    // --- Slider Bar (vertical bar on road, left side) ---
+    this.sliderBar = this.add.image(TUNING.SLIDER_BAR_X, TUNING.SLIDER_BAR_Y, 'slider-bar')
+      .setScale(TUNING.SLIDER_BAR_SCALE)
+      .setDepth(TUNING.SLIDER_BAR_DEPTH)
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    // --- Slider Knob (centered on slider bar) ---
+    this.sliderKnob = this.add.image(TUNING.SLIDER_BAR_X, TUNING.SLIDER_BAR_Y, 'slider-knob')
+      .setScale(TUNING.SLIDER_BAR_SCALE)
+      .setDepth(TUNING.SLIDER_BAR_DEPTH + 1)
+      .setScrollFactor(0)
+      .setVisible(false);
+
     // --- Profile Popup (opens on avatar click) ---
     this.profilePopup = new ProfilePopup(this);
     this.profileHud.onAvatarClick(() => {
@@ -647,8 +714,11 @@ export class GameScene extends Phaser.Scene {
       if (hasAvatar) {
         const key = this.profilePopup.getAvatarTextureKey();
         if (key) this.profileHud.setAvatarTexture(key);
+      } else {
+        this.profileHud.setAvatarTexture('default-avatar');
       }
       if (this.state === GameState.TITLE) {
+        this.profileHud.setVisible(true);
         this.profileHud.showProfileMode(name, this.getProfileRankText());
       } else if (this.state === GameState.PLAYING) {
         this.profileHud.showPlayingMode(name);
@@ -663,6 +733,7 @@ export class GameScene extends Phaser.Scene {
       const key = this.profilePopup.getAvatarTextureKey();
       if (key) this.profileHud.setAvatarTexture(key);
       if (this.state === GameState.TITLE) {
+        this.profileHud.setVisible(true);
         this.profileHud.showProfileMode(name, this.getProfileRankText());
       } else if (this.state === GameState.PLAYING) {
         this.profileHud.showPlayingMode(name);
@@ -714,6 +785,17 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.titleAnimEnabled) this._titleAnimPlay('loop');
     // Mobile without ?anim_level: static first frame (no animation)
+
+    // --- Title reveal overlay (black, fades out after swipe-to-fullscreen completes) ---
+    this.titleRevealOverlay = this.add.rectangle(
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
+      GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT,
+      0x000000, 1
+    ).setDepth(201).setScrollFactor(0);
+    if (!GAME_MODE.isPhoneMode) {
+      // Desktop: no swipe, reveal immediately
+      this.titleRevealOverlay.setAlpha(0);
+    }
 
     // --- Title screen ---
     this.titleContainer = this.add.container(0, 0).setDepth(200);
@@ -774,7 +856,7 @@ export class GameScene extends Phaser.Scene {
     this.deathContainer = this.add.container(0, 0).setDepth(200);
     const deathBg = this.add.rectangle(
       TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
-      TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
+      GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT,
       0x000000, 1
     );
     const deathTitle = this.add.text(
@@ -841,47 +923,50 @@ export class GameScene extends Phaser.Scene {
     this.nameEntryContainer = this.add.container(0, 0).setDepth(210);
     const nameBg = this.add.rectangle(
       TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
-      TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
+      GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT,
       0x000000, 1
     );
     this.nameTitleText = this.add.text(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 - 120,
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 - 300,
       'NEW HIGH SCORE!', {
-        fontSize: '48px',
+        fontSize: '144px',
         color: '#ffcc00',
         fontFamily: 'Early GameBoy',
       }
     ).setOrigin(0.5);
     const nameScoreLabel = this.add.text(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 - 60,
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 - 140,
       '', {
-        fontSize: '36px',
+        fontSize: '108px',
         color: '#ffffff',
         fontFamily: 'monospace',
       }
     ).setOrigin(0.5);
     nameScoreLabel.setData('id', 'nameScoreLabel');
     const namePrompt = this.add.text(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 10,
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 20,
       'ENTER YOUR NAME:', {
-        fontSize: '24px',
+        fontSize: '72px',
         color: '#aaaaaa',
         fontFamily: 'monospace',
       }
     ).setOrigin(0.5);
     this.nameInputText = this.add.text(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 60,
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 130,
       '_', {
-        fontSize: '36px',
+        fontSize: '108px',
         color: '#ffffff',
         fontFamily: 'monospace',
         fontStyle: 'bold',
       }
-    ).setOrigin(0.5);
+    ).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    this.nameInputText.on('pointerdown', () => {
+      if (this.nameHiddenInput) this.nameHiddenInput.focus();
+    });
     this.nameSkipWarning = this.add.text(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 200,
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 350,
       'Your score won\'t be saved! Press ESC again to skip.', {
-        fontSize: '22px',
+        fontSize: '66px',
         color: '#ff4444',
         fontFamily: 'monospace',
         fontStyle: 'bold',
@@ -892,14 +977,14 @@ export class GameScene extends Phaser.Scene {
 
     // ENTER button — scene-level (NOT inside container) so pointer events work reliably
     this.nameEnterBtn = this.add.text(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 140,
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 300,
       '[ ENTER ]', {
-        fontSize: '32px',
+        fontSize: '96px',
         color: '#00ff00',
         fontFamily: 'monospace',
         fontStyle: 'bold',
         backgroundColor: '#003300',
-        padding: { x: 24, y: 12 },
+        padding: { x: 72, y: 36 },
       }
     ).setOrigin(0.5).setDepth(211).setInteractive({ useHandCursor: true });
     this.nameEnterBtn.on('pointerover', () => {
@@ -921,7 +1006,7 @@ export class GameScene extends Phaser.Scene {
     this.emptyNamePrompt = this.add.text(
       TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 200,
       'No name entered. Are you sure?', {
-        fontSize: '24px',
+        fontSize: '72px',
         color: '#ff4444',
         fontFamily: 'monospace',
         fontStyle: 'bold',
@@ -929,13 +1014,13 @@ export class GameScene extends Phaser.Scene {
     ).setOrigin(0.5).setDepth(212).setVisible(false);
 
     const btnStyle = {
-      fontSize: '28px',
+      fontSize: '84px',
       fontFamily: 'monospace',
       fontStyle: 'bold',
-      padding: { x: 24, y: 8 },
+      padding: { x: 72, y: 24 },
     };
     this.emptyNameYesBtn = this.add.text(
-      TUNING.GAME_WIDTH / 2 - 100, TUNING.GAME_HEIGHT / 2 + 250,
+      TUNING.GAME_WIDTH / 2 - 300, TUNING.GAME_HEIGHT / 2 + 380,
       'YES', { ...btnStyle, color: '#ff4444', backgroundColor: '#330000' }
     ).setOrigin(0.5).setDepth(212).setInteractive({ useHandCursor: true }).setVisible(false);
     this.emptyNameYesBtn.on('pointerover', () => { this.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }); this.emptyNameYesBtn.setColor('#ffffff').setBackgroundColor('#660000'); });
@@ -948,7 +1033,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.emptyNameNoBtn = this.add.text(
-      TUNING.GAME_WIDTH / 2 + 100, TUNING.GAME_HEIGHT / 2 + 250,
+      TUNING.GAME_WIDTH / 2 + 300, TUNING.GAME_HEIGHT / 2 + 380,
       'NO', { ...btnStyle, color: '#00ff00', backgroundColor: '#003300' }
     ).setOrigin(0.5).setDepth(212).setInteractive({ useHandCursor: true }).setVisible(false);
     this.emptyNameNoBtn.on('pointerover', () => { this.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }); this.emptyNameNoBtn.setColor('#ffffff').setBackgroundColor('#006600'); });
@@ -959,6 +1044,22 @@ export class GameScene extends Phaser.Scene {
         this.hideEmptyNamePrompt();
       }
     });
+
+    // Widescreen side curtains — cover the extra canvas width during title/tutorial/countdown.
+    // Slide off-screen when gameplay starts, slide back on returnToTitle.
+    const cOff = GAME_MODE.contentOffsetX;
+    if (cOff > 0) {
+      this.curtainLeft = this.add.rectangle(
+        cOff / 2, TUNING.GAME_HEIGHT / 2,
+        cOff + 4, TUNING.GAME_HEIGHT,
+        0x000000
+      ).setDepth(300).setScrollFactor(0);
+      this.curtainRight = this.add.rectangle(
+        GAME_MODE.canvasWidth - cOff / 2, TUNING.GAME_HEIGHT / 2,
+        cOff + 4, TUNING.GAME_HEIGHT,
+        0x000000
+      ).setDepth(300).setScrollFactor(0);
+    }
 
     // Black overlay for countdown (covers game world, below countdown numbers)
     this.blackOverlay = this.add.rectangle(
@@ -971,13 +1072,13 @@ export class GameScene extends Phaser.Scene {
     // Desktop: full-res PNGs (1924×1076). Mobile: half-res JPGs (962×538, ~68MB VRAM).
     this.preStartSprite = this.add.sprite(
       GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00000'
-    ).setDisplaySize(GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT)
+    ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT)
      .setDepth(248).setScrollFactor(0).setVisible(false);
 
     // Intro-to-tutorial cutscene (all platforms — unskippable transition)
     this.introTutSprite = this.add.sprite(
       GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'intro-tut-00000'
-    ).setDisplaySize(GAME_MODE.canvasWidth * TUNING.INTRO_TUT_SCALE, TUNING.GAME_HEIGHT)
+    ).setDisplaySize(TUNING.GAME_WIDTH * TUNING.INTRO_TUT_SCALE, TUNING.GAME_HEIGHT)
      .setDepth(248).setScrollFactor(0).setVisible(false);
 
     // Death exposure white overlay (above everything game-related)
@@ -1012,11 +1113,11 @@ export class GameScene extends Phaser.Scene {
 
     // Tutorial skip button (bottom-right, above tutorial content, below black overlay)
     this.tutorialSkipBtn = this.add.image(0, 0, 'tutorial-skip')
-      .setOrigin(0.5, 0.5).setScale(0.5).setAlpha(SKIP_BTN_PULSE_MAX).setDepth(248).setVisible(false).setInteractive({ useHandCursor: true }).setTintFill(0xffffff);
-    // Position so bottom-right edge sits 30px from screen edges
+      .setOrigin(0.5, 0.5).setScale(SKIP_BTN_SCALE).setAlpha(SKIP_BTN_PULSE_MAX).setDepth(248).setVisible(false).setInteractive({ useHandCursor: true }).setTintFill(0xffffff);
+    // Position from right/bottom edges (margin is distance from edge to button center)
     this.tutorialSkipBtn.setPosition(
-      TUNING.GAME_WIDTH - SKIP_BTN_MARGIN_RIGHT - this.tutorialSkipBtn.displayWidth / 2,
-      TUNING.GAME_HEIGHT - SKIP_BTN_MARGIN_BOTTOM - this.tutorialSkipBtn.displayHeight / 2,
+      TUNING.GAME_WIDTH - SKIP_BTN_MARGIN_RIGHT,
+      TUNING.GAME_HEIGHT - SKIP_BTN_MARGIN_BOTTOM,
     );
 
     // Looping fade pulse — runs whenever button is not hovered
@@ -1207,7 +1308,7 @@ export class GameScene extends Phaser.Scene {
         const rect = this.game.canvas.getBoundingClientRect();
         const cx = clientX + TUNING.CURSOR_OFFSET_X;
         const cy = clientY + TUNING.CURSOR_OFFSET_Y;
-        this.globalCursorX = ((cx - rect.left) / rect.width) * TUNING.GAME_WIDTH;
+        this.globalCursorX = ((cx - rect.left) / rect.width) * GAME_MODE.canvasWidth;
         this.globalCursorY = ((cy - rect.top) / rect.height) * TUNING.GAME_HEIGHT;
         // Position HTML cursor at offset
         this.htmlCursor!.style.display = '';
@@ -1268,10 +1369,30 @@ export class GameScene extends Phaser.Scene {
     // Start title music — timing depends on platform:
     if (GAME_MODE.isPhoneMode) {
       // Mobile: music starts AFTER swipe-to-fullscreen completes (first sound user hears)
+      const fadeReveal = () => {
+        // Hide UI corners until reveal completes (AFTER tryAutoplayMusic which resets opacity)
+        this.profileHud.setAlpha(0);
+        this.musicPlayer.setContainerOpacity(0);
+        // 0.5s delay then 1.5s fade to reveal title animation
+        this.time.delayedCall(500, () => {
+          this.tweens.add({
+            targets: this.titleRevealOverlay,
+            alpha: 0,
+            duration: 1500,
+            ease: 'Linear',
+          });
+          // UI corners start fading in 1s after overlay starts (0.5s before overlay finishes)
+          this.time.delayedCall(1000, () => {
+            this.tweens.add({ targets: this.profileHud.getContainer(), alpha: 1, duration: 1500, ease: 'Linear' });
+            this.musicPlayer.fadeContainerOpacity(1, 1500);
+          });
+        });
+      };
       if ((window as any).__mobileSwipeComplete) {
         this.tryAutoplayMusic();
+        fadeReveal(); // must be after tryAutoplayMusic so setContainerOpacity(0) isn't overridden
       } else {
-        (window as any).__onMobileSwipeComplete = () => this.tryAutoplayMusic();
+        (window as any).__onMobileSwipeComplete = () => { this.tryAutoplayMusic(); fadeReveal(); };
       }
     } else if (bootOverlay?.waitForBeep) {
       // Desktop/tablet: music starts after BIOS beep finishes
@@ -1877,7 +1998,7 @@ export class GameScene extends Phaser.Scene {
     if (this.debugMasterEnabled && DEBUG_HOTKEYS.musicSource.active && this.input.keyboard
         && Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey(DEBUG_HOTKEYS.musicSource.key))) {
       if (!this.debugMusicSourceText) {
-        this.debugMusicSourceText = this.add.text(TUNING.GAME_WIDTH - 40, 150, '', {
+        this.debugMusicSourceText = this.add.text(GAME_MODE.canvasWidth - 40, 150, '', {
           fontSize: '18px', color: '#00ff00', fontFamily: 'monospace',
         }).setOrigin(1, 0).setDepth(9999).setScrollFactor(0);
       }
@@ -2457,6 +2578,7 @@ export class GameScene extends Phaser.Scene {
       if (this.cursorStroke) this.cursorStroke.setAlpha(0);
       this._titleAnimStop();
       this.titleLoopSprite.setVisible(false);
+
       this.musicPlayer.skipCountdownAudio(); // Stop Phaser countdown audio (desktop)
       this.musicPlayer.revealForGameplay();
       this.playerSystem.reset();
@@ -2545,6 +2667,7 @@ export class GameScene extends Phaser.Scene {
           this.musicPlayer.revealForGameplay();
           this._titleAnimStop();
           this.titleLoopSprite.setVisible(false);
+
           this.playerSystem.reset();
           const fadeDur = TUNING.COUNTDOWN_DELAY * 1000;
           this.tweens.add({ targets: this.blackOverlay, alpha: 0, duration: fadeDur });
@@ -2577,6 +2700,18 @@ export class GameScene extends Phaser.Scene {
     this.state = GameState.TITLE;
     this.setCrosshairMode(false);
     this.elapsed = 0;
+
+    // Reset widescreen curtains back to covering the sides
+    if (this.curtainLeft && this.curtainRight) {
+      const cOff = GAME_MODE.contentOffsetX;
+      this.tweens.killTweensOf(this.curtainLeft);
+      this.tweens.killTweensOf(this.curtainRight);
+      this.curtainLeft.x = cOff / 2;
+      this.curtainRight.x = GAME_MODE.canvasWidth - cOff / 2;
+    }
+    // Hide mobile accelerate button
+    this.inputSystem.setPrimaryButtonVisible(false);
+
     this.debugPreStartOverlay.setVisible(false);
     this.reflectionSystem.setVisible(false);
     this.musicPlayer.resetForTitle();
@@ -2677,11 +2812,12 @@ export class GameScene extends Phaser.Scene {
     if (this.titleAnimEnabled) this._titleAnimPlay('loop');
     this.titleContainer.setVisible(true);
 
-    // Show music player in compact mode on title
+    // Show music player in compact mode on title (revert gameplay shift)
+    this.musicPlayer.setContainerOpacity(1);
     this.musicPlayer.setVisible(true);
     this.musicPlayer.setCompact(true);
+    this.musicPlayer.setGameplayMode(false);
 
-    // ProfileHud in profile mode on title
     this.profileHud.showProfileMode(this.profilePopup.getName(), this.getProfileRankText());
     this.profileHud.setAlpha(1);
     this.profileHud.setVisible(true);
@@ -2717,6 +2853,7 @@ export class GameScene extends Phaser.Scene {
     this.musicPlayer.startTitleMusic();
     this.musicPlayer.setVisible(true);
     this.musicPlayer.setCompact(true);
+    this.musicPlayer.setGameplayMode(false);
     this.profileHud.showProfileMode(this.profilePopup.getName(), this.getProfileRankText());
     this.profileHud.setVisible(true);
   }
@@ -2727,6 +2864,7 @@ export class GameScene extends Phaser.Scene {
       this.titleContainer.setVisible(false);
       this._titleAnimStop();
       this.titleLoopSprite.setVisible(false);
+
       this.enterStarting();
       return;
     }
@@ -2739,10 +2877,12 @@ export class GameScene extends Phaser.Scene {
       this._titleAnimOnceComplete(() => {
         this._titleAnimStop();
         this.titleLoopSprite.setVisible(false);
+
       });
     } else {
       // No title-start animation loaded — just hide immediately
       this.titleLoopSprite.setVisible(false);
+
     }
 
     // Play intro-to-tutorial cutscene over everything (all platforms, unskippable)
@@ -2764,7 +2904,7 @@ export class GameScene extends Phaser.Scene {
       this.tutorialPhase = 'controls_wait';
       this.tutorialTimer = 0;
       this.tutorialAdvance = false;
-      this.tutorialSkipBtn.setVisible(true).setAlpha(SKIP_BTN_PULSE_MAX).setScale(0.5).setTintFill(0xffffff).setInteractive({ useHandCursor: true });
+      this.tutorialSkipBtn.setVisible(true).setAlpha(SKIP_BTN_PULSE_MAX).setScale(SKIP_BTN_SCALE).setTintFill(0xffffff).setInteractive({ useHandCursor: true });
       (this.tutorialSkipBtn.getData('startPulse') as () => void)();
     });
 
@@ -2941,7 +3081,6 @@ export class GameScene extends Phaser.Scene {
     this.titleContainer.setVisible(false);
     this._titleAnimStop();
     this.titleLoopSprite.setVisible(false);
-    this.musicPlayer.setVisible(false);
 
     // Fade cursor away during countdown (returns on resetToTitle)
     if (this.cursorMain) {
@@ -2954,13 +3093,15 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.htmlCursor) this.htmlCursor.style.display = 'none';
 
-    // Fade out profile HUD during countdown
+    // Fade out profile HUD + music player during countdown
     this.tweens.add({
       targets: this.profileHud.getContainer(),
       alpha: 0,
       duration: 1500,
       ease: 'Power2',
     });
+    this.musicPlayer.fadeContainerOpacity(0, 1500);
+    this.time.delayedCall(1500, () => { this.musicPlayer.setVisible(false); });
 
     // Start countdown (5→2, then fade black to reveal game) — begin with initial delay
     this.countdownIndex = -1;
@@ -3112,7 +3253,7 @@ export class GameScene extends Phaser.Scene {
 
     const canvas = this.game.canvas;
     const cr = canvas.getBoundingClientRect();
-    const gx = ((cx - cr.left) / cr.width) * TUNING.GAME_WIDTH;
+    const gx = ((cx - cr.left) / cr.width) * GAME_MODE.canvasWidth;
     const gy = ((cy - cr.top) / cr.height) * TUNING.GAME_HEIGHT;
 
     // Collect ALL Phaser Text objects at click point
@@ -3265,6 +3406,7 @@ export class GameScene extends Phaser.Scene {
     this.state = GameState.PLAYING;
     this.setCrosshairMode(true);
     this.musicPlayer.setCompact(false);
+    this.musicPlayer.setGameplayMode(true);
     this.timeDilation = new TimeDilationSystem();
     this.wasDilating = false;
     this.elapsed = 0;
@@ -3276,6 +3418,59 @@ export class GameScene extends Phaser.Scene {
     this.spawnGraceTimer = 0;
     this.blackOverlay.setVisible(false);
     this.deathWhiteOverlay.setVisible(false);
+
+    // Start gameplay UI at alpha 0 — fades in when curtains start sliding
+    this.actionBtnTop.setVisible(true).setAlpha(0);
+    this.actionBtnBottom.setVisible(true).setAlpha(0);
+    this.sliderBar.setVisible(true).setAlpha(0);
+    this.sliderKnob.setVisible(true).setAlpha(0);
+    this.musicPlayer.setContainerOpacity(0);
+    this.musicPlayer.setVisible(true);
+
+    // Slide widescreen curtains off-screen to reveal the full gameplay canvas.
+    // Delay 1100ms so the preStartSprite fade (1000ms) completes first —
+    // otherwise the 1920px-wide fading sprite creates a vignette-like seam
+    // as the curtains reveal the wider canvas behind it.
+    const uiFadeIn = () => {
+      const uiTargets = [this.actionBtnTop, this.actionBtnBottom, this.sliderBar, this.sliderKnob, this.hudLabel, this.hudHighScore];
+      this.tweens.add({ targets: uiTargets, alpha: 1, duration: 2000, ease: 'Power2' });
+      this.musicPlayer.fadeContainerOpacity(1, 2000);
+    };
+    if (this.curtainLeft && this.curtainRight) {
+      const cOff = GAME_MODE.contentOffsetX;
+      this.time.delayedCall(1100, () => {
+        uiFadeIn();
+        if (this.curtainLeft && this.curtainRight) {
+          this.tweens.add({
+            targets: this.curtainLeft,
+            x: -cOff / 2,
+            duration: 2000,
+            ease: 'Cubic.Out',
+          });
+          this.tweens.add({
+            targets: this.curtainRight,
+            x: GAME_MODE.canvasWidth + cOff / 2,
+            duration: 2000,
+            ease: 'Cubic.Out',
+            onComplete: () => {
+              // Curtains fully off-screen — fade in the accelerate button
+              if (GAME_MODE.mobileMode) {
+                this.inputSystem.fadeInPrimaryButton(TUNING.MOBILE_BTN_FADE_IN);
+              }
+            },
+          });
+        }
+      });
+    } else if (GAME_MODE.mobileMode) {
+      // No curtains (canvas = 1920) — fade in button after same delay
+      this.time.delayedCall(1100, () => { uiFadeIn(); });
+      this.time.delayedCall(1100 + 2000, () => {
+        this.inputSystem.fadeInPrimaryButton(TUNING.MOBILE_BTN_FADE_IN);
+      });
+    } else {
+      // Desktop, no curtains — fade in at same 1100ms delay
+      this.time.delayedCall(1100, () => { uiFadeIn(); });
+    }
     this.dyingPhase = 'done';
     this.roadSystem.setVisible(true);
     this.roadSystem.resetScroll(TUNING.SPRITE_OFFSET_ROAD);
@@ -3336,9 +3531,9 @@ export class GameScene extends Phaser.Scene {
     const entries = this.leaderboardSystem.getEntries();
     const weeklyHigh = entries.length > 0 ? entries[0].score : 0;
     this.hudHighScore.setText(String(weeklyHigh).padStart(7, '0'));
-    this.hudLabel.setVisible(true);
+    this.hudLabel.setVisible(true).setAlpha(0);
     this.hudLabel.x = GAME_MODE.canvasWidth / 2 + TUNING.SPRITE_OFFSET_HUD_LABEL;
-    this.hudHighScore.setVisible(true);
+    this.hudHighScore.setVisible(true).setAlpha(0);
     this.hudHighScore.x = GAME_MODE.canvasWidth / 2 + TUNING.SPRITE_OFFSET_HUD_SCORE;
     this.profileHud.setVisible(true);
     this.profileHud.setPosition(40 + TUNING.SPRITE_OFFSET_PROFILE_HUD, 40);
@@ -3609,6 +3804,14 @@ export class GameScene extends Phaser.Scene {
     this.difficultySystem.update(hDt);
     this.playerSystem.setInvincible(this.rageTimer > 0 || this.rageZoomProgress > 0);
     this.playerSystem.update(hDt, roadSpeed, baseRoadSpeed, vDt);
+
+    // Remap green cursor Y → slider knob Y
+    if (this.sliderKnob.visible) {
+      const cursorY = this.inputSystem.getTargetY();
+      const t = (cursorY - TUNING.ROAD_TOP_Y) / (TUNING.ROAD_BOTTOM_Y - TUNING.ROAD_TOP_Y);
+      this.sliderKnob.setY(TUNING.SLIDER_KNOB_Y_MIN + t * (TUNING.SLIDER_KNOB_Y_MAX - TUNING.SLIDER_KNOB_Y_MIN));
+    }
+
     this.scoreSystem.update(hDt, this.playerSystem.getPlayerSpeed());
     if (this.spawnGraceTimer <= 0) {
       this.obstacleSystem.update(hDt, roadSpeed, this.difficultySystem.getFactor(), rageFactor);
@@ -4656,6 +4859,10 @@ export class GameScene extends Phaser.Scene {
     this.autoSubmitted = false;
     this.debugPreStartOverlay.setVisible(false);
     this.reflectionSystem.setVisible(false);
+    this.actionBtnTop.setVisible(false);
+    this.actionBtnBottom.setVisible(false);
+    this.sliderBar.setVisible(false);
+    this.sliderKnob.setVisible(false);
 
     // Mobile: hide all cursors on death/high score screen
     if (GAME_MODE.mobileMode) {
@@ -4663,6 +4870,7 @@ export class GameScene extends Phaser.Scene {
       if (this.cursorStroke) this.cursorStroke.setVisible(false);
       this.crosshair?.setVisible(false);
       if (this.htmlCursor) this.htmlCursor.style.display = 'none';
+      this.inputSystem.setPrimaryButtonVisible(false);
     }
 
     // Reset time dilation and restore music rate
@@ -4677,6 +4885,7 @@ export class GameScene extends Phaser.Scene {
     if (this.hudHidden) {
       this.hudHidden = false;
       this.profileHud.setVisible(true);
+      this.musicPlayer.setContainerOpacity(1);
       this.musicPlayer.setVisible(true);
       this.obstacleSystem.setSuppressExplosions(false);
       this.fxSystem.setSuppressShake(false);
@@ -4691,8 +4900,9 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setScroll(-GAME_MODE.contentOffsetX, 0);
     this.adjustHudForZoom(1);
 
-    // Collapse music player to thumbnail-only
+    // Collapse music player to thumbnail-only + revert to title position/scale
     this.musicPlayer.setCompact(true);
+    this.musicPlayer.setGameplayMode(false);
 
     // Juice: shake, flash, impact sound
     this.fxSystem.triggerDeath();
@@ -4749,6 +4959,28 @@ export class GameScene extends Phaser.Scene {
   /** Activate name entry state and keyboard handler (call after visuals are revealed) */
   private activateNameEntry(): void {
     this.state = GameState.NAME_ENTRY;
+
+    // Create hidden HTML input to trigger mobile keyboard
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.maxLength = NAME_MAX_LENGTH;
+    inp.autocomplete = 'off';
+    inp.autocapitalize = 'characters';
+    inp.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;z-index:9999;';
+    document.body.appendChild(inp);
+    this.nameHiddenInput = inp;
+
+    // Sync hidden input → Phaser text on every keystroke
+    inp.addEventListener('input', () => {
+      if (this.state !== GameState.NAME_ENTRY) return;
+      if (this.emptyNameVisible) this.hideEmptyNamePrompt();
+      this.enteredName = inp.value.slice(0, NAME_MAX_LENGTH);
+      this.nameInputText.setText(this.enteredName + '_');
+    });
+
+    // Focus the input to pop the mobile keyboard
+    setTimeout(() => inp.focus(), 100);
+
     this.nameKeyHandler = (event: KeyboardEvent) => {
       if (this.state !== GameState.NAME_ENTRY) return;
 
@@ -4765,14 +4997,26 @@ export class GameScene extends Phaser.Scene {
         this.hideEmptyNamePrompt();
       }
 
+      // Desktop: sync from keyboard events (hidden input handles mobile)
       if (event.key === 'Backspace') {
         this.enteredName = this.enteredName.slice(0, -1);
       } else if (event.key.length === 1 && this.enteredName.length < NAME_MAX_LENGTH) {
         this.enteredName += event.key;
       }
       this.nameInputText.setText(this.enteredName + '_');
+      // Keep hidden input in sync for mobile
+      if (this.nameHiddenInput) this.nameHiddenInput.value = this.enteredName;
     };
     this.input.keyboard?.on('keydown', this.nameKeyHandler);
+  }
+
+  /** Remove the hidden HTML input used for mobile keyboard */
+  private removeNameHiddenInput(): void {
+    if (this.nameHiddenInput) {
+      this.nameHiddenInput.blur();
+      this.nameHiddenInput.remove();
+      this.nameHiddenInput = null;
+    }
   }
 
   /** Get the rank text for the current profile name (e.g. "RANKED #3" or "") */
@@ -5070,11 +5314,12 @@ export class GameScene extends Phaser.Scene {
     if (this.nameConfirmed) {
       this.nameConfirmed = false;
 
-      // Remove keyboard listener
+      // Remove keyboard listener + hidden input
       if (this.nameKeyHandler) {
         this.input.keyboard?.off('keydown', this.nameKeyHandler);
         this.nameKeyHandler = null;
       }
+      this.removeNameHiddenInput();
 
       // Submit score with name
       const name = this.enteredName.trim() || 'ANON';

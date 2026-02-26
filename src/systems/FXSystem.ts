@@ -56,7 +56,7 @@ export class FXSystem {
     // --- Flash overlay (full screen, hidden) ---
     this.flashOverlay = scene.add.rectangle(
       TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
-      TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT,
+      GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT,
       TUNING.FLASH_DEATH_COLOR
     ).setAlpha(0).setDepth(150);
 

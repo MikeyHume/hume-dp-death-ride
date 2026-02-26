@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Cutscene Resolution Comparison</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; color: #fff; font-family: monospace; padding: 20px; }
+  h1 { margin-bottom: 10px; font-size: 20px; }
+  h2 { margin: 20px 0 8px; color: #ff4400; font-size: 16px; }
+  .info { color: #888; font-size: 13px; margin-bottom: 20px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 30px; }
+  .card {
+    border: 2px solid #333;
+    padding: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    position: relative;
+  }
+  .card:hover { border-color: #ff4400; }
+  .card.selected { border-color: #00ff00; }
+  .card img {
+    display: block;
+    width: 384px;
+    height: auto;
+    image-rendering: pixelated;
+  }
+  .card .label {
+    text-align: center;
+    padding: 6px 0 2px;
+    font-size: 13px;
+    color: #ccc;
+  }
+  .card .vram {
+    text-align: center;
+    font-size: 11px;
+    color: #888;
+  }
+  .fullscreen-preview {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 1000;
+    cursor: pointer;
+  }
+  .fullscreen-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+  }
+  .fullscreen-preview .close-hint {
+    position: absolute;
+    top: 10px;
+    right: 16px;
+    color: #666;
+    font-size: 14px;
+  }
+  .summary {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    padding: 16px;
+    margin-top: 20px;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .summary .green { color: #00ff00; }
+  .summary .yellow { color: #ffff00; }
+  .summary .red { color: #ff4444; }
+</style>
+</head>
+<body>
+
+<h1>Cutscene Resolution Test — Nearest Neighbor</h1>
+<p class="info">Click any thumbnail for fullscreen preview (at game canvas size). All frames scaled with nearest-neighbor. Click fullscreen to close.</p>
+
+<h2>Pre-Start Cutscene (46 frames @ 12fps = 3.8s)</h2>
+<div class="row" id="pre-start-row"></div>
+
+<h2>Intro-to-Tutorial Cutscene (27 frames @ 12fps = 2.25s)</h2>
+<div class="row" id="intro-tut-row"></div>
+
+<div class="summary">
+  <strong>VRAM Budget (both cutscenes combined at each resolution):</strong><br>
+  <span class="red">100% (1924×1076): 272 + 160 = 432 MB — crashes mobile, heavy desktop</span><br>
+  <span class="yellow">75% (1443×807): 153 + 90 = 243 MB — heavy on 4GB devices</span><br>
+  <span class="green">50% (962×538): 68 + 40 = 108 MB — safe on all devices</span><br>
+  <span class="green">38% (731×409): 39 + 23 = 62 MB — very safe</span><br>
+  <span class="green">25% (481×269): 17 + 10 = 27 MB — lightest, may look blocky</span><br>
+  <br>
+  <strong>Note:</strong> These play fullscreen at 1920×1080 — Phaser stretches to fill. Nearest-neighbor preserves pixel edges.<br>
+  iPhone Xs (4GB RAM): aim for <strong>&lt;150MB total</strong> for cutscene textures (other game textures need room too).
+</div>
+
+<div class="fullscreen-preview" id="fullscreen" onclick="this.style.display='none'">
+  <img id="fullscreen-img">
+  <div class="close-hint">click to close</div>
+</div>
+
+<script>
+const scales = [
+  { label: '100%', dims: '1924x1076', vram46: '272MB', vram27: '160MB', file_pre: 'pre_start_test_100pct_1924x1076.jpg', file_intro: 'intro_tut_test_100pct_1924x1076.jpg' },
+  { label: '75%', dims: '1443x807', vram46: '153MB', vram27: '90MB', file_pre: 'pre_start_test_75pct_1443x807.jpg', file_intro: 'intro_tut_test_75pct_1443x807.jpg' },
+  { label: '50%', dims: '962x538', vram46: '68MB', vram27: '40MB', file_pre: 'pre_start_test_50pct_962x538.jpg', file_intro: 'intro_tut_test_50pct_962x538.jpg' },
+  { label: '38%', dims: '731x409', vram46: '39MB', vram27: '23MB', file_pre: 'pre_start_test_38pct_731x409.jpg', file_intro: 'intro_tut_test_38pct_731x409.jpg' },
+  { label: '25%', dims: '481x269', vram46: '17MB', vram27: '10MB', file_pre: 'pre_start_test_25pct_481x269.jpg', file_intro: 'intro_tut_test_25pct_269.jpg' },
+];
+
+function makeCard(src, label, dims, vram) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `<img src="${src}"><div class="label">${label} — ${dims}</div><div class="vram">VRAM: ${vram}</div>`;
+  card.onclick = () => {
+    document.getElementById('fullscreen-img').src = src;
+    document.getElementById('fullscreen').style.display = 'block';
+  };
+  return card;
+}
+
+const preRow = document.getElementById('pre-start-row');
+const introRow = document.getElementById('intro-tut-row');
+const base = 'assets/cutscenes/resolution_test/';
+
+scales.forEach(s => {
+  preRow.appendChild(makeCard(base + s.file_pre, s.label, s.dims, s.vram46));
+  introRow.appendChild(makeCard(base + s.file_intro, s.label, s.dims, s.vram27));
+});
+</script>
+</body>
+</html>

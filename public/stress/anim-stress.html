@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ANIM STRESS TEST — Results</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0a;
+    color: #33ff33;
+    font-family: 'VT323', 'Courier New', monospace;
+    font-size: 16px;
+    line-height: 1.4;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* CRT overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0,0,0,0.15) 0px,
+      rgba(0,0,0,0.15) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.5) 100%);
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  /* Header */
+  .header {
+    border: 2px solid #33ff33;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    text-align: center;
+    text-shadow: 0 0 8px #33ff33;
+  }
+  .header h1 {
+    font-size: 28px;
+    letter-spacing: 4px;
+    margin-bottom: 6px;
+  }
+  .header .subtitle {
+    font-size: 16px;
+    color: #22aa22;
+  }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    border: 1px solid #225522;
+    padding: 8px 16px;
+    text-align: center;
+  }
+  .stat-label { color: #22aa22; font-size: 12px; }
+  .stat-value { font-size: 22px; text-shadow: 0 0 6px currentColor; }
+  .stat-crash .stat-value { color: #ff3333; }
+  .stat-fail .stat-value { color: #ffaa33; }
+  .stat-good .stat-value { color: #33ff33; }
+  .stat-sweet .stat-value { color: #ffff33; }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-bottom: 16px;
+    font-size: 14px;
+    color: #888;
+  }
+  .legend span { display: flex; align-items: center; gap: 4px; }
+  .legend-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+  }
+  .legend-dot.crash { background: #ff3333; }
+  .legend-dot.fail { background: #ff6633; }
+  .legend-dot.rough { background: #ffaa33; }
+  .legend-dot.ok { background: #ffff33; }
+  .legend-dot.good { background: #33ff33; }
+
+  /* Level rows */
+  .level-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border: 1px solid #225522;
+    padding: 8px;
+    background: rgba(0,20,0,0.3);
+  }
+
+  .level-row {
+    display: grid;
+    grid-template-columns: 40px 110px 55px 1fr 70px 70px;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 8px;
+    border-bottom: 1px solid rgba(34,85,34,0.2);
+    transition: background 0.1s;
+  }
+  .level-row:hover {
+    background: rgba(34,85,34,0.15);
+  }
+  .level-row.crashed {
+    background: rgba(80,0,0,0.2);
+  }
+  .level-row.sweet-spot {
+    background: rgba(80,80,0,0.2);
+    border: 1px solid #ffff33;
+  }
+
+  .level-label { font-size: 15px; font-weight: bold; }
+  .level-dim { color: #22aa22; font-size: 14px; }
+  .level-vram { color: #558855; font-size: 13px; }
+
+  /* Progress bar */
+  .bar-container {
+    height: 16px;
+    background: #111;
+    border: 1px solid #225522;
+    position: relative;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    transition: width 0.5s ease-out;
+    position: relative;
+  }
+  .bar-fill::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      90deg,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.3) 3px,
+      rgba(0,0,0,0.3) 4px
+    );
+  }
+  .bar-fill.crash { background: #ff3333; box-shadow: 0 0 6px #ff3333; }
+  .bar-fill.fail { background: #ff6633; box-shadow: 0 0 6px #ff6633; }
+  .bar-fill.rough { background: #ffaa33; box-shadow: 0 0 6px #ffaa33; }
+  .bar-fill.ok { background: #ffff33; box-shadow: 0 0 6px #ffff33; }
+  .bar-fill.good { background: #33ff33; box-shadow: 0 0 6px #33ff33; }
+  .bar-fill.smooth { background: #33ffaa; box-shadow: 0 0 6px #33ffaa; }
+
+  .level-fps {
+    text-align: right;
+    font-size: 15px;
+    text-shadow: 0 0 6px currentColor;
+  }
+  .level-status {
+    text-align: right;
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+
+  /* Status colors */
+  .s-crash { color: #ff3333; }
+  .s-dead { color: #ff3333; }
+  .s-timeout { color: #ff3333; }
+  .s-fail { color: #ff6633; }
+  .s-error { color: #ff6633; }
+  .s-rough { color: #ffaa33; }
+  .s-ok { color: #ffff33; }
+  .s-good { color: #33ff33; }
+  .s-smooth { color: #33ffaa; }
+  .s-unknown { color: #888; }
+
+  /* Header row */
+  .level-header {
+    display: grid;
+    grid-template-columns: 40px 110px 55px 1fr 70px 70px;
+    gap: 8px;
+    padding: 4px 8px;
+    color: #558855;
+    font-size: 12px;
+    border-bottom: 1px solid #225522;
+    margin-bottom: 2px;
+  }
+
+  /* No data message */
+  .no-data {
+    text-align: center;
+    padding: 60px 20px;
+    color: #558855;
+    font-size: 20px;
+  }
+  .no-data code {
+    display: block;
+    margin-top: 12px;
+    color: #33ff33;
+    font-size: 14px;
+  }
+
+  /* Sweet spot callout */
+  .sweet-callout {
+    text-align: center;
+    padding: 12px;
+    margin: 16px 0;
+    border: 2px solid #ffff33;
+    color: #ffff33;
+    font-size: 20px;
+    text-shadow: 0 0 10px #ffff33;
+    letter-spacing: 2px;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 12px;
+    margin-top: 16px;
+    color: #335533;
+    font-size: 13px;
+  }
+
+  /* Flicker animation */
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    97% { opacity: 1; }
+    98% { opacity: 0.8; }
+    99% { opacity: 1; }
+  }
+  .container { animation: flicker 4s infinite; }
+</style>
+</head>
+<body>
+<div class="container" id="app">
+  <div class="no-data" id="loading">
+    LOADING RESULTS...<br>
+    <code>node scripts/anim-stress-test.mjs</code>
+  </div>
+</div>
+
+<script>
+(async function() {
+  const app = document.getElementById('app');
+
+  // Try to load results from multiple locations
+  let data = null;
+  const sources = [
+    '/stress/anim-stress-latest.json',
+    '../stress/anim-stress-latest.json',
+  ];
+
+  for (const src of sources) {
+    try {
+      const res = await fetch(src);
+      if (res.ok) { data = await res.json(); break; }
+    } catch {}
+  }
+
+  // Also check URL param for custom JSON
+  const params = new URLSearchParams(location.search);
+  const customSrc = params.get('data');
+  if (customSrc) {
+    try {
+      const res = await fetch(customSrc);
+      if (res.ok) data = await res.json();
+    } catch {}
+  }
+
+  if (!data || !data.levels?.length) {
+    document.getElementById('loading').innerHTML = `
+      NO RESULTS FOUND<br><br>
+      <span style="color: #33ff33; font-size: 14px;">Run the stress test first:</span>
+      <code>node scripts/anim-stress-test.mjs</code><br>
+      <code>node scripts/anim-stress-test.mjs --dry-run</code>
+    `;
+    return;
+  }
+
+  // Classify FPS into status
+  function getClass(r) {
+    if (r.crashed || r.timeout) return 'crash';
+    if (r.fpsAvg === 0) return 'dead';
+    if (r.errors > 0) return 'error';
+    if (r.fpsAvg < 15) return 'fail';
+    if (r.fpsAvg < 20) return 'rough';
+    if (r.fpsAvg < 25) return 'ok';
+    if (r.fpsAvg < 30) return 'good';
+    return 'smooth';
+  }
+
+  // Count stats
+  const crashes = data.levels.filter(l => ['CRASH','DEAD','TIMEOUT'].includes(l.status)).length;
+  const fails = data.levels.filter(l => ['FAIL','ERROR','ROUGH'].includes(l.status)).length;
+  const goods = data.levels.filter(l => ['GOOD','SMOOTH','OK'].includes(l.status)).length;
+  const sweet = data.sweetSpot;
+
+  // Build HTML
+  let html = `
+    <div class="header">
+      <h1>▓ ANIM STRESS TEST ▓</h1>
+      <div class="subtitle">
+        ${data.device || 'Unknown Device'} · CRT ${data.crt ? 'ON' : 'OFF'} · ${data.levels.length} levels ·
+        ${new Date(data.timestamp).toLocaleString()}
+      </div>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat stat-crash">
+        <div class="stat-label">CRASH/DEAD</div>
+        <div class="stat-value">${crashes}</div>
+      </div>
+      <div class="stat stat-fail">
+        <div class="stat-label">FAIL/ROUGH</div>
+        <div class="stat-value">${fails}</div>
+      </div>
+      <div class="stat stat-good">
+        <div class="stat-label">GOOD/SMOOTH</div>
+        <div class="stat-value">${goods}</div>
+      </div>
+      <div class="stat stat-sweet">
+        <div class="stat-label">★ SWEET SPOT</div>
+        <div class="stat-value">${sweet ? `L${String(sweet.level).padStart(2,'0')} @ ${sweet.fps} FPS` : 'N/A'}</div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><span class="legend-dot crash"></span> Crash/Dead</span>
+      <span><span class="legend-dot fail"></span> Fail (&lt;15)</span>
+      <span><span class="legend-dot rough"></span> Rough (15-24)</span>
+      <span><span class="legend-dot ok"></span> OK (25-29)</span>
+      <span><span class="legend-dot good"></span> Good (30+)</span>
+    </div>
+  `;
+
+  if (sweet) {
+    html += `
+      <div class="sweet-callout">
+        ★ RECOMMENDED: L${String(sweet.level).padStart(2,'0')}
+        (${sweet.width}×${sweet.height}) — ${sweet.fps} FPS ★
+      </div>
+    `;
+  }
+
+  html += `
+    <div class="level-grid">
+      <div class="level-header">
+        <span>LVL</span>
+        <span>RESOLUTION</span>
+        <span>VRAM</span>
+        <span>PERFORMANCE</span>
+        <span style="text-align:right">FPS</span>
+        <span style="text-align:right">STATUS</span>
+      </div>
+  `;
+
+  for (const level of data.levels) {
+    const cls = getClass(level);
+    const barWidth = Math.min(100, Math.round((level.fpsAvg / 60) * 100));
+    const isSweet = sweet && level.level === sweet.level;
+    const rowClass = level.crashed || level.timeout ? 'crashed' : (isSweet ? 'sweet-spot' : '');
+    const fpsDisplay = level.timeout ? '???' : level.fpsAvg;
+    const statusIcon = {
+      crash: '☠', dead: '☠', timeout: '⏱', error: '✗', fail: '✗',
+      rough: '~', ok: '○', good: '●', smooth: '★', unknown: '?'
+    }[cls] || '?';
+
+    html += `
+      <div class="level-row ${rowClass}" title="Samples: ${level.fpsSamples?.join(', ') || 'none'} | Min: ${level.fpsMin} Max: ${level.fpsMax} | Errors: ${level.errors}">
+        <span class="level-label s-${cls}">L${String(level.level).padStart(2,'0')}</span>
+        <span class="level-dim">${level.width}×${level.height}</span>
+        <span class="level-vram">${level.vramMB} MB</span>
+        <div class="bar-container">
+          <div class="bar-fill ${cls}" style="width: ${barWidth}%"></div>
+        </div>
+        <span class="level-fps s-${cls}">${fpsDisplay} FPS</span>
+        <span class="level-status s-${cls}">${statusIcon} ${level.status}</span>
+      </div>
+    `;
+  }
+
+  html += `</div>`;
+
+  html += `
+    <div class="footer">
+      Elapsed: ${data.elapsedSeconds}s · Settle: ${data.settleMs/1000}s · Samples: ${data.samples}/level
+      <br>Run again: <code style="color:#33ff33">node scripts/anim-stress-test.mjs</code>
+    </div>
+  `;
+
+  app.innerHTML = html;
+
+  // Animate bars in
+  setTimeout(() => {
+    document.querySelectorAll('.bar-fill').forEach((el, i) => {
+      el.style.transition = `width 0.3s ease-out ${i * 30}ms`;
+    });
+  }, 100);
+})();
+</script>
+</body>
+</html>

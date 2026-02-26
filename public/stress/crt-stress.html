@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRT STRESS TEST — Results</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0a;
+    color: #33ff33;
+    font-family: 'VT323', 'Courier New', monospace;
+    font-size: 16px;
+    line-height: 1.4;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* CRT overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0,0,0,0.15) 0px,
+      rgba(0,0,0,0.15) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.5) 100%);
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+  .header {
+    border: 2px solid #33ff33;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    text-align: center;
+    text-shadow: 0 0 8px #33ff33;
+  }
+  .header h1 { font-size: 28px; letter-spacing: 4px; margin-bottom: 6px; }
+  .header .subtitle { font-size: 16px; color: #22aa22; }
+
+  /* Legend */
+  .legend {
+    display: flex; gap: 16px; justify-content: center;
+    margin-bottom: 16px; font-size: 14px; color: #888;
+  }
+  .legend span { display: flex; align-items: center; gap: 4px; }
+  .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+  .legend-dot.crash { background: #ff3333; }
+  .legend-dot.rough { background: #ffaa33; }
+  .legend-dot.ok { background: #ffff33; }
+  .legend-dot.good { background: #33ff33; }
+  .legend-dot.smooth { background: #33ffaa; }
+
+  /* Variant grid */
+  .variant-grid {
+    display: flex; flex-direction: column; gap: 2px;
+    border: 1px solid #225522; padding: 8px;
+    background: rgba(0,20,0,0.3);
+  }
+
+  .variant-header {
+    display: grid;
+    grid-template-columns: 110px 45px 1fr 80px 120px 80px;
+    gap: 8px; padding: 4px 8px;
+    color: #558855; font-size: 12px;
+    border-bottom: 1px solid #225522; margin-bottom: 2px;
+  }
+
+  .variant-row {
+    display: grid;
+    grid-template-columns: 110px 45px 1fr 80px 120px 80px;
+    align-items: center; gap: 8px;
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(34,85,34,0.2);
+    transition: background 0.1s;
+  }
+  .variant-row:hover { background: rgba(34,85,34,0.15); }
+  .variant-row.best { background: rgba(80,80,0,0.2); border: 1px solid #ffff33; }
+  .variant-row.crashed { background: rgba(80,0,0,0.2); }
+
+  .v-name { font-size: 16px; font-weight: bold; }
+  .v-tex { color: #558855; font-size: 14px; text-align: center; }
+
+  .bar-container {
+    height: 18px; background: #111;
+    border: 1px solid #225522;
+    position: relative; overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    transition: width 0.5s ease-out;
+    position: relative;
+  }
+  .bar-fill::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(90deg, transparent 0px, transparent 3px, rgba(0,0,0,0.3) 3px, rgba(0,0,0,0.3) 4px);
+  }
+  .bar-fill.crash { background: #ff3333; box-shadow: 0 0 6px #ff3333; }
+  .bar-fill.rough { background: #ffaa33; box-shadow: 0 0 6px #ffaa33; }
+  .bar-fill.ok { background: #ffff33; box-shadow: 0 0 6px #ffff33; }
+  .bar-fill.good { background: #33ff33; box-shadow: 0 0 6px #33ff33; }
+  .bar-fill.smooth { background: #33ffaa; box-shadow: 0 0 6px #33ffaa; }
+
+  .v-fps { text-align: right; font-size: 16px; text-shadow: 0 0 6px currentColor; }
+  .v-range { text-align: center; font-size: 13px; color: #558855; }
+  .v-status { text-align: right; font-size: 14px; letter-spacing: 1px; }
+
+  .s-crash { color: #ff3333; }
+  .s-rough { color: #ffaa33; }
+  .s-ok { color: #ffff33; }
+  .s-good { color: #33ff33; }
+  .s-smooth { color: #33ffaa; }
+
+  /* Feature tags */
+  .features {
+    display: flex; gap: 3px; flex-wrap: wrap;
+    margin-top: 2px;
+  }
+  .feat-tag {
+    font-size: 11px; padding: 1px 4px;
+    border: 1px solid #225522; color: #33aa33;
+  }
+  .feat-tag.off { color: #333; border-color: #222; }
+
+  /* Description row */
+  .desc-row {
+    padding: 2px 8px 8px 8px;
+    font-size: 13px; color: #447744;
+    border-bottom: 1px solid rgba(34,85,34,0.3);
+  }
+
+  /* Recommendation */
+  .recommend {
+    text-align: center; padding: 14px;
+    margin: 16px 0;
+    border: 2px solid #ffff33;
+    color: #ffff33; font-size: 20px;
+    text-shadow: 0 0 10px #ffff33;
+    letter-spacing: 2px;
+  }
+
+  .footer {
+    text-align: center; padding: 12px; margin-top: 16px;
+    color: #335533; font-size: 13px;
+  }
+
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    97% { opacity: 1; }
+    98% { opacity: 0.8; }
+    99% { opacity: 1; }
+  }
+  .container { animation: flicker 4s infinite; }
+</style>
+</head>
+<body>
+<div class="container" id="app">
+  <div style="text-align:center;padding:60px 20px;color:#558855;font-size:20px" id="loading">
+    LOADING RESULTS...<br>
+    <code style="color:#33ff33;font-size:14px;display:block;margin-top:12px">node scripts/crt-stress-test.mjs</code>
+  </div>
+</div>
+
+<script>
+(async function() {
+  const app = document.getElementById('app');
+
+  let data = null;
+  const sources = ['/stress/crt-stress-latest.json', '../stress/crt-stress-latest.json'];
+  for (const src of sources) {
+    try { const res = await fetch(src); if (res.ok) { data = await res.json(); break; } } catch {}
+  }
+  const params = new URLSearchParams(location.search);
+  const customSrc = params.get('data');
+  if (customSrc) {
+    try { const res = await fetch(customSrc); if (res.ok) data = await res.json(); } catch {}
+  }
+
+  if (!data || !data.variants?.length) {
+    document.getElementById('loading').innerHTML = `
+      NO RESULTS FOUND<br><br>
+      <span style="color:#33ff33;font-size:14px;">Run the stress test first:</span>
+      <code style="display:block;margin-top:12px;color:#33ff33;font-size:14px;">node scripts/crt-stress-test.mjs</code>
+    `;
+    return;
+  }
+
+  function getClass(fps, crashed) {
+    if (crashed || fps === 0) return 'crash';
+    if (fps < 20) return 'rough';
+    if (fps < 25) return 'ok';
+    if (fps < 30) return 'good';
+    return 'smooth';
+  }
+
+  function getIcon(cls) {
+    return { crash: '☠', rough: '~', ok: '○', good: '●', smooth: '★' }[cls] || '?';
+  }
+
+  // Sort by median FPS (best first)
+  const sorted = [...data.variants].sort((a, b) => b.medianFps - a.medianFps);
+  const best = sorted[0];
+  const desktop = data.variants.find(v => v.name === 'desktop');
+
+  let html = `
+    <div class="header">
+      <h1>▓ CRT STRESS TEST ▓</h1>
+      <div class="subtitle">
+        ${data.device || 'Unknown'} · ${data.variants.length} variants × ${data.runsPerVariant} runs ·
+        ${new Date(data.timestamp).toLocaleString()}
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><span class="legend-dot crash"></span> Crash</span>
+      <span><span class="legend-dot rough"></span> Rough (&lt;20)</span>
+      <span><span class="legend-dot ok"></span> OK (20-24)</span>
+      <span><span class="legend-dot good"></span> Good (25-29)</span>
+      <span><span class="legend-dot smooth"></span> Smooth (30+)</span>
+    </div>
+  `;
+
+  if (best && desktop && best.medianFps > desktop.medianFps + 2) {
+    html += `
+      <div class="recommend">
+        ★ BEST: "${best.name}" — ${best.medianFps} FPS
+        (+${best.medianFps - desktop.medianFps} vs desktop) ★
+      </div>
+    `;
+  } else if (desktop) {
+    html += `
+      <div class="recommend" style="border-color:#33ff33;color:#33ff33;">
+        ★ Desktop CRT runs at ${desktop.medianFps} FPS — looking good ★
+      </div>
+    `;
+  }
+
+  html += `
+    <div class="variant-grid">
+      <div class="variant-header">
+        <span>VARIANT</span>
+        <span style="text-align:center">TEX</span>
+        <span>PERFORMANCE</span>
+        <span style="text-align:right">MEDIAN</span>
+        <span style="text-align:center">RANGE</span>
+        <span style="text-align:right">STATUS</span>
+      </div>
+  `;
+
+  for (const v of sorted) {
+    const cls = getClass(v.medianFps, v.crashCount === data.runsPerVariant);
+    const icon = getIcon(cls);
+    const barW = Math.min(100, Math.round((v.medianFps / 60) * 100));
+    const isBest = v === best && v.medianFps > 0;
+    const rowClass = v.crashCount === data.runsPerVariant ? 'crashed' : (isBest ? 'best' : '');
+    const rangeStr = v.bestFps > 0 ? `${v.worstFps}-${v.bestFps}` : '—';
+    const crashStr = v.crashCount > 0 ? ` (${v.crashCount} crash)` : '';
+
+    const allFeats = ['bloom', 'beam', 'mask', 'chroma', 'scanlines', 'noise'];
+    const featHtml = allFeats.map(f =>
+      `<span class="feat-tag ${v.features[f] ? '' : 'off'}">${f.toUpperCase().slice(0,3)}</span>`
+    ).join('');
+
+    html += `
+      <div class="variant-row ${rowClass}" title="${v.description}">
+        <div>
+          <span class="v-name s-${cls}">${v.name}</span>
+          <div class="features">${featHtml}</div>
+        </div>
+        <span class="v-tex">${v.texLookups}</span>
+        <div class="bar-container">
+          <div class="bar-fill ${cls}" style="width: ${barW}%"></div>
+        </div>
+        <span class="v-fps s-${cls}">${v.medianFps > 0 ? v.medianFps + ' FPS' : 'CRASH'}</span>
+        <span class="v-range">${rangeStr}${crashStr}</span>
+        <span class="v-status s-${cls}">${icon} ${v.status}</span>
+      </div>
+      <div class="desc-row">${v.description}</div>
+    `;
+  }
+
+  html += '</div>';
+
+  // Individual run details
+  html += `
+    <div style="margin-top:20px;border:1px solid #225522;padding:8px;background:rgba(0,20,0,0.3);">
+      <div style="color:#558855;font-size:14px;padding:4px 8px;border-bottom:1px solid #225522;margin-bottom:4px;">
+        INDIVIDUAL RUNS
+      </div>
+  `;
+
+  for (const v of sorted) {
+    for (const run of v.runs) {
+      const cls = getClass(run.fpsAvg, run.crashed);
+      const samples = run.fpsSamples?.join(', ') || '—';
+      html += `
+        <div style="display:grid;grid-template-columns:110px 60px 1fr;gap:8px;padding:2px 8px;font-size:13px;color:#447744;">
+          <span>${v.name} #${run.run + 1}</span>
+          <span class="s-${cls}">${run.crashed ? 'CRASH' : run.fpsAvg + ' FPS'}</span>
+          <span style="color:#335533">[${samples}] ${run.gameState || ''}</span>
+        </div>
+      `;
+    }
+  }
+
+  html += '</div>';
+
+  html += `
+    <div class="footer">
+      Elapsed: ${data.elapsedSeconds}s · Settle: ${data.settleMs/1000}s · Samples: ${data.samplesPerRun}/run
+      <br>Run again: <code style="color:#33ff33">node scripts/crt-stress-test.mjs</code>
+    </div>
+  `;
+
+  app.innerHTML = html;
+
+  setTimeout(() => {
+    document.querySelectorAll('.bar-fill').forEach((el, i) => {
+      el.style.transition = `width 0.3s ease-out ${i * 50}ms`;
+    });
+  }, 100);
+})();
+</script>
+</body>
+</html>

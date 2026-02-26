@@ -260,6 +260,12 @@ export class BootScene extends Phaser.Scene {
     this.load.image('default-avatar', 'assets/profiles/dp_anon_pic.jpg');
     this.load.image('add-pic-icon', 'ui/add_pic_icon.png');
 
+    // Action button spritesheets (5 frames each, 640x640 per frame)
+    this.load.spritesheet('btn-slash', 'ui/slash_button.png', { frameWidth: 640, frameHeight: 640 });
+    this.load.spritesheet('btn-rocket', 'ui/rocket_button.png', { frameWidth: 640, frameHeight: 640 });
+    this.load.image('slider-bar', 'ui/slider_bar.png');
+    this.load.image('slider-knob', 'ui/slider.png');
+
     // Tutorial assets
     this.load.image('tutorial-skip', 'assets/tutorial/skip_v02.png');
     if (!GAME_MODE.mobileMode) {

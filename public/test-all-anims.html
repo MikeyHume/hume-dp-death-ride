@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DP Moto — All Animation Perf Test</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0a; color: #00ff41; font-family: 'Courier New', monospace; font-size: 13px; overflow-y: auto; }
+  #game-container { width: 960px; height: 540px; margin: 10px auto; border: 1px solid #333; position: relative; }
+  #status { text-align: center; padding: 8px; color: #888; }
+  #results { max-width: 1200px; margin: 10px auto; padding: 10px; }
+  .anim-row { display: flex; align-items: center; padding: 4px 8px; border-bottom: 1px solid #1a1a1a; }
+  .anim-row:hover { background: #111; }
+  .anim-name { width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .anim-meta { width: 120px; color: #888; font-size: 11px; }
+  .bar-container { flex: 1; height: 18px; position: relative; margin: 0 8px; }
+  .bar { height: 100%; position: absolute; left: 0; top: 0; border-radius: 2px; transition: width 0.3s; }
+  .bar-vram { background: #ff4444; opacity: 0.8; }
+  .bar-judder { background: #ffaa00; opacity: 0.8; }
+  .bar-label { position: absolute; right: 4px; top: 1px; font-size: 10px; color: #fff; z-index: 1; }
+  .section-header { color: #00aaff; font-size: 14px; font-weight: bold; padding: 10px 8px 4px; border-bottom: 2px solid #00aaff; margin-top: 12px; }
+  .legend { display: flex; gap: 20px; padding: 8px; justify-content: center; margin-bottom: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-swatch { width: 14px; height: 14px; border-radius: 2px; }
+  .metric-grid { display: grid; grid-template-columns: 200px 80px 80px 80px 80px 1fr 100px; gap: 2px; font-size: 11px; }
+  .metric-header { color: #00aaff; font-weight: bold; padding: 4px; border-bottom: 1px solid #00aaff; }
+  .metric-cell { padding: 3px 4px; }
+  .grade-A { color: #00ff41; } .grade-B { color: #aaff00; } .grade-C { color: #ffaa00; } .grade-D { color: #ff6600; } .grade-F { color: #ff0000; }
+  #summary-box { background: #111; border: 1px solid #333; padding: 12px; margin: 10px auto; max-width: 1200px; }
+  .progress-bar { width: 100%; height: 24px; background: #1a1a1a; border: 1px solid #333; margin: 6px 0; position: relative; }
+  .progress-fill { height: 100%; background: #00ff41; transition: width 0.5s; }
+  .progress-text { position: absolute; top: 3px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 12px; }
+  canvas { image-rendering: pixelated; }
+</style>
+</head>
+<body>
+
+<div id="summary-box">
+  <div style="text-align:center; font-size:16px; color:#00aaff;">ALL ANIMATION PERFORMANCE TEST</div>
+  <div id="status">Initializing...</div>
+  <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div><div class="progress-text" id="progress-text">0 / 0</div></div>
+</div>
+
+<div id="game-container"></div>
+
+<div id="results">
+  <div class="legend">
+    <div class="legend-item"><div class="legend-swatch" style="background:#ff4444"></div> VRAM (MB)</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#ffaa00"></div> Judder %</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#00ff41"></div> Smooth</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#ff0000"></div> Choppy</div>
+  </div>
+  <div id="results-table"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+<script>
+// ── Animation Registry ─────────────────────────────────────────
+const ANIMS = [
+  // TITLE SEQUENCES (spritesheets)
+  { id: 'title-loop', section: 'Title Screen', label: 'Title Loop',
+    type: 'spritesheet', path: 'assets/start/start_loop_sheet_s50.jpg',
+    frameW: 964, frameH: 538, frames: 27, fps: 12, loop: true,
+    sheetW: 2892, sheetH: 4842, vram: 53.4 },
+  { id: 'title-start', section: 'Title Screen', label: 'Title Start',
+    type: 'spritesheet', path: 'assets/start/start_play_sheet_s50.jpg',
+    frameW: 964, frameH: 538, frames: 25, fps: 12, loop: false,
+    sheetW: 4820, sheetH: 2690, vram: 49.5 },
+
+  // PLAYER
+  { id: 'player-ride', section: 'Player', label: 'Ride (loop)',
+    type: 'spritesheet', path: 'assets/dp_player/dp_moto_v03.png',
+    frameW: 702, frameH: 590, frames: 9, fps: 12, loop: true,
+    sheetW: 3510, sheetH: 1180, vram: 15.8 },
+  { id: 'player-ride-m', section: 'Player', label: 'Ride Mobile',
+    type: 'spritesheet', path: 'assets/dp_player/dp_moto_v03_mobile.png',
+    frameW: 351, frameH: 295, frames: 9, fps: 12, loop: true,
+    sheetW: 1755, sheetH: 590, vram: 3.9 },
+  { id: 'player-attack', section: 'Player', label: 'Attack (21f @30fps)',
+    type: 'spritesheet', path: 'assets/dp_player/dp_attack.png',
+    frameW: 821, frameH: 590, frames: 21, fps: 30, loop: false,
+    sheetW: 3284, sheetH: 3540, vram: 44.3 },
+  { id: 'player-attack-m', section: 'Player', label: 'Attack Mobile',
+    type: 'spritesheet', path: 'assets/dp_player/dp_attack_mobile.png',
+    frameW: 410, frameH: 295, frames: 21, fps: 30, loop: false,
+    sheetW: 1640, sheetH: 1770, vram: 11.1 },
+  { id: 'player-start', section: 'Player', label: 'Start (14f @12fps)',
+    type: 'spritesheet', path: 'assets/dp_player/dp_start.png',
+    frameW: 824, frameH: 708, frames: 14, fps: 12, loop: false,
+    sheetW: 5768, sheetH: 1416, vram: 31.2 },
+  { id: 'player-start-m', section: 'Player', label: 'Start Mobile',
+    type: 'spritesheet', path: 'assets/dp_player/dp_start_mobile.png',
+    frameW: 412, frameH: 354, frames: 14, fps: 12, loop: false,
+    sheetW: 2884, sheetH: 708, vram: 7.8 },
+  { id: 'player-powered', section: 'Player', label: 'Powered Up (18f @12fps)',
+    type: 'spritesheet', path: 'assets/dp_player/dp_powered_up.png',
+    frameW: 1076, frameH: 697, frames: 18, fps: 12, loop: true,
+    sheetW: 6456, sheetH: 2091, vram: 51.5 },
+  { id: 'player-powered-m', section: 'Player', label: 'Powered Up Mobile',
+    type: 'spritesheet', path: 'assets/dp_player/dp_powered_up_mobile.png',
+    frameW: 538, frameH: 348, frames: 18, fps: 12, loop: true,
+    sheetW: 3228, sheetH: 1044, vram: 12.9 },
+  { id: 'player-speedup', section: 'Player', label: 'Speed Up (64f @24fps)',
+    type: 'spritesheet', path: 'assets/dp_player/dp_speed_up.png',
+    frameW: 655, frameH: 469, frames: 64, fps: 24, loop: true,
+    sheetW: 2620, sheetH: 7504, vram: 75.0 },
+  { id: 'player-speedup-m', section: 'Player', label: 'Speed Up Mobile',
+    type: 'spritesheet', path: 'assets/dp_player/dp_speed_up_mobile.png',
+    frameW: 327, frameH: 234, frames: 64, fps: 24, loop: true,
+    sheetW: 1308, sheetH: 3744, vram: 18.7 },
+  { id: 'player-rocket', section: 'Player', label: 'Rocket Launch (20f @12fps)',
+    type: 'spritesheet', path: 'assets/dp_player/dp_rocket_lancher_v2.png',
+    frameW: 802, frameH: 488, frames: 20, fps: 12, loop: false,
+    sheetW: 4010, sheetH: 1952, vram: 29.9 },
+  { id: 'player-rocket-m', section: 'Player', label: 'Rocket Launch Mobile',
+    type: 'spritesheet', path: 'assets/dp_player/dp_rocket_lancher_v2_mobile.png',
+    frameW: 401, frameH: 244, frames: 20, fps: 12, loop: false,
+    sheetW: 2005, sheetH: 976, vram: 7.5 },
+
+  // COLLECTION EFFECTS
+  { id: 'col-rocket', section: 'Collection FX', label: 'Collect Rocket (19f @24fps)',
+    type: 'spritesheet', path: 'assets/COL/COL_rocket.png',
+    frameW: 840, frameH: 637, frames: 19, fps: 24, loop: false,
+    sheetW: 3360, sheetH: 3185, vram: 40.8 },
+  { id: 'col-rocket-m', section: 'Collection FX', label: 'Collect Rocket Mobile',
+    type: 'spritesheet', path: 'assets/COL/COL_rocket_mobile.png',
+    frameW: 420, frameH: 318, frames: 19, fps: 24, loop: false,
+    sheetW: 1680, sheetH: 1590, vram: 10.2 },
+  { id: 'col-shield', section: 'Collection FX', label: 'Collect Shield (19f @24fps)',
+    type: 'spritesheet', path: 'assets/COL/COL_shield.png',
+    frameW: 840, frameH: 637, frames: 19, fps: 24, loop: false,
+    sheetW: 3360, sheetH: 3185, vram: 40.8 },
+  { id: 'col-shield-m', section: 'Collection FX', label: 'Collect Shield Mobile',
+    type: 'spritesheet', path: 'assets/COL/COL_shield_mobile.png',
+    frameW: 420, frameH: 318, frames: 19, fps: 24, loop: false,
+    sheetW: 1680, sheetH: 1590, vram: 10.2 },
+  { id: 'col-hit', section: 'Collection FX', label: 'Collect Hit (19f @24fps)',
+    type: 'spritesheet', path: 'assets/COL/COL_hit.png',
+    frameW: 840, frameH: 637, frames: 19, fps: 24, loop: false,
+    sheetW: 3360, sheetH: 3185, vram: 40.8 },
+  { id: 'col-hit-m', section: 'Collection FX', label: 'Collect Hit Mobile',
+    type: 'spritesheet', path: 'assets/COL/COL_hit_mobile.png',
+    frameW: 420, frameH: 318, frames: 19, fps: 24, loop: false,
+    sheetW: 1680, sheetH: 1590, vram: 10.2 },
+
+  // PICKUPS
+  { id: 'pickup-rocket', section: 'Pickups', label: 'Rocket Pickup (31f @12fps)',
+    type: 'spritesheet', path: 'assets/pickups/rocket pickup.png',
+    frameW: 300, frameH: 300, frames: 31, fps: 12, loop: true,
+    sheetW: 1800, sheetH: 1800, vram: 12.4 },
+  { id: 'pickup-rocket-m', section: 'Pickups', label: 'Rocket Pickup Mobile',
+    type: 'spritesheet', path: 'assets/pickups/rocket pickup_mobile.png',
+    frameW: 150, frameH: 150, frames: 31, fps: 12, loop: true,
+    sheetW: 900, sheetH: 900, vram: 3.1 },
+  { id: 'pickup-shield', section: 'Pickups', label: 'Shield Pickup (17f @12fps)',
+    type: 'spritesheet', path: 'assets/pickups/shield_pickup.png',
+    frameW: 300, frameH: 300, frames: 17, fps: 12, loop: true,
+    sheetW: 1800, sheetH: 900, vram: 6.2 },
+  { id: 'pickup-shield-m', section: 'Pickups', label: 'Shield Pickup Mobile',
+    type: 'spritesheet', path: 'assets/pickups/shield_pickup_mobile.png',
+    frameW: 150, frameH: 150, frames: 17, fps: 12, loop: true,
+    sheetW: 900, sheetH: 450, vram: 1.5 },
+  { id: 'rocket-proj', section: 'Pickups', label: 'Rocket Projectile (20f @12fps)',
+    type: 'spritesheet', path: 'assets/pickups/rocket_Projectile.png',
+    frameW: 385, frameH: 200, frames: 20, fps: 12, loop: true,
+    sheetW: 1925, sheetH: 800, vram: 5.9 },
+  { id: 'rocket-proj-m', section: 'Pickups', label: 'Rocket Projectile Mobile',
+    type: 'spritesheet', path: 'assets/pickups/rocket_Projectile_mobile.png',
+    frameW: 192, frameH: 100, frames: 20, fps: 12, loop: true,
+    sheetW: 960, sheetH: 400, vram: 1.5 },
+
+  // VFX
+  { id: 'explosion', section: 'VFX', label: 'Explosion (7f @12fps)',
+    type: 'spritesheet', path: 'assets/vfx/vfx_explosion.png',
+    frameW: 440, frameH: 440, frames: 7, fps: 12, loop: false,
+    sheetW: 3080, sheetH: 440, vram: 5.2 },
+  { id: 'explosion-m', section: 'VFX', label: 'Explosion Mobile',
+    type: 'spritesheet', path: 'assets/vfx/vfx_explosion_mobile.png',
+    frameW: 220, frameH: 220, frames: 7, fps: 12, loop: false,
+    sheetW: 1540, sheetH: 220, vram: 1.3 },
+  { id: 'slash', section: 'VFX', label: 'Slash (7f @24fps)',
+    type: 'spritesheet', path: 'assets/vfx/slash.png',
+    frameW: 140, frameH: 120, frames: 8, fps: 24, loop: false,
+    sheetW: 1120, sheetH: 120, vram: 0.5 },
+  { id: 'slash-m', section: 'VFX', label: 'Slash Mobile',
+    type: 'spritesheet', path: 'assets/vfx/slash_mobile.png',
+    frameW: 70, frameH: 60, frames: 8, fps: 24, loop: false,
+    sheetW: 560, sheetH: 60, vram: 0.1 },
+
+  // CARS (just test one representative)
+  { id: 'car-001', section: 'Cars', label: 'Car 001 (59f @12fps)',
+    type: 'spritesheet', path: 'assets/cars/car_001.png',
+    frameW: 441, frameH: 186, frames: 59, fps: 12, loop: true,
+    sheetW: 3969, sheetH: 1302, vram: 19.7 },
+  { id: 'car-001-m', section: 'Cars', label: 'Car 001 Mobile',
+    type: 'spritesheet', path: 'assets/cars/car_001_mobile.png',
+    frameW: 220, frameH: 93, frames: 59, fps: 12, loop: true,
+    sheetW: 1980, sheetH: 651, vram: 4.9 },
+
+  // COUNTDOWN
+  { id: 'countdown', section: 'UI', label: 'Countdown (5f manual)',
+    type: 'spritesheet', path: 'assets/start/countdown.png',
+    frameW: 600, frameH: 600, frames: 5, fps: 1, loop: false,
+    sheetW: 1800, sheetH: 1200, vram: 8.2 },
+  { id: 'countdown-m', section: 'UI', label: 'Countdown Mobile',
+    type: 'spritesheet', path: 'assets/start/countdown_mobile.png',
+    frameW: 300, frameH: 300, frames: 5, fps: 1, loop: false,
+    sheetW: 900, sheetH: 600, vram: 2.1 },
+];
+
+// ── Test Configuration ─────────────────────────────────────────
+const MEASURE_DURATION = 3000;  // ms per animation test
+const SETTLE_FRAMES = 30;      // frames to skip before measuring
+
+// ── URL Params ─────────────────────────────────────────────────
+const params = new URLSearchParams(location.search);
+const CRT_ON = params.get('crt') === '1';
+const MOBILE_ONLY = params.get('mobile') === '1';
+const DESKTOP_ONLY = params.get('desktop') === '1';
+
+let filteredAnims = ANIMS;
+if (MOBILE_ONLY) filteredAnims = ANIMS.filter(a => a.id.endsWith('-m'));
+else if (DESKTOP_ONLY) filteredAnims = ANIMS.filter(a => !a.id.endsWith('-m'));
+
+// ── Results Storage ────────────────────────────────────────────
+const results = [];
+
+// ── Phaser Test Scene ──────────────────────────────────────────
+class AnimTestScene extends Phaser.Scene {
+  constructor() { super('AnimTestScene'); }
+
+  init() {
+    this._queue = [...filteredAnims];
+    this._currentAnim = null;
+    this._sprite = null;
+    this._measuring = false;
+    this._frameTimes = [];
+    this._lastFrameChange = 0;
+    this._lastFrame = -1;
+    this._settleCount = 0;
+    this._manualFrame = 0;
+    this._manualLastTime = 0;
+    this._startTime = 0;
+    this._loadStart = 0;
+  }
+
+  preload() {
+    // We load each animation on demand in the test loop
+  }
+
+  create() {
+    this.cameras.main.setBackgroundColor('#0a0a0a');
+    this._nextTest();
+  }
+
+  _nextTest() {
+    // Cleanup previous
+    if (this._sprite) { this._sprite.destroy(); this._sprite = null; }
+
+    if (this._queue.length === 0) {
+      this._finalize();
+      return;
+    }
+
+    this._currentAnim = this._queue.shift();
+    const a = this._currentAnim;
+    const idx = filteredAnims.length - this._queue.length - 1;
+    const total = filteredAnims.length;
+
+    document.getElementById('status').textContent = `Testing: ${a.label} (${idx}/${total})`;
+    document.getElementById('progress-fill').style.width = ((idx / total) * 100) + '%';
+    document.getElementById('progress-text').textContent = `${idx} / ${total}`;
+
+    // Reset state
+    this._measuring = false;
+    this._frameTimes = [];
+    this._lastFrameChange = 0;
+    this._lastFrame = -1;
+    this._settleCount = 0;
+    this._manualFrame = 0;
+    this._manualLastTime = 0;
+    this._startTime = 0;
+
+    // Load the asset
+    this._loadStart = performance.now();
+    const key = a.id;
+
+    // Remove old texture if exists
+    if (this.textures.exists(key)) this.textures.remove(key);
+
+    this.load.spritesheet(key, a.path, { frameWidth: a.frameW, frameHeight: a.frameH });
+    this.load.once('complete', () => {
+      const loadTime = performance.now() - this._loadStart;
+      this._currentAnim._loadTime = loadTime;
+
+      // Create sprite centered
+      const cx = this.cameras.main.width / 2;
+      const cy = this.cameras.main.height / 2;
+      this._sprite = this.add.sprite(cx, cy, key, 0);
+
+      // Scale to fit
+      const scaleX = (this.cameras.main.width * 0.8) / a.frameW;
+      const scaleY = (this.cameras.main.height * 0.8) / a.frameH;
+      const scale = Math.min(scaleX, scaleY, 1.5);
+      this._sprite.setScale(scale);
+
+      // Start manual frame stepping
+      this._manualFrame = 0;
+      this._manualLastTime = performance.now();
+      this._startTime = performance.now();
+      this._settleCount = 0;
+    });
+    this.load.start();
+  }
+
+  update(time, delta) {
+    if (!this._sprite || !this._currentAnim) return;
+
+    const a = this._currentAnim;
+    const now = performance.now();
+    const elapsed = now - this._startTime;
+
+    // Manual frame stepping (performance.now based — our winner)
+    const frameDuration = 1000 / a.fps;
+    const timeSinceLast = now - this._manualLastTime;
+
+    if (timeSinceLast >= frameDuration) {
+      const steps = Math.floor(timeSinceLast / frameDuration);
+      this._manualLastTime += steps * frameDuration;
+
+      const oldFrame = this._manualFrame;
+      if (a.loop) {
+        this._manualFrame = (this._manualFrame + steps) % a.frames;
+      } else {
+        this._manualFrame = Math.min(this._manualFrame + steps, a.frames - 1);
+      }
+      this._sprite.setFrame(this._manualFrame);
+
+      // Track frame change timing for judder measurement
+      if (this._settleCount < SETTLE_FRAMES) {
+        this._settleCount++;
+      } else if (!this._measuring) {
+        this._measuring = true;
+        this._lastFrameChange = now;
+        this._lastFrame = this._manualFrame;
+      } else if (this._manualFrame !== this._lastFrame) {
+        this._frameTimes.push(now - this._lastFrameChange);
+        this._lastFrameChange = now;
+        this._lastFrame = this._manualFrame;
+      }
+    }
+
+    // Check if measurement period is done
+    if (this._measuring && elapsed > SETTLE_FRAMES * 16 + MEASURE_DURATION) {
+      this._recordResults();
+      this._nextTest();
+    }
+
+    // For non-looping anims that finish early, restart for measurement
+    if (!a.loop && this._manualFrame >= a.frames - 1 && elapsed < SETTLE_FRAMES * 16 + MEASURE_DURATION) {
+      this._manualFrame = 0;
+      this._manualLastTime = now;
+    }
+  }
+
+  _recordResults() {
+    const a = this._currentAnim;
+    const times = this._frameTimes;
+
+    if (times.length < 3) {
+      results.push({
+        ...a, loadTime: a._loadTime || 0,
+        avgInterval: 0, stddev: 0, judder: 0, grade: '?',
+        minInterval: 0, maxInterval: 0, sampleCount: times.length
+      });
+      return;
+    }
+
+    const idealInterval = 1000 / a.fps;
+    const avg = times.reduce((s, t) => s + t, 0) / times.length;
+    const variance = times.reduce((s, t) => s + (t - avg) ** 2, 0) / times.length;
+    const stddev = Math.sqrt(variance);
+    const maxDev = Math.max(...times.map(t => Math.abs(t - idealInterval)));
+    const judder = (maxDev / idealInterval) * 100;
+
+    let grade;
+    if (judder < 15) grade = 'A';
+    else if (judder < 30) grade = 'B';
+    else if (judder < 50) grade = 'C';
+    else if (judder < 75) grade = 'D';
+    else grade = 'F';
+
+    results.push({
+      ...a, loadTime: a._loadTime || 0,
+      avgInterval: avg, stddev, judder, grade,
+      minInterval: Math.min(...times), maxInterval: Math.max(...times),
+      sampleCount: times.length
+    });
+
+    // Live update the results table
+    renderResults();
+  }
+
+  _finalize() {
+    document.getElementById('status').textContent = 'All tests complete!';
+    document.getElementById('progress-fill').style.width = '100%';
+    document.getElementById('progress-text').textContent = `${filteredAnims.length} / ${filteredAnims.length}`;
+    renderResults();
+
+    // Post results for automated collection
+    fetch('/agent/result', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'all-anims-perf', crt: CRT_ON, results })
+    }).catch(() => {});
+  }
+}
+
+// ── Results Rendering ──────────────────────────────────────────
+function renderResults() {
+  const container = document.getElementById('results-table');
+  const maxVram = Math.max(...results.map(r => r.vram), 1);
+
+  let html = '';
+  let currentSection = '';
+
+  // Summary stats
+  const desktopResults = results.filter(r => !r.id.endsWith('-m'));
+  const mobileResults = results.filter(r => r.id.endsWith('-m'));
+  const totalVramDesktop = desktopResults.reduce((s, r) => s + r.vram, 0);
+  const totalVramMobile = mobileResults.reduce((s, r) => s + r.vram, 0);
+  const avgJudder = results.length > 0 ? results.reduce((s, r) => s + r.judder, 0) / results.length : 0;
+
+  html += `<div style="padding:8px; color:#888; font-size:12px;">`;
+  if (desktopResults.length > 0) html += `Desktop VRAM Total: <span style="color:#ff4444">${totalVramDesktop.toFixed(1)} MB</span> | `;
+  if (mobileResults.length > 0) html += `Mobile VRAM Total: <span style="color:#ffaa00">${totalVramMobile.toFixed(1)} MB</span> | `;
+  html += `Avg Judder: <span style="color:${avgJudder < 30 ? '#00ff41' : avgJudder < 60 ? '#ffaa00' : '#ff0000'}">${avgJudder.toFixed(0)}%</span>`;
+  html += `</div>`;
+
+  for (const r of results) {
+    if (r.section !== currentSection) {
+      currentSection = r.section;
+      html += `<div class="section-header">${currentSection}</div>`;
+    }
+
+    const vramPct = (r.vram / maxVram) * 100;
+    const judderPct = Math.min(r.judder, 100);
+    const judderColor = r.judder < 20 ? '#00ff41' : r.judder < 40 ? '#aaff00' : r.judder < 60 ? '#ffaa00' : r.judder < 80 ? '#ff6600' : '#ff0000';
+
+    html += `<div class="anim-row">`;
+    html += `<div class="anim-name" title="${r.id}">${r.label}</div>`;
+    html += `<div class="anim-meta">${r.frames}f @${r.fps}fps</div>`;
+
+    // VRAM bar
+    html += `<div class="bar-container">`;
+    html += `<div class="bar bar-vram" style="width:${vramPct}%"></div>`;
+    html += `<div class="bar-label">${r.vram.toFixed(1)} MB</div>`;
+    html += `</div>`;
+
+    // Judder bar
+    html += `<div class="bar-container">`;
+    html += `<div class="bar" style="width:${judderPct}%; background:${judderColor}"></div>`;
+    html += `<div class="bar-label">${r.judder.toFixed(0)}% judder</div>`;
+    html += `</div>`;
+
+    // Grade + stats
+    html += `<div style="width:40px; text-align:center; font-size:16px; font-weight:bold;" class="grade-${r.grade}">${r.grade}</div>`;
+    html += `<div class="anim-meta">σ ${r.stddev.toFixed(1)}ms | ${r.loadTime.toFixed(0)}ms load</div>`;
+    html += `</div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+// ── Launch Phaser ──────────────────────────────────────────────
+const game = new Phaser.Game({
+  type: Phaser.WEBGL,
+  width: 960,
+  height: 540,
+  parent: 'game-container',
+  backgroundColor: '#0a0a0a',
+  scene: AnimTestScene,
+  render: { pixelArt: false, antialias: false },
+  fps: { target: 60, forceSetTimeOut: false },
+  banner: false,
+});
+</script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { TUNING } from '../config/tuning';
+import { GAME_MODE } from '../config/gameMode';
 
 const ROAD_FRAMES = 6;   // number of segments in road spritesheet
 const FRAME_W = 2048;     // each frame's pixel width
@@ -23,12 +24,15 @@ export class RoadSystem {
     this.spriteW = FRAME_W * this.scaleVal;
 
     // How many sprites needed to cover the screen + 1 buffer
-    const count = Math.ceil(TUNING.GAME_WIDTH / this.spriteW) + 2;
+    const count = Math.ceil(GAME_MODE.canvasWidth / this.spriteW) + 2;
 
     // Road container — left-edge aligned (origin 0,0.5) for precise tiling
+    // Start tiles at -contentOffsetX so they cover the full visible area
+    // (camera scroll of -contentOffsetX shifts visible area left of x=0)
+    const startX = -GAME_MODE.contentOffsetX;
     this.roadContainer = scene.add.container(0, 0);
     for (let i = 0; i < count; i++) {
-      const s = scene.add.sprite(i * this.spriteW, roadCenterY, 'road-img', i % ROAD_FRAMES);
+      const s = scene.add.sprite(startX + i * this.spriteW, roadCenterY, 'road-img', i % ROAD_FRAMES);
       s.setScale(this.scaleVal);
       s.setOrigin(0, 0.5);
       this.roadSprites.push(s);
@@ -39,7 +43,7 @@ export class RoadSystem {
     // Lines container (same positioning, slightly higher depth)
     this.linesContainer = scene.add.container(0, 0);
     for (let i = 0; i < count; i++) {
-      const s = scene.add.sprite(i * this.spriteW, roadCenterY, 'road-lines', i % ROAD_FRAMES);
+      const s = scene.add.sprite(startX + i * this.spriteW, roadCenterY, 'road-lines', i % ROAD_FRAMES);
       s.setScale(this.scaleVal);
       s.setOrigin(0, 0.5);
       this.linesSprites.push(s);
@@ -49,9 +53,10 @@ export class RoadSystem {
   }
 
   resetScroll(_offsetX: number = 0): void {
-    // Reset sprite positions to initial layout
+    // Reset sprite positions to initial layout (start at -contentOffsetX to cover full visible area)
+    const startX = -GAME_MODE.contentOffsetX;
     for (let i = 0; i < this.roadSprites.length; i++) {
-      const x = i * this.spriteW;
+      const x = startX + i * this.spriteW;
       this.roadSprites[i].x = x;
       this.roadSprites[i].setFrame(i % ROAD_FRAMES);
       this.linesSprites[i].x = x;
@@ -69,8 +74,9 @@ export class RoadSystem {
       this.linesSprites[i].x -= scrollPx;
     }
 
-    // Wrap: if leftmost sprite's right edge is fully off-screen left, move to right end
-    while (this.roadSprites[0].x + this.spriteW < 0) {
+    // Wrap: if leftmost sprite's right edge is fully off visible left edge, move to right end
+    const wrapLeft = -GAME_MODE.contentOffsetX - this.spriteW;
+    while (this.roadSprites[0].x < wrapLeft) {
       const rs = this.roadSprites.shift()!;
       const ls = this.linesSprites.shift()!;
       const lastR = this.roadSprites[this.roadSprites.length - 1];

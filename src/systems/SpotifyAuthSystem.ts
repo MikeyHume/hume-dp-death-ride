@@ -34,7 +34,8 @@ function getClientId(): string | null {
 }
 
 function getRedirectUri(): string {
-  return window.location.origin + '/callback';
+  const envUri = import.meta.env.VITE_SPOTIFY_REDIRECT_URI as string | undefined;
+  return envUri && envUri.length > 0 ? envUri : window.location.origin + '/callback';
 }
 
 /**

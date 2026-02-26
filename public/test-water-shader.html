@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Water Shader Stress Test</title>
+<style>
+  * { margin: 0; padding: 0; }
+  body { background: #000; overflow: hidden; }
+  #hud {
+    position: fixed; top: 8px; left: 8px; z-index: 10;
+    color: #0f0; font: bold 16px monospace;
+    background: rgba(0,0,0,0.85); padding: 8px 12px;
+    border: 1px solid #0f0; white-space: pre;
+  }
+  #results {
+    position: fixed; bottom: 8px; left: 8px; right: 8px; z-index: 10;
+    color: #0f0; font: 13px monospace;
+    background: rgba(0,0,0,0.9); padding: 8px;
+    border: 1px solid #0f0; max-height: 45vh; overflow-y: auto;
+    display: none;
+  }
+</style>
+</head>
+<body>
+<div id="hud">Loading...</div>
+<div id="results"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+const SETTLE_MS = parseInt(params.get('settle') || '3000');
+const MEASURE_MS = parseInt(params.get('measure') || '5000');
+const MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+const hud = document.getElementById('hud');
+const resultsDiv = document.getElementById('results');
+
+// Expose for WebDriver
+window.__shaderTestResults = [];
+window.__shaderTestDone = false;
+window.__shaderTestPhase = 'loading';
+
+// Current variant config (read by pipeline each frame)
+window.__sv = { octaves: 0, tintMix: 0 };
+window.__sp = 0; // shader phase
+
+// ── Shader ──
+const FRAG = `
+precision mediump float;
+uniform sampler2D uMainSampler;
+varying vec2 outTexCoord;
+uniform float uAmp;
+uniform float uFreq;
+uniform float uPhase;
+uniform int   uOct;
+uniform float uLac;
+uniform float uGain;
+uniform float uYAmt;
+uniform float uTintH;
+uniform float uTintS;
+uniform float uTintM;
+
+vec3 rgb2hsl(vec3 c) {
+    float mx = max(c.r, max(c.g, c.b));
+    float mn = min(c.r, min(c.g, c.b));
+    float l = (mx + mn) * 0.5;
+    if (mx == mn) return vec3(0.0, 0.0, l);
+    float d = mx - mn;
+    float s = l > 0.5 ? d / (2.0 - mx - mn) : d / (mx + mn);
+    float h;
+    if (mx == c.r) h = (c.g - c.b) / d + (c.g < c.b ? 6.0 : 0.0);
+    else if (mx == c.g) h = (c.b - c.r) / d + 2.0;
+    else h = (c.r - c.g) / d + 4.0;
+    return vec3(h / 6.0, s, l);
+}
+float hue2rgb(float p, float q, float t) {
+    if (t < 0.0) t += 1.0;
+    if (t > 1.0) t -= 1.0;
+    if (t < 1.0/6.0) return p + (q - p) * 6.0 * t;
+    if (t < 0.5) return q;
+    if (t < 2.0/3.0) return p + (q - p) * (2.0/3.0 - t) * 6.0;
+    return p;
+}
+vec3 hsl2rgb(vec3 hsl) {
+    if (hsl.y == 0.0) return vec3(hsl.z);
+    float q = hsl.z < 0.5 ? hsl.z * (1.0 + hsl.y) : hsl.z + hsl.y - hsl.z * hsl.y;
+    float p = 2.0 * hsl.z - q;
+    return vec3(hue2rgb(p,q,hsl.x+1.0/3.0), hue2rgb(p,q,hsl.x), hue2rgb(p,q,hsl.x-1.0/3.0));
+}
+void main() {
+    vec2 uv = outTexCoord;
+    float ox = 0.0, oy = 0.0, f = uFreq, a = uAmp;
+    for (int i = 0; i < 4; i++) {
+        if (i >= uOct) break;
+        float po = float(i) * 1.7;
+        ox += sin(uv.y * f + uPhase + po) * a;
+        oy += sin(uv.x * f * 0.7 + uPhase * 1.3 + po + 2.5) * a * uYAmt;
+        f *= uLac; a *= uGain;
+    }
+    vec4 color = texture2D(uMainSampler, clamp(uv + vec2(ox, oy), 0.0, 1.0));
+    if (uTintM > 0.0) {
+        vec3 hsl = rgb2hsl(color.rgb);
+        color.rgb = mix(color.rgb, hsl2rgb(vec3(uTintH, uTintS, hsl.z)), uTintM);
+    }
+    gl_FragColor = color;
+}
+`;
+
+// ── Variants — pipeline always active, just change uniforms ──
+const VARIANTS = [
+  { name: 'passthrough',   label: 'Passthrough (FBO copy only)',   octaves: 0, tintMix: 0   },
+  { name: 'disp-1oct',     label: '1 octave sine displacement',    octaves: 1, tintMix: 0   },
+  { name: 'disp-2oct',     label: '2 octave displacement',         octaves: 2, tintMix: 0   },
+  { name: 'disp-4oct',     label: '4 octave displacement',         octaves: 4, tintMix: 0   },
+  { name: 'tint-only',     label: 'HSL tint only (no disp)',       octaves: 0, tintMix: 0.5 },
+  { name: 'disp1+tint',    label: '1 oct + tint (game config)',    octaves: 1, tintMix: 0.5 },
+  { name: 'disp4+tint',    label: '4 oct + tint (worst case)',     octaves: 4, tintMix: 0.5 },
+];
+
+// ── Scene ──
+class TestScene extends Phaser.Scene {
+  constructor() { super('TestScene'); }
+
+  create() {
+    const W = this.scale.width, H = this.scale.height;
+
+    // Build busy background — simulates reflected parallax content
+    for (let i = 0; i < 8; i++) {
+      const color = [0x334488, 0x225566, 0x446633, 0x664422, 0x553355, 0x335544, 0x445533, 0x224466][i];
+      const r = this.add.rectangle(W/2, H * (0.1 + i * 0.1), W, H * 0.12, color, 0.6);
+      this.tweens.add({ targets: r, x: r.x + 120, duration: 2000 + i*200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+    // Add circles
+    for (let i = 0; i < 15; i++) {
+      const g = this.add.graphics();
+      g.fillStyle(Phaser.Math.Between(0x222244, 0x6688aa), 0.5);
+      g.fillCircle(Phaser.Math.Between(50, W-50), Phaser.Math.Between(50, H-50), Phaser.Math.Between(15, 60));
+    }
+
+    // Apply PostFX immediately and leave it on for all tests
+    this.fxLayer = this.add.layer();
+    for (let i = 0; i < 12; i++) {
+      const r = this.add.rectangle(
+        Phaser.Math.Between(80, W-80), Phaser.Math.Between(80, H-80),
+        Phaser.Math.Between(80, 300), Phaser.Math.Between(40, 150),
+        Phaser.Math.Between(0x112244, 0x557799), 0.5
+      );
+      this.fxLayer.add(r);
+      this.tweens.add({ targets: r, x: r.x + Phaser.Math.Between(-100,100), duration: 1800+i*150, yoyo: true, repeat: -1 });
+    }
+    this.fxLayer.setPostPipeline('WTP');
+
+    this.varIdx = 0;
+    this.testPhase = 'idle';
+    this.timer = 0;
+    this.fps = [];
+
+    this.time.delayedCall(1500, () => this.startVariant(0));
+  }
+
+  startVariant(idx) {
+    if (idx >= VARIANTS.length) {
+      window.__shaderTestDone = true;
+      window.__shaderTestPhase = 'done';
+      hud.textContent = 'DONE\n' + this.fmt();
+      return;
+    }
+    this.varIdx = idx;
+    const v = VARIANTS[idx];
+    window.__sv = { octaves: v.octaves, tintMix: v.tintMix };
+    this.testPhase = 'settling';
+    this.timer = 0;
+    this.fps = [];
+    window.__shaderTestPhase = 'settling-' + v.name;
+    hud.textContent = '[' + (idx+1) + '/' + VARIANTS.length + '] ' + v.label + '\nSettling...';
+  }
+
+  update(time, delta) {
+    window.__sp += delta * 0.004; // shader phase
+
+    if (this.testPhase === 'settling') {
+      this.timer += delta;
+      if (this.timer >= SETTLE_MS) {
+        this.testPhase = 'measuring';
+        this.timer = 0;
+        this.fps = [];
+        window.__shaderTestPhase = 'measuring-' + VARIANTS[this.varIdx].name;
+        hud.textContent = '[' + (this.varIdx+1) + '/' + VARIANTS.length + '] ' + VARIANTS[this.varIdx].label + '\nMeasuring...';
+      }
+    } else if (this.testPhase === 'measuring') {
+      this.timer += delta;
+      this.fps.push(this.game.loop.actualFps);
+      if (this.timer >= MEASURE_MS) {
+        const avg = this.fps.reduce((a,b)=>a+b,0)/this.fps.length;
+        const sorted = [...this.fps].sort((a,b)=>a-b);
+        const v = VARIANTS[this.varIdx];
+        const r = {
+          name: v.name, label: v.label,
+          avgFps: Math.round(avg*10)/10,
+          minFps: Math.round(Math.min(...this.fps)*10)/10,
+          p5Fps: Math.round(sorted[Math.floor(sorted.length*0.05)]*10)/10,
+          samples: this.fps.length
+        };
+        window.__shaderTestResults.push(r);
+        resultsDiv.style.display = 'block';
+        resultsDiv.textContent = this.fmt();
+        hud.textContent = '[' + (this.varIdx+1) + '/' + VARIANTS.length + '] ' + v.label + '\nAVG: ' + r.avgFps;
+        this.testPhase = 'idle';
+        this.time.delayedCall(500, () => this.startVariant(this.varIdx + 1));
+      }
+    }
+  }
+
+  fmt() {
+    const R = window.__shaderTestResults;
+    if (!R.length) return '';
+    const b = R[0].avgFps;
+    return R.map(r => {
+      const d = (r.avgFps - b).toFixed(1);
+      return r.label.padEnd(33) + ' AVG:' + String(r.avgFps).padStart(5) + '  MIN:' + String(r.minFps).padStart(5) + '  d:' + (d>=0?'+':'') + d;
+    }).join('\n');
+  }
+}
+
+// ── Pipeline ──
+class WTP extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline {
+  constructor(game) { super({ game, name: 'WTP', fragShader: FRAG }); }
+  onPreRender() {
+    const v = window.__sv || {};
+    this.set1f('uAmp', 0.01);
+    this.set1f('uFreq', 200.0);
+    this.set1f('uPhase', window.__sp || 0);
+    this.set1i('uOct', v.octaves || 0);
+    this.set1f('uLac', 2.0);
+    this.set1f('uGain', 0.5);
+    this.set1f('uYAmt', 0.3);
+    this.set1f('uTintH', 0.611);
+    this.set1f('uTintS', 0.7);
+    this.set1f('uTintM', v.tintMix || 0);
+  }
+}
+
+new Phaser.Game({
+  type: Phaser.WEBGL,
+  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: MOBILE ? 960 : 1920, height: MOBILE ? 540 : 1080 },
+  backgroundColor: '#111122',
+  scene: TestScene,
+  audio: { noAudio: true },
+  banner: false,
+  pipeline: { WTP },
+});
+</script>
+</body>
+</html>

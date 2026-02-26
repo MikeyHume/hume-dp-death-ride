@@ -3,11 +3,13 @@ import { TUNING } from '../config/tuning';
 import { GAME_MODE } from '../config/gameMode';
 
 const MODAL_DEPTH = 1500;
-const DIALOG_W = 500;
-const DIALOG_H = 220;
-const BTN_W = 140;
-const BTN_H = 50;
-const BTN_GAP = 40;
+const isMobile = GAME_MODE.mobileMode;
+const MOB = isMobile ? 2 : 1;
+const DIALOG_W = 700 * MOB;
+const DIALOG_H = 350 * MOB;
+const BTN_W = 280 * MOB;
+const BTN_H = 100 * MOB;
+const BTN_GAP = 40 * MOB;
 
 export class DisconnectModal {
   private scene: Phaser.Scene;
@@ -26,7 +28,14 @@ export class DisconnectModal {
       .setScrollFactor(0)
       .setInteractive()
       .setVisible(false);
-    this.backdrop.on('pointerdown', () => this.answer(false));
+    this.backdrop.on('pointerdown', (_ptr: Phaser.Input.Pointer, _lx: number, _ly: number, _ev: Phaser.Types.Input.EventData) => {
+      // Only dismiss if tap is OUTSIDE the dialog panel
+      const px = _ptr.x - cx;
+      const py = _ptr.y - cy;
+      if (Math.abs(px) > DIALOG_W / 2 || Math.abs(py) > DIALOG_H / 2) {
+        this.answer(false);
+      }
+    });
 
     // Container for dialog content (cx already = canvasWidth/2 via scrollFactor(0))
     this.container = scene.add.container(cx, cy)
@@ -43,30 +52,31 @@ export class DisconnectModal {
     this.container.add(panel);
 
     // Title text
-    const title = scene.add.text(0, -DIALOG_H / 2 + 50, 'Disconnect Spotify?', {
-      fontSize: '26px',
+    const title = scene.add.text(0, -DIALOG_H / 2 + 50 * MOB, 'Disconnect Spotify?', {
+      fontSize: `${26 * MOB}px`,
       fontFamily: 'monospace',
       color: '#ffffff',
     }).setOrigin(0.5);
     this.container.add(title);
 
     // YES button
-    const btnY = DIALOG_H / 2 - 60;
+    const btnY = DIALOG_H / 2 - 60 * MOB;
     const yesX = -(BTN_W / 2 + BTN_GAP / 2);
     const yesBg = scene.add.graphics();
-    yesBg.fillStyle(0x5a0b0b, 1);
+    yesBg.fillStyle(0x1DB954, 1);
     yesBg.fillRoundedRect(yesX - BTN_W / 2, btnY - BTN_H / 2, BTN_W, BTN_H, 8);
     this.container.add(yesBg);
 
     const yesLabel = scene.add.text(yesX, btnY, 'YES', {
-      fontSize: '24px',
+      fontSize: `${24 * MOB}px`,
       fontFamily: 'monospace',
       fontStyle: 'bold',
-      color: '#ff4444',
+      color: '#ffffff',
     }).setOrigin(0.5);
     this.container.add(yesLabel);
 
-    const yesHit = scene.add.zone(yesX, btnY, BTN_W, BTN_H)
+    // DEBUG: pink hit area so we can see where the tap zone is
+    const yesHit = scene.add.rectangle(yesX, btnY, BTN_W, BTN_H, 0xff00ff, 0.3)
       .setInteractive({ useHandCursor: true });
     yesHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
     yesHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER }); this.answer(true); });
@@ -75,19 +85,20 @@ export class DisconnectModal {
     // NO button
     const noX = BTN_W / 2 + BTN_GAP / 2;
     const noBg = scene.add.graphics();
-    noBg.fillStyle(0x1DB954, 1);
+    noBg.fillStyle(0x5a0b0b, 1);
     noBg.fillRoundedRect(noX - BTN_W / 2, btnY - BTN_H / 2, BTN_W, BTN_H, 8);
     this.container.add(noBg);
 
     const noLabel = scene.add.text(noX, btnY, 'NO', {
-      fontSize: '24px',
+      fontSize: `${24 * MOB}px`,
       fontFamily: 'monospace',
       fontStyle: 'bold',
       color: '#ffffff',
     }).setOrigin(0.5);
     this.container.add(noLabel);
 
-    const noHit = scene.add.zone(noX, btnY, BTN_W, BTN_H)
+    // DEBUG: pink hit area so we can see where the tap zone is
+    const noHit = scene.add.rectangle(noX, btnY, BTN_W, BTN_H, 0xff00ff, 0.3)
       .setInteractive({ useHandCursor: true });
     noHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
     noHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER }); this.answer(false); });

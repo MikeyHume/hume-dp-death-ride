@@ -814,7 +814,17 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 8081,
     strictPort: true,
-    origin: 'http://192.168.1.150:8081',
+    ...((() => {
+      const keyPath = path.join(__dirname, 'telemetry', 'certs', 'key.pem');
+      const certPath = path.join(__dirname, 'telemetry', 'certs', 'cert.pem');
+      if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+        return {
+          https: { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) },
+          origin: 'https://192.168.1.150:8081',
+        };
+      }
+      return { origin: 'http://192.168.1.150:8081' };
+    })()),
     headers: {
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',

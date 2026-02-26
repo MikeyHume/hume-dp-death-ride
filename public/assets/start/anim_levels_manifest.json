@@ -1,0 +1,892 @@
+{
+  "generated_at": "2026-02-24T21:08:22",
+  "quality": 85,
+  "animations": {
+    "start_loop": [
+      {
+        "level": 1,
+        "width": 1882,
+        "height": 1058,
+        "folder": "start_loop_L01",
+        "total_kb": 7245,
+        "avg_frame_kb": 268,
+        "vram_mb": 205.1
+      },
+      {
+        "level": 2,
+        "width": 1844,
+        "height": 1038,
+        "folder": "start_loop_L02",
+        "total_kb": 7092,
+        "avg_frame_kb": 263,
+        "vram_mb": 197.1
+      },
+      {
+        "level": 3,
+        "width": 1806,
+        "height": 1016,
+        "folder": "start_loop_L03",
+        "total_kb": 6887,
+        "avg_frame_kb": 255,
+        "vram_mb": 189.0
+      },
+      {
+        "level": 4,
+        "width": 1766,
+        "height": 994,
+        "folder": "start_loop_L04",
+        "total_kb": 6705,
+        "avg_frame_kb": 248,
+        "vram_mb": 180.8
+      },
+      {
+        "level": 5,
+        "width": 1728,
+        "height": 972,
+        "folder": "start_loop_L05",
+        "total_kb": 6519,
+        "avg_frame_kb": 241,
+        "vram_mb": 173.0
+      },
+      {
+        "level": 6,
+        "width": 1690,
+        "height": 950,
+        "folder": "start_loop_L06",
+        "total_kb": 6378,
+        "avg_frame_kb": 236,
+        "vram_mb": 165.4
+      },
+      {
+        "level": 7,
+        "width": 1652,
+        "height": 930,
+        "folder": "start_loop_L07",
+        "total_kb": 6213,
+        "avg_frame_kb": 230,
+        "vram_mb": 158.2
+      },
+      {
+        "level": 8,
+        "width": 1614,
+        "height": 908,
+        "folder": "start_loop_L08",
+        "total_kb": 6003,
+        "avg_frame_kb": 222,
+        "vram_mb": 150.9
+      },
+      {
+        "level": 9,
+        "width": 1574,
+        "height": 886,
+        "folder": "start_loop_L09",
+        "total_kb": 5860,
+        "avg_frame_kb": 217,
+        "vram_mb": 143.6
+      },
+      {
+        "level": 10,
+        "width": 1536,
+        "height": 864,
+        "folder": "start_loop_L10",
+        "total_kb": 5635,
+        "avg_frame_kb": 209,
+        "vram_mb": 136.7
+      },
+      {
+        "level": 11,
+        "width": 1498,
+        "height": 842,
+        "folder": "start_loop_L11",
+        "total_kb": 5468,
+        "avg_frame_kb": 202,
+        "vram_mb": 129.9
+      },
+      {
+        "level": 12,
+        "width": 1460,
+        "height": 822,
+        "folder": "start_loop_L12",
+        "total_kb": 5297,
+        "avg_frame_kb": 196,
+        "vram_mb": 123.6
+      },
+      {
+        "level": 13,
+        "width": 1422,
+        "height": 800,
+        "folder": "start_loop_L13",
+        "total_kb": 5137,
+        "avg_frame_kb": 190,
+        "vram_mb": 117.2
+      },
+      {
+        "level": 14,
+        "width": 1382,
+        "height": 778,
+        "folder": "start_loop_L14",
+        "total_kb": 4960,
+        "avg_frame_kb": 184,
+        "vram_mb": 110.7
+      },
+      {
+        "level": 15,
+        "width": 1344,
+        "height": 756,
+        "folder": "start_loop_L15",
+        "total_kb": 4767,
+        "avg_frame_kb": 177,
+        "vram_mb": 104.7
+      },
+      {
+        "level": 16,
+        "width": 1306,
+        "height": 734,
+        "folder": "start_loop_L16",
+        "total_kb": 4587,
+        "avg_frame_kb": 170,
+        "vram_mb": 98.7
+      },
+      {
+        "level": 17,
+        "width": 1268,
+        "height": 714,
+        "folder": "start_loop_L17",
+        "total_kb": 4437,
+        "avg_frame_kb": 164,
+        "vram_mb": 93.2
+      },
+      {
+        "level": 18,
+        "width": 1230,
+        "height": 692,
+        "folder": "start_loop_L18",
+        "total_kb": 4243,
+        "avg_frame_kb": 157,
+        "vram_mb": 87.7
+      },
+      {
+        "level": 19,
+        "width": 1190,
+        "height": 670,
+        "folder": "start_loop_L19",
+        "total_kb": 4059,
+        "avg_frame_kb": 150,
+        "vram_mb": 82.1
+      },
+      {
+        "level": 20,
+        "width": 1152,
+        "height": 648,
+        "folder": "start_loop_L20",
+        "total_kb": 3835,
+        "avg_frame_kb": 142,
+        "vram_mb": 76.9
+      },
+      {
+        "level": 21,
+        "width": 1114,
+        "height": 626,
+        "folder": "start_loop_L21",
+        "total_kb": 3709,
+        "avg_frame_kb": 137,
+        "vram_mb": 71.8
+      },
+      {
+        "level": 22,
+        "width": 1076,
+        "height": 606,
+        "folder": "start_loop_L22",
+        "total_kb": 3554,
+        "avg_frame_kb": 132,
+        "vram_mb": 67.2
+      },
+      {
+        "level": 23,
+        "width": 1038,
+        "height": 584,
+        "folder": "start_loop_L23",
+        "total_kb": 3390,
+        "avg_frame_kb": 126,
+        "vram_mb": 62.4
+      },
+      {
+        "level": 24,
+        "width": 998,
+        "height": 562,
+        "folder": "start_loop_L24",
+        "total_kb": 3219,
+        "avg_frame_kb": 119,
+        "vram_mb": 57.8
+      },
+      {
+        "level": 25,
+        "width": 960,
+        "height": 540,
+        "folder": "start_loop_L25",
+        "total_kb": 2997,
+        "avg_frame_kb": 111,
+        "vram_mb": 53.4
+      },
+      {
+        "level": 26,
+        "width": 922,
+        "height": 518,
+        "folder": "start_loop_L26",
+        "total_kb": 2885,
+        "avg_frame_kb": 107,
+        "vram_mb": 49.2
+      },
+      {
+        "level": 27,
+        "width": 884,
+        "height": 498,
+        "folder": "start_loop_L27",
+        "total_kb": 2700,
+        "avg_frame_kb": 100,
+        "vram_mb": 45.3
+      },
+      {
+        "level": 28,
+        "width": 846,
+        "height": 476,
+        "folder": "start_loop_L28",
+        "total_kb": 2548,
+        "avg_frame_kb": 94,
+        "vram_mb": 41.5
+      },
+      {
+        "level": 29,
+        "width": 806,
+        "height": 454,
+        "folder": "start_loop_L29",
+        "total_kb": 2393,
+        "avg_frame_kb": 89,
+        "vram_mb": 37.7
+      },
+      {
+        "level": 30,
+        "width": 768,
+        "height": 432,
+        "folder": "start_loop_L30",
+        "total_kb": 2209,
+        "avg_frame_kb": 82,
+        "vram_mb": 34.2
+      },
+      {
+        "level": 31,
+        "width": 730,
+        "height": 410,
+        "folder": "start_loop_L31",
+        "total_kb": 2073,
+        "avg_frame_kb": 77,
+        "vram_mb": 30.8
+      },
+      {
+        "level": 32,
+        "width": 692,
+        "height": 390,
+        "folder": "start_loop_L32",
+        "total_kb": 1937,
+        "avg_frame_kb": 72,
+        "vram_mb": 27.8
+      },
+      {
+        "level": 33,
+        "width": 654,
+        "height": 368,
+        "folder": "start_loop_L33",
+        "total_kb": 1802,
+        "avg_frame_kb": 67,
+        "vram_mb": 24.8
+      },
+      {
+        "level": 34,
+        "width": 614,
+        "height": 346,
+        "folder": "start_loop_L34",
+        "total_kb": 1639,
+        "avg_frame_kb": 61,
+        "vram_mb": 21.9
+      },
+      {
+        "level": 35,
+        "width": 576,
+        "height": 324,
+        "folder": "start_loop_L35",
+        "total_kb": 1483,
+        "avg_frame_kb": 55,
+        "vram_mb": 19.2
+      },
+      {
+        "level": 36,
+        "width": 538,
+        "height": 302,
+        "folder": "start_loop_L36",
+        "total_kb": 1340,
+        "avg_frame_kb": 50,
+        "vram_mb": 16.7
+      },
+      {
+        "level": 37,
+        "width": 500,
+        "height": 282,
+        "folder": "start_loop_L37",
+        "total_kb": 1206,
+        "avg_frame_kb": 45,
+        "vram_mb": 14.5
+      },
+      {
+        "level": 38,
+        "width": 462,
+        "height": 260,
+        "folder": "start_loop_L38",
+        "total_kb": 1068,
+        "avg_frame_kb": 40,
+        "vram_mb": 12.4
+      },
+      {
+        "level": 39,
+        "width": 422,
+        "height": 238,
+        "folder": "start_loop_L39",
+        "total_kb": 920,
+        "avg_frame_kb": 34,
+        "vram_mb": 10.3
+      },
+      {
+        "level": 40,
+        "width": 384,
+        "height": 216,
+        "folder": "start_loop_L40",
+        "total_kb": 799,
+        "avg_frame_kb": 30,
+        "vram_mb": 8.5
+      },
+      {
+        "level": 41,
+        "width": 346,
+        "height": 194,
+        "folder": "start_loop_L41",
+        "total_kb": 672,
+        "avg_frame_kb": 25,
+        "vram_mb": 6.9
+      },
+      {
+        "level": 42,
+        "width": 308,
+        "height": 174,
+        "folder": "start_loop_L42",
+        "total_kb": 565,
+        "avg_frame_kb": 21,
+        "vram_mb": 5.5
+      },
+      {
+        "level": 43,
+        "width": 270,
+        "height": 152,
+        "folder": "start_loop_L43",
+        "total_kb": 448,
+        "avg_frame_kb": 17,
+        "vram_mb": 4.2
+      },
+      {
+        "level": 44,
+        "width": 230,
+        "height": 130,
+        "folder": "start_loop_L44",
+        "total_kb": 352,
+        "avg_frame_kb": 13,
+        "vram_mb": 3.1
+      },
+      {
+        "level": 45,
+        "width": 192,
+        "height": 108,
+        "folder": "start_loop_L45",
+        "total_kb": 258,
+        "avg_frame_kb": 10,
+        "vram_mb": 2.1
+      },
+      {
+        "level": 46,
+        "width": 154,
+        "height": 86,
+        "folder": "start_loop_L46",
+        "total_kb": 177,
+        "avg_frame_kb": 7,
+        "vram_mb": 1.4
+      },
+      {
+        "level": 47,
+        "width": 116,
+        "height": 66,
+        "folder": "start_loop_L47",
+        "total_kb": 114,
+        "avg_frame_kb": 4,
+        "vram_mb": 0.8
+      },
+      {
+        "level": 48,
+        "width": 78,
+        "height": 44,
+        "folder": "start_loop_L48",
+        "total_kb": 59,
+        "avg_frame_kb": 2,
+        "vram_mb": 0.4
+      },
+      {
+        "level": 49,
+        "width": 38,
+        "height": 22,
+        "folder": "start_loop_L49",
+        "total_kb": 23,
+        "avg_frame_kb": 1,
+        "vram_mb": 0.1
+      }
+    ],
+    "start_play": [
+      {
+        "level": 1,
+        "width": 1882,
+        "height": 1058,
+        "folder": "start_play_L01",
+        "total_kb": 2895,
+        "avg_frame_kb": 116,
+        "vram_mb": 189.9
+      },
+      {
+        "level": 2,
+        "width": 1844,
+        "height": 1038,
+        "folder": "start_play_L02",
+        "total_kb": 2831,
+        "avg_frame_kb": 113,
+        "vram_mb": 182.5
+      },
+      {
+        "level": 3,
+        "width": 1806,
+        "height": 1016,
+        "folder": "start_play_L03",
+        "total_kb": 2745,
+        "avg_frame_kb": 110,
+        "vram_mb": 175.0
+      },
+      {
+        "level": 4,
+        "width": 1766,
+        "height": 994,
+        "folder": "start_play_L04",
+        "total_kb": 2664,
+        "avg_frame_kb": 107,
+        "vram_mb": 167.4
+      },
+      {
+        "level": 5,
+        "width": 1728,
+        "height": 972,
+        "folder": "start_play_L05",
+        "total_kb": 2588,
+        "avg_frame_kb": 104,
+        "vram_mb": 160.2
+      },
+      {
+        "level": 6,
+        "width": 1690,
+        "height": 950,
+        "folder": "start_play_L06",
+        "total_kb": 2533,
+        "avg_frame_kb": 101,
+        "vram_mb": 153.1
+      },
+      {
+        "level": 7,
+        "width": 1652,
+        "height": 930,
+        "folder": "start_play_L07",
+        "total_kb": 2468,
+        "avg_frame_kb": 99,
+        "vram_mb": 146.5
+      },
+      {
+        "level": 8,
+        "width": 1614,
+        "height": 908,
+        "folder": "start_play_L08",
+        "total_kb": 2373,
+        "avg_frame_kb": 95,
+        "vram_mb": 139.8
+      },
+      {
+        "level": 9,
+        "width": 1574,
+        "height": 886,
+        "folder": "start_play_L09",
+        "total_kb": 2318,
+        "avg_frame_kb": 93,
+        "vram_mb": 133.0
+      },
+      {
+        "level": 10,
+        "width": 1536,
+        "height": 864,
+        "folder": "start_play_L10",
+        "total_kb": 2230,
+        "avg_frame_kb": 89,
+        "vram_mb": 126.6
+      },
+      {
+        "level": 11,
+        "width": 1498,
+        "height": 842,
+        "folder": "start_play_L11",
+        "total_kb": 2158,
+        "avg_frame_kb": 86,
+        "vram_mb": 120.3
+      },
+      {
+        "level": 12,
+        "width": 1460,
+        "height": 822,
+        "folder": "start_play_L12",
+        "total_kb": 2097,
+        "avg_frame_kb": 84,
+        "vram_mb": 114.5
+      },
+      {
+        "level": 13,
+        "width": 1422,
+        "height": 800,
+        "folder": "start_play_L13",
+        "total_kb": 2018,
+        "avg_frame_kb": 81,
+        "vram_mb": 108.5
+      },
+      {
+        "level": 14,
+        "width": 1382,
+        "height": 778,
+        "folder": "start_play_L14",
+        "total_kb": 1948,
+        "avg_frame_kb": 78,
+        "vram_mb": 102.5
+      },
+      {
+        "level": 15,
+        "width": 1344,
+        "height": 756,
+        "folder": "start_play_L15",
+        "total_kb": 1877,
+        "avg_frame_kb": 75,
+        "vram_mb": 96.9
+      },
+      {
+        "level": 16,
+        "width": 1306,
+        "height": 734,
+        "folder": "start_play_L16",
+        "total_kb": 1801,
+        "avg_frame_kb": 72,
+        "vram_mb": 91.4
+      },
+      {
+        "level": 17,
+        "width": 1268,
+        "height": 714,
+        "folder": "start_play_L17",
+        "total_kb": 1736,
+        "avg_frame_kb": 69,
+        "vram_mb": 86.3
+      },
+      {
+        "level": 18,
+        "width": 1230,
+        "height": 692,
+        "folder": "start_play_L18",
+        "total_kb": 1665,
+        "avg_frame_kb": 67,
+        "vram_mb": 81.2
+      },
+      {
+        "level": 19,
+        "width": 1190,
+        "height": 670,
+        "folder": "start_play_L19",
+        "total_kb": 1592,
+        "avg_frame_kb": 64,
+        "vram_mb": 76.0
+      },
+      {
+        "level": 20,
+        "width": 1152,
+        "height": 648,
+        "folder": "start_play_L20",
+        "total_kb": 1499,
+        "avg_frame_kb": 60,
+        "vram_mb": 71.2
+      },
+      {
+        "level": 21,
+        "width": 1114,
+        "height": 626,
+        "folder": "start_play_L21",
+        "total_kb": 1444,
+        "avg_frame_kb": 58,
+        "vram_mb": 66.5
+      },
+      {
+        "level": 22,
+        "width": 1076,
+        "height": 606,
+        "folder": "start_play_L22",
+        "total_kb": 1386,
+        "avg_frame_kb": 55,
+        "vram_mb": 62.2
+      },
+      {
+        "level": 23,
+        "width": 1038,
+        "height": 584,
+        "folder": "start_play_L23",
+        "total_kb": 1323,
+        "avg_frame_kb": 53,
+        "vram_mb": 57.8
+      },
+      {
+        "level": 24,
+        "width": 998,
+        "height": 562,
+        "folder": "start_play_L24",
+        "total_kb": 1258,
+        "avg_frame_kb": 50,
+        "vram_mb": 53.5
+      },
+      {
+        "level": 25,
+        "width": 960,
+        "height": 540,
+        "folder": "start_play_L25",
+        "total_kb": 1167,
+        "avg_frame_kb": 47,
+        "vram_mb": 49.4
+      },
+      {
+        "level": 26,
+        "width": 922,
+        "height": 518,
+        "folder": "start_play_L26",
+        "total_kb": 1126,
+        "avg_frame_kb": 45,
+        "vram_mb": 45.5
+      },
+      {
+        "level": 27,
+        "width": 884,
+        "height": 498,
+        "folder": "start_play_L27",
+        "total_kb": 1050,
+        "avg_frame_kb": 42,
+        "vram_mb": 42.0
+      },
+      {
+        "level": 28,
+        "width": 846,
+        "height": 476,
+        "folder": "start_play_L28",
+        "total_kb": 988,
+        "avg_frame_kb": 40,
+        "vram_mb": 38.4
+      },
+      {
+        "level": 29,
+        "width": 806,
+        "height": 454,
+        "folder": "start_play_L29",
+        "total_kb": 923,
+        "avg_frame_kb": 37,
+        "vram_mb": 34.9
+      },
+      {
+        "level": 30,
+        "width": 768,
+        "height": 432,
+        "folder": "start_play_L30",
+        "total_kb": 857,
+        "avg_frame_kb": 34,
+        "vram_mb": 31.6
+      },
+      {
+        "level": 31,
+        "width": 730,
+        "height": 410,
+        "folder": "start_play_L31",
+        "total_kb": 800,
+        "avg_frame_kb": 32,
+        "vram_mb": 28.5
+      },
+      {
+        "level": 32,
+        "width": 692,
+        "height": 390,
+        "folder": "start_play_L32",
+        "total_kb": 746,
+        "avg_frame_kb": 30,
+        "vram_mb": 25.7
+      },
+      {
+        "level": 33,
+        "width": 654,
+        "height": 368,
+        "folder": "start_play_L33",
+        "total_kb": 694,
+        "avg_frame_kb": 28,
+        "vram_mb": 23.0
+      },
+      {
+        "level": 34,
+        "width": 614,
+        "height": 346,
+        "folder": "start_play_L34",
+        "total_kb": 632,
+        "avg_frame_kb": 25,
+        "vram_mb": 20.3
+      },
+      {
+        "level": 35,
+        "width": 576,
+        "height": 324,
+        "folder": "start_play_L35",
+        "total_kb": 571,
+        "avg_frame_kb": 23,
+        "vram_mb": 17.8
+      },
+      {
+        "level": 36,
+        "width": 538,
+        "height": 302,
+        "folder": "start_play_L36",
+        "total_kb": 516,
+        "avg_frame_kb": 21,
+        "vram_mb": 15.5
+      },
+      {
+        "level": 37,
+        "width": 500,
+        "height": 282,
+        "folder": "start_play_L37",
+        "total_kb": 465,
+        "avg_frame_kb": 19,
+        "vram_mb": 13.4
+      },
+      {
+        "level": 38,
+        "width": 462,
+        "height": 260,
+        "folder": "start_play_L38",
+        "total_kb": 413,
+        "avg_frame_kb": 17,
+        "vram_mb": 11.5
+      },
+      {
+        "level": 39,
+        "width": 422,
+        "height": 238,
+        "folder": "start_play_L39",
+        "total_kb": 353,
+        "avg_frame_kb": 14,
+        "vram_mb": 9.6
+      },
+      {
+        "level": 40,
+        "width": 384,
+        "height": 216,
+        "folder": "start_play_L40",
+        "total_kb": 308,
+        "avg_frame_kb": 12,
+        "vram_mb": 7.9
+      },
+      {
+        "level": 41,
+        "width": 346,
+        "height": 194,
+        "folder": "start_play_L41",
+        "total_kb": 258,
+        "avg_frame_kb": 10,
+        "vram_mb": 6.4
+      },
+      {
+        "level": 42,
+        "width": 308,
+        "height": 174,
+        "folder": "start_play_L42",
+        "total_kb": 219,
+        "avg_frame_kb": 9,
+        "vram_mb": 5.1
+      },
+      {
+        "level": 43,
+        "width": 270,
+        "height": 152,
+        "folder": "start_play_L43",
+        "total_kb": 173,
+        "avg_frame_kb": 7,
+        "vram_mb": 3.9
+      },
+      {
+        "level": 44,
+        "width": 230,
+        "height": 130,
+        "folder": "start_play_L44",
+        "total_kb": 138,
+        "avg_frame_kb": 6,
+        "vram_mb": 2.9
+      },
+      {
+        "level": 45,
+        "width": 192,
+        "height": 108,
+        "folder": "start_play_L45",
+        "total_kb": 103,
+        "avg_frame_kb": 4,
+        "vram_mb": 2.0
+      },
+      {
+        "level": 46,
+        "width": 154,
+        "height": 86,
+        "folder": "start_play_L46",
+        "total_kb": 72,
+        "avg_frame_kb": 3,
+        "vram_mb": 1.3
+      },
+      {
+        "level": 47,
+        "width": 116,
+        "height": 66,
+        "folder": "start_play_L47",
+        "total_kb": 48,
+        "avg_frame_kb": 2,
+        "vram_mb": 0.7
+      },
+      {
+        "level": 48,
+        "width": 78,
+        "height": 44,
+        "folder": "start_play_L48",
+        "total_kb": 27,
+        "avg_frame_kb": 1,
+        "vram_mb": 0.3
+      },
+      {
+        "level": 49,
+        "width": 38,
+        "height": 22,
+        "folder": "start_play_L49",
+        "total_kb": 13,
+        "avg_frame_kb": 1,
+        "vram_mb": 0.1
+      }
+    ]
+  }
+}

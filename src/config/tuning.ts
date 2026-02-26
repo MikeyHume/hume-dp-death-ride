@@ -79,7 +79,8 @@ export const TUNING = {
   PLAYER_COLLISION_W: 200,        // player hitbox full width (ellipse, fits motorcycle length)
   PLAYER_COLLISION_H: 6,         // player hitbox full height (ellipse, thin at tire base)
   PLAYER_COLLISION_OFFSET_Y: 80, // px to shift collision circle down (centered on tire base)
-  PLAYER_TOP_Y_EXTEND: 40,  // px the player can travel above ROAD_TOP_Y
+  PLAYER_TOP_Y_EXTEND: 60,  // px the player can travel above ROAD_TOP_Y
+  PLAYER_BOTTOM_Y_INSET: 20, // extra px above ROAD_BOTTOM_Y to prevent clipping at bottom (accounts for scale-up)
 
   PLAYER_ARROW_SPEED: 600,   // px/sec vertical movement when using arrow keys
   PLAYER_MOUSE_FOLLOW_RATE: 15, // exponential approach rate for mouse Y tracking (higher = snappier, 15 ≈ 95% in 0.2s)
@@ -369,13 +370,35 @@ export const TUNING = {
 
   // Music player UI positioning (game-unit values, scaled to canvas)
   MUSIC_UI_PAD_TOP: 40,            // game-unit padding above the music player group
-  MUSIC_UI_PAD_RIGHT: 40,          // game-unit padding from right edge to music player container
+  MUSIC_UI_PAD_RIGHT: 40,          // game-unit padding from right edge (title/tutorial)
+  MUSIC_UI_PAD_RIGHT_PLAY: 600,    // game-unit padding from right edge (gameplay — closer to center)
+  MUSIC_UI_SCALE: 0.8,             // overall UI scale (title/tutorial)
+  MUSIC_UI_SCALE_PLAY: 0.55,       // smaller scale during gameplay
+  MUSIC_UI_BTN_SCALE: 1.5,         // control buttons group scale multiplier
+  MUSIC_UI_SCALE_MULT: 0.9,        // manual multiplier (tune on iPhone 12 Mini first)
   MUSIC_UI_THUMB_SCALE: 1.3,       // thumbnail scale factor (1.0 = 96px base height)
   MUSIC_UI_WIDTH: 740,             // fixed container width in game units (desktop)
   MUSIC_UI_MOBILE_WIDTH: 1050,     // wider container for mobile (full-size buttons + thumbnail + gap)
   MUSIC_UI_PHONE_PAD: 40,             // px padding on each side of phone popup (screen width - 2*pad = popup width)
   MUSIC_UI_PHONE_BACKDROP_ALPHA: 0.6, // backdrop opacity behind phone popup
   MUSIC_UI_PHONE_ANIM_MS: 350,        // phone popup expand/collapse animation duration (ms)
+
+  // Action buttons (upper-right, spritesheet buttons — 640x640 native)
+  ACTION_BTN_SCALE_TOP: 0.25,        // rocket button scale (0.1=64px, 0.15=96px, 0.2=128px)
+  ACTION_BTN_PAD_RIGHT_TOP: 180,      // rocket button px from right edge of screen
+  ACTION_BTN_PAD_TOP_TOP: 120,        // rocket button px from top edge of screen
+  ACTION_BTN_SCALE_BOT: 0.5,         // slash button scale (bigger than rocket)
+  ACTION_BTN_PAD_RIGHT_BOT: 340,      // slash button px from right edge of screen
+  ACTION_BTN_PAD_TOP_BOT: 350,       // slash button px from top edge of screen
+  ACTION_BTN_DEPTH: 300,             // render depth (above HUD, below modals)
+
+  // Slider bar (vertical bar on road, left side)
+  SLIDER_BAR_X: 200,                 // px from left edge (left-justified + padding)
+  SLIDER_BAR_Y: 690,                 // vertical center of road ((480+1080)/2 = 780)
+  SLIDER_BAR_SCALE: 1.25,             // uniform scale (1.0 = native 90x600, fits road exactly)
+  SLIDER_BAR_DEPTH: 5,               // render depth (above road, below player)
+  SLIDER_KNOB_Y_MIN: 480,             // knob top position (when cursor at road top)
+  SLIDER_KNOB_Y_MAX: 1060,             // knob bottom position (when cursor at road bottom)
 
   // WMP popup window
   WMP_WIDTH_PCT: 80,                 // popup width as % of overlay
@@ -531,6 +554,22 @@ export const TUNING = {
   MOBILE_TAP_THRESHOLD: 180,       // ms — touch shorter than this = tap (boost)
   MOBILE_ROCKET_HOLD: 1000,        // ms — hold right side this long to fire rocket
   MOBILE_SAFE_TOP: 20,             // px safe area padding when mobile
+
+  // Mobile action buttons (placeholder — spritesheet art coming later)
+  // Size = percentage of screen height (GAME_HEIGHT) so buttons look the same on all phones
+  MOBILE_BTN_SCALE: 0.37,           // primary button size as fraction of screen height (0.37 × 1080 ≈ 400px)
+  MOBILE_BTN_COLOR: 0x00ff00,      // green placeholder
+  MOBILE_BTN_ALPHA: 0.35,          // semi-transparent overlay
+  MOBILE_BTN_DEPTH: 95,            // above road/parallax, below HUD (100)
+  MOBILE_BTN_FADE_IN: 500,         // ms to fade in after curtains clear
+  MOBILE_BTN_PADDING: 0,           // px inset from screen edges (0 = flush with corner)
+
+  // Profile HUD position & layout
+  HUD_PAD_LEFT: 100,              // px from left screen edge to pink HUD box
+  HUD_PAD_TOP: 40,                // px from top screen edge to pink HUD box
+  HUD_SCALE_MULT: 1.6,            // manual scale multiplier (tune on iPhone 12 Mini first)
+  HUD_REF_SCREEN_H: 375,          // iPhone 12 Mini landscape height (CSS px) — baseline for scaling
+  TITLE_HUD_BASE_W: 320,          // natural HUD width at scale 1.0 (pink box width)
 
   // Custom cursor — values read from window.__cursorConfig (defined in index.html)
   CURSOR_SIZE: ((window as any).__cursorConfig?.size ?? 48) as number,

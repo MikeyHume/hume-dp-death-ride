@@ -9,8 +9,9 @@ import { HumePlayerSystem } from './HumePlayerSystem';
 import { GAME_MODE, DEVICE_PROFILE } from '../config/gameMode';
 import { TEST_MODE } from '../util/testMode';
 
-const MUSIC_UI_SCALE = 0.5;            // uniform scale from upper-right corner (half size)
-const MUSIC_BTN_SCALE = 1.5;           // scale multiplier for control buttons group (anchor: bottom-right)
+const heightScale = Math.min(screen.width, screen.height) / TUNING.HUD_REF_SCREEN_H;
+const MUSIC_UI_SCALE = TUNING.MUSIC_UI_SCALE * TUNING.MUSIC_UI_SCALE_MULT * heightScale;
+const MUSIC_BTN_SCALE = TUNING.MUSIC_UI_BTN_SCALE;
 const CROSSFADE_LEAD_S = 3.0;        // fade duration in seconds (audio audibly fades over this)
 const CROSSFADE_STARTUP_S = 2.0;    // estimated startup overhead for startPlaylist() (shuffle+play+skip+wait)
 const CROSSFADE_START_DB = -6;       // starting volume in dB (0 = full, -12 ≈ 25%)
@@ -78,6 +79,7 @@ export class MusicPlayer {
   private titleText!: Phaser.GameObjects.Text;
   private titleMaskGfx!: Phaser.GameObjects.Graphics;
   private lastGameFontSize: number = 0;
+  private _phaserAlpha: number = 1;  // master alpha for all Phaser proxy sprites (for fade-in)
 
   // Dual-source
   private source: MusicSource = 'youtube';
@@ -392,7 +394,7 @@ export class MusicPlayer {
       transform: `scale(${MUSIC_UI_SCALE})`,
       transformOrigin: 'top right',
       overflow: 'hidden',
-      transition: 'width 0.4s ease, gap 0.4s ease',
+      transition: 'width 0.4s ease, gap 0.4s ease, right 0.4s ease, transform 0.4s ease',
       padding: `${MUSIC_BG_PAD}px`,
       boxSizing: 'border-box',
     });
@@ -1615,6 +1617,17 @@ export class MusicPlayer {
     this.wmpPopup?.setIframeBehind(behind);
   }
 
+  /** Shift music player left + shrink for gameplay, revert for title/tutorial */
+  setGameplayMode(playing: boolean): void {
+    const padRight = playing ? TUNING.MUSIC_UI_PAD_RIGHT_PLAY : TUNING.MUSIC_UI_PAD_RIGHT;
+    const scale = playing
+      ? TUNING.MUSIC_UI_SCALE_PLAY * TUNING.MUSIC_UI_SCALE_MULT * (Math.min(screen.width, screen.height) / TUNING.HUD_REF_SCREEN_H)
+      : MUSIC_UI_SCALE;
+    const rightPct = (padRight / GAME_MODE.canvasWidth) * 100;
+    this.container.style.right = `${rightPct}%`;
+    this.container.style.transform = `scale(${scale})`;
+  }
+
   setCompact(value: boolean): void {
     this.compact = value;
     if (GAME_MODE.isPhoneMode) {
@@ -1830,6 +1843,27 @@ export class MusicPlayer {
     });
   }
 
+  setContainerOpacity(opacity: number): void {
+    this.container.style.opacity = String(opacity);
+    this._phaserAlpha = opacity;
+  }
+
+  fadeContainerOpacity(target: number, durationMs: number): void {
+    this.container.style.transition = `opacity ${durationMs}ms linear`;
+    this.container.style.opacity = String(target);
+    // Animate Phaser alpha in sync
+    const start = this._phaserAlpha;
+    const startTime = performance.now();
+    const tick = () => {
+      const elapsed = performance.now() - startTime;
+      const t = Math.min(elapsed / durationMs, 1);
+      this._phaserAlpha = start + (target - start) * t;
+      if (t < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    setTimeout(() => { this.container.style.transition = ''; }, durationMs + 50);
+  }
+
   setVisible(visible: boolean): void {
     this.container.style.display = visible ? 'flex' : 'none';
     if (!visible) {
@@ -1913,7 +1947,7 @@ export class MusicPlayer {
       const bgY = (cRect.top - overlayRect.top) / oh * TUNING.GAME_HEIGHT;
       const bgW = (cRect.width / ow) * GAME_MODE.canvasWidth;
       const bgH = (cRect.height / oh) * TUNING.GAME_HEIGHT;
-      this.bgPanel.setPosition(bgX, bgY).setDisplaySize(bgW, bgH).setVisible(true);
+      this.bgPanel.setPosition(bgX, bgY).setDisplaySize(bgW, bgH).setVisible(true).setAlpha(0.55 * this._phaserAlpha);
 
       // Rounded corners via postFX — Phaser rectangles don't natively support borderRadius,
       // but the CRT shader makes it look good enough with the slight warp
@@ -1935,7 +1969,7 @@ export class MusicPlayer {
       const gameSize = (btnRect.width / ow) * GAME_MODE.canvasWidth;
       this.btnSprites[i].setPosition(gameX, gameY);
       this.btnSprites[i].setDisplaySize(gameSize, gameSize);
-      this.btnSprites[i].setVisible(true);
+      this.btnSprites[i].setVisible(true).setAlpha(this._phaserAlpha);
     }
 
     // --- Thumbnail sprite ---
@@ -1946,7 +1980,7 @@ export class MusicPlayer {
       const tcy = tr.top + tr.height / 2 - overlayRect.top;
       this.thumbSprite.setPosition((tcx / ow) * GAME_MODE.canvasWidth, (tcy / oh) * TUNING.GAME_HEIGHT);
       this.thumbSprite.setDisplaySize((tr.width / ow) * GAME_MODE.canvasWidth, (tr.height / oh) * TUNING.GAME_HEIGHT);
-      this.thumbSprite.setVisible(true);
+      this.thumbSprite.setVisible(true).setAlpha(this._phaserAlpha);
       // Hover brightness overlay
       this.thumbHoverOverlay.setPosition(this.thumbSprite.x, this.thumbSprite.y);
       this.thumbHoverOverlay.setDisplaySize(this.thumbSprite.displayWidth, this.thumbSprite.displayHeight);
@@ -1978,7 +2012,7 @@ export class MusicPlayer {
       const titleLeft = (titleRect.left - overlayRect.left) / ow * GAME_MODE.canvasWidth;
       const titleMidY = (titleRect.top + titleRect.height / 2 - overlayRect.top) / oh * TUNING.GAME_HEIGHT;
       this.titleText.setPosition(titleLeft, titleMidY);
-      this.titleText.setVisible(true);
+      this.titleText.setVisible(true).setAlpha(this._phaserAlpha);
 
       // Update geometry mask to match titleClip bounds
       const clipRect = this.titleClip.getBoundingClientRect();
@@ -2006,7 +2040,7 @@ export class MusicPlayer {
       this.heartTextP.setPosition(gameHX, gameHY);
       this.heartTextP.setFontSize(heartFontSize);
       this.heartTextP.setStroke('#ffffff', Math.max(1, heartFontSize * 0.08));
-      this.heartTextP.setVisible(true);
+      this.heartTextP.setVisible(true).setAlpha(this._phaserAlpha * 0.7);
 
       // Favorite state coloring
       const isFav = this.wmpPopup?.isFavorited(this.currentTrackId!) ?? false;

@@ -4,8 +4,8 @@ import { isConnected } from '../systems/SpotifyAuthSystem';
 
 // ── HUD tuning (edit these) ──
 const HUD_SCALE = 1.0;                    // uniform scale for entire HUD (1.0 = default)
-const HUD_ORIGIN_X = 40;                  // container X position on screen
-const HUD_ORIGIN_Y = 40;                  // container Y position on screen
+const HUD_ORIGIN_X = TUNING.HUD_PAD_LEFT;  // container X position on screen (from tuning)
+const HUD_ORIGIN_Y = TUNING.HUD_PAD_TOP;  // container Y position on screen (from tuning)
 const AVATAR_RADIUS = 64;                 // avatar circle radius in px
 const AVATAR_STROKE_WIDTH = 10;            // stroke thickness around profile pic
 const AVATAR_STROKE_COLOR = 0xffffff;     // stroke color
@@ -13,7 +13,7 @@ const AVATAR_STROKE_ALPHA = 1;          // stroke opacity (max 1 — higher caus
 const SCORE_FONT_SIZE = 48;               // score text font size in px
 const SCORE_GAP_X = 12;                   // horizontal gap between avatar and score
 const SCORE_GAP_Y = 4;                    // vertical offset of score from container top
-const BAR_W = 500;                        // rage bar width in px (1.5x)
+const BAR_W = 450;                        // rage bar width in px (1.5x)
 const BAR_H = 28;                         // rage bar height in px
 const BAR_SEGMENTS = 10;                  // number of retro segment divisions
 const BAR_GAP_Y = 4;                      // vertical gap between score bottom and rage bar
@@ -94,21 +94,30 @@ export class ProfileHud {
 
   // Score gating during slam
   private latestScore = 0;
+  private debugBox!: Phaser.GameObjects.Rectangle;
 
   constructor(scene: Phaser.Scene) {
-    this.container = scene.add.container(HUD_ORIGIN_X, HUD_ORIGIN_Y).setDepth(1300).setScrollFactor(0).setScale(HUD_SCALE);
+    const initHeightScale = Math.min(screen.width, screen.height) / TUNING.HUD_REF_SCREEN_H;
+    const initScale = HUD_SCALE * TUNING.HUD_SCALE_MULT * initHeightScale;
+    this.container = scene.add.container(HUD_ORIGIN_X, HUD_ORIGIN_Y).setDepth(1300).setScrollFactor(0).setScale(initScale);
+
+    // --- Debug pink bounding box (shows HUD design-width extents) ---
+    const debugW = TUNING.TITLE_HUD_BASE_W;
+    const debugH = AVATAR_RADIUS * 2 + BAR_GAP_Y + BAR_H + PIP_GAP + 40;
+    this.debugBox = scene.add.rectangle(0, 0, debugW, debugH, 0xff69b4, 0.0)
+      .setOrigin(0, 0);
+    this.debugBox.setStrokeStyle(2, 0xff69b4, 0.0);
+    this.container.add(this.debugBox);
+
 
     // --- Avatar placeholder (filled circle) ---
     this.avatarCircle = scene.add.circle(AVATAR_X, AVATAR_Y, AVATAR_RADIUS, 0x555555, 1);
     this.avatarCircle.setStrokeStyle(AVATAR_STROKE_WIDTH, AVATAR_STROKE_COLOR, AVATAR_STROKE_ALPHA);
     this.container.add(this.avatarCircle);
 
-    // --- Clickable hit zone over avatar ---
-    const hitZone = scene.add.zone(AVATAR_X, AVATAR_Y, AVATAR_RADIUS * 2, AVATAR_RADIUS * 2);
-    hitZone.setInteractive(
-      new Phaser.Geom.Circle(AVATAR_RADIUS, AVATAR_RADIUS, AVATAR_RADIUS),
-      Phaser.Geom.Circle.Contains
-    );
+    // --- Clickable hit zone (covers full HUD area for easy mobile tapping) ---
+    const hitZone = scene.add.zone(debugW / 2, debugH / 2, debugW, debugH)
+      .setInteractive();
     // White overlay for hover brightness (inserted after avatar image, before hit zone)
     this.avatarHoverOverlay = scene.add.circle(AVATAR_X, AVATAR_Y, AVATAR_RADIUS, 0xffffff, 0.1)
       .setBlendMode(Phaser.BlendModes.ADD)
@@ -308,10 +317,12 @@ export class ProfileHud {
 
   /** Counter-scale and reposition so camera zoom doesn't push HUD off-screen */
   adjustForZoom(rageMultiplier: number): void {
-    // With camera origin(0,0): screen = worldPos * absoluteZoom.
-    // Compensate for rage zoom only (renderScale is the desired base zoom).
     const invR = 1 / rageMultiplier;
-    this.container.setScale(HUD_SCALE * invR);
+    // Screen-height scale: device short edge (stable, ignores Safari chrome)
+    const stableH = Math.min(screen.width, screen.height);
+    const heightScale = stableH / TUNING.HUD_REF_SCREEN_H;
+    const finalScale = HUD_SCALE * TUNING.HUD_SCALE_MULT * heightScale * invR;
+    this.container.setScale(finalScale);
     this.container.setPosition(HUD_ORIGIN_X * invR, HUD_ORIGIN_Y * invR);
   }
 
@@ -323,8 +334,11 @@ export class ProfileHud {
     const scene = this.container.scene;
     this.avatarImage = scene.add.image(AVATAR_X, AVATAR_Y, key);
     this.avatarImage.setDisplaySize(AVATAR_RADIUS * 2, AVATAR_RADIUS * 2);
-    // Insert after avatarCircle (0) but before hitZone (1)
-    this.container.addAt(this.avatarImage, 1);
+    // Insert after avatarCircle so image renders on top
+    const circleIdx = this.container.getIndex(this.avatarCircle);
+    this.container.addAt(this.avatarImage, circleIdx + 1);
+    // Hide the gray fill but keep the stroke ring
+    this.avatarCircle.setFillStyle(0x555555, 0);
   }
 
   onAvatarClick(callback: () => void): void {
@@ -550,14 +564,11 @@ export class ProfileHud {
       this.signInTween.destroy();
       this.signInTween = null;
     }
-    // Timeline: 1.5s visible → 1s fade out → 0.5s off → 1s fade in → repeat
     const scene = this.container.scene;
     this.signInTween = scene.tweens.add({
       targets: this.signInImage,
       alpha: { from: 1, to: 0 },
-      delay: 1500,
-      duration: 1000,
-      hold: 500,
+      duration: 800,
       yoyo: true,
       repeat: -1,
     });

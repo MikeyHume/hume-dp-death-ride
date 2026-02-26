@@ -26,6 +26,10 @@ export class InputSystem {
   private touchBoostTap: boolean = false;
   private leftTouchStartTime: number = 0;
 
+  // Green button state (accelerate — tap + hold, like spacebar)
+  private btnPointerId: number | null = null;
+  private btnBoostHeld: boolean = false;
+
   // Right side state (katana tap / rocket hold)
   private rightTouchStartTime: number = 0;
   private rightRocketFired: boolean = false;
@@ -35,6 +39,11 @@ export class InputSystem {
 
   // Visual cursor (green triangle, left edge of screen)
   private cursorGraphic: Phaser.GameObjects.Triangle | null = null;
+
+  // Mobile button group (lower-right corner) — container is the group parent
+  private btnGroup: Phaser.GameObjects.Container | null = null;
+  private primaryButton: Phaser.GameObjects.Rectangle | null = null;
+  private btnSize: number = 0; // computed from GAME_HEIGHT * MOBILE_BTN_SCALE
 
   // Road Y bounds (stored as fields for external touch API)
   private clampMinY: number = 0;
@@ -85,45 +94,68 @@ export class InputSystem {
   }
 
   private setupMobileInput(scene: Phaser.Scene): void {
-    // Green right-pointing triangle cursor on left edge
+    // Enable extra pointer slots for multi-touch (default is 2 — need more so
+    // left-thumb steering + right-thumb button taps both register reliably)
+    scene.input.addPointer(2); // now 4 total pointer slots
+
+    // Green right-pointing triangle cursor — centered horizontally for now (debugging position)
     const cw = TUNING.MOBILE_CURSOR_WIDTH;
     const ch = cw * 1.2; // slightly taller than wide
     // Triangle points: (0, 0) top-left, (0, ch) bottom-left, (cw, ch/2) right point
     this.cursorGraphic = scene.add.triangle(
-      cw / 2, this.touchTargetY,
+      GAME_MODE.canvasWidth / 2, this.touchTargetY,
       0, 0,
       0, ch,
       cw, ch / 2,
       TUNING.MOBILE_CURSOR_COLOR
     ).setDepth(200).setScrollFactor(0).setAlpha(0.8).setVisible(false);
 
+    // Accelerate zone = entire right half of screen (invisible — no visible button)
+    // The "button group" still exists as a logical container for future visible UI,
+    // but the hit zone is simply: worldX >= halfScreen (right half of screen).
+    this.btnSize = 1; // non-zero so hit-test guard passes, but size unused for zone check
+    this.btnGroup = scene.add.container(0, 0)
+      .setDepth(TUNING.MOBILE_BTN_DEPTH).setScrollFactor(0).setAlpha(0).setVisible(false);
+
     const halfScreen = TUNING.GAME_WIDTH / 2;
-    const halfH = TUNING.PLAYER_DISPLAY_HEIGHT / 2;
+    const halfHeight = TUNING.GAME_HEIGHT / 2;
+    // Touch Y accepted anywhere within the road texture area (marker = finger 1:1)
+    // Player smoothing + sprite-based clamping handled by PlayerSystem
     this.clampMinY = TUNING.ROAD_TOP_Y - TUNING.PLAYER_TOP_Y_EXTEND;
-    this.clampMaxY = TUNING.ROAD_BOTTOM_Y - halfH;
+    this.clampMaxY = TUNING.ROAD_BOTTOM_Y - TUNING.PLAYER_DISPLAY_HEIGHT / 2 - TUNING.PLAYER_BOTTOM_Y_INSET;
     const minY = this.clampMinY;
     const maxY = this.clampMaxY;
 
     // ── Phaser-level handlers (touches ON the canvas) ──────────────
+    // IMPORTANT: pointer.x/y are in render-resolution space (e.g. 1170×540).
+    // pointer.worldX/worldY are in world space (1920×1080 game coordinates).
+    // All comparisons use world coords so they match tuning values.
+    // For scrollFactor(0) objects (buttons), use worldX - cam.scrollX / worldY - cam.scrollY
+    // to get screen-game-space coordinates.
     scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       // Skip if this pointer is already tracked as external (black-bar touch)
       if (this._externalPointerIds.has(pointer.id)) return;
 
-      if (pointer.x < halfScreen) {
-        // Left half — steer + boost
+      const wx = pointer.worldX;
+      const wy = pointer.worldY;
+
+      if (wx >= halfScreen && wy >= halfHeight) {
+        // Bottom-right quadrant — accelerate (acts like spacebar: hold + tap)
+        if (this.btnPointerId === null) {
+          this.btnPointerId = pointer.id;
+          this.btnBoostHeld = true;   // held state (like spacebar isDown)
+          this.touchBoostTap = true;  // tap impulse (like JustDown)
+        }
+      } else {
+        // Everywhere else — steer + hold-boost (like holding spacebar)
         if (this.leftPointerId === null) {
           this.leftPointerId = pointer.id;
           this.leftTouchStartTime = Date.now();
           this.touchBoostHeld = true;
-          const y = Phaser.Math.Clamp(pointer.y, minY, maxY);
-          this.touchTargetY = y;
-        }
-      } else {
-        // Right half — attack / rocket
-        if (this.rightPointerId === null) {
-          this.rightPointerId = pointer.id;
-          this.rightTouchStartTime = Date.now();
-          this.rightRocketFired = false;
+          // Only update Y if finger is within road bounds; otherwise keep last valid Y
+          if (wy >= minY && wy <= maxY) {
+            this.touchTargetY = wy;
+          }
         }
       }
     });
@@ -131,24 +163,24 @@ export class InputSystem {
     scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (this._externalPointerIds.has(pointer.id)) return;
       if (pointer.id === this.leftPointerId) {
-        const y = Phaser.Math.Clamp(pointer.y, minY, maxY);
-        this.touchTargetY = y;
+        const wy = pointer.worldY;
+        // Only update Y while finger is within road bounds; stays at last valid Y otherwise
+        if (wy >= minY && wy <= maxY) {
+          this.touchTargetY = wy;
+        }
       }
     });
 
     scene.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (this._externalPointerIds.has(pointer.id)) return;
-      if (pointer.id === this.leftPointerId) {
+      if (pointer.id === this.btnPointerId) {
+        // Green button released
+        this.btnBoostHeld = false;
+        this.btnPointerId = null;
+      } else if (pointer.id === this.leftPointerId) {
         this.touchBoostHeld = false;
-        if (Date.now() - this.leftTouchStartTime < TUNING.MOBILE_TAP_THRESHOLD) {
-          this.touchBoostTap = true;
-        }
+        this.touchBoostTap = true;  // tap impulse on lift (like spacebar JustDown)
         this.leftPointerId = null;
-      } else if (pointer.id === this.rightPointerId) {
-        if (!this.rightRocketFired) {
-          this.slashPressed = true; // katana
-        }
-        this.rightPointerId = null;
       }
     });
 
@@ -175,27 +207,28 @@ export class InputSystem {
         if (e.target === canvas) return;
         const rect = canvas.getBoundingClientRect();
         const screenHalf = window.innerWidth / 2;
+        const gameX = ((e.clientX - rect.left) / rect.width) * GAME_MODE.canvasWidth;
         const gameY = ((e.clientY - rect.top) / rect.height) * TUNING.GAME_HEIGHT;
-        const clampedY = Phaser.Math.Clamp(gameY, minY, maxY);
 
         if (e.clientX < screenHalf) {
-          // Left half — steer + boost
+          // Left half — steer + hold-boost
           if (this.leftPointerId === null) {
             this.leftPointerId = e.pointerId;
             this._externalPointerIds.add(e.pointerId);
             this.leftTouchStartTime = Date.now();
             this.touchBoostHeld = true;
-            this.touchTargetY = clampedY;
-            // Capture this pointer so move/up events come to the container
+            if (gameY >= minY && gameY <= maxY) {
+              this.touchTargetY = gameY;
+            }
             container.setPointerCapture(e.pointerId);
           }
         } else {
-          // Right half — attack / rocket
-          if (this.rightPointerId === null) {
-            this.rightPointerId = e.pointerId;
+          // Right half — accelerate (acts like spacebar: hold + tap)
+          if (this.btnPointerId === null) {
+            this.btnPointerId = e.pointerId;
             this._externalPointerIds.add(e.pointerId);
-            this.rightTouchStartTime = Date.now();
-            this.rightRocketFired = false;
+            this.btnBoostHeld = true;
+            this.touchBoostTap = true;
             container.setPointerCapture(e.pointerId);
           }
         }
@@ -206,24 +239,23 @@ export class InputSystem {
         if (e.pointerId === this.leftPointerId) {
           const rect = canvas.getBoundingClientRect();
           const gameY = ((e.clientY - rect.top) / rect.height) * TUNING.GAME_HEIGHT;
-          this.touchTargetY = Phaser.Math.Clamp(gameY, minY, maxY);
+          if (gameY >= minY && gameY <= maxY) {
+            this.touchTargetY = gameY;
+          }
         }
       };
 
       this._domPointerUp = (e: PointerEvent) => {
         if (!this._externalPointerIds.has(e.pointerId)) return;
         this._externalPointerIds.delete(e.pointerId);
-        if (e.pointerId === this.leftPointerId) {
+        if (e.pointerId === this.btnPointerId) {
+          // Green button released
+          this.btnBoostHeld = false;
+          this.btnPointerId = null;
+        } else if (e.pointerId === this.leftPointerId) {
           this.touchBoostHeld = false;
-          if (Date.now() - this.leftTouchStartTime < TUNING.MOBILE_TAP_THRESHOLD) {
-            this.touchBoostTap = true;
-          }
+          this.touchBoostTap = true;  // tap impulse on lift
           this.leftPointerId = null;
-        } else if (e.pointerId === this.rightPointerId) {
-          if (!this.rightRocketFired) {
-            this.slashPressed = true; // katana
-          }
-          this.rightPointerId = null;
         }
       };
 
@@ -260,7 +292,7 @@ export class InputSystem {
     return Phaser.Math.Clamp(
       this.scene.input.activePointer.y,
       TUNING.ROAD_TOP_Y - TUNING.PLAYER_TOP_Y_EXTEND,
-      TUNING.ROAD_BOTTOM_Y - halfH
+      TUNING.ROAD_BOTTOM_Y - halfH - TUNING.PLAYER_BOTTOM_Y_INSET
     );
   }
 
@@ -269,16 +301,17 @@ export class InputSystem {
     return this.scene.input.activePointer.x;
   }
 
-  /** Returns true while boost is held (Space on desktop, left thumb down on mobile) */
+  /** Returns true while boost is held (Space on desktop, left thumb OR green button on mobile) */
   isSpaceHeld(): boolean {
-    if (this.mobileMode) return this.touchBoostHeld;
+    if (this.mobileMode) return this.touchBoostHeld || this.btnBoostHeld;
     return this.spaceKey.isDown;
   }
 
   /** Returns true on tap boost (JustDown Space on desktop, quick tap on mobile, or injected) */
-  /** Show/hide the green triangle cursor (mobile only). Hidden during TITLE/TUTORIAL. */
-  setCursorVisible(visible: boolean): void {
-    if (this.cursorGraphic) this.cursorGraphic.setVisible(visible);
+  /** Show/hide the green triangle cursor (mobile only). Currently disabled. */
+  setCursorVisible(_visible: boolean): void {
+    // Green triangle cursor disabled — slider knob replaced it
+    if (this.cursorGraphic) this.cursorGraphic.setVisible(false);
   }
 
   getSpeedTap(): boolean {
@@ -345,6 +378,17 @@ export class InputSystem {
     return false;
   }
 
+  /** Brief alpha flash on button tap for visual feedback */
+  // ── Button group visibility (called from GameScene) ──
+  // Accelerate zone is invisible — these are no-ops kept for API compatibility.
+  setPrimaryButtonVisible(_visible: boolean): void {}
+  private flashPrimaryButton(): void {}
+
+  fadeInPrimaryButton(_duration: number): void {
+    // Accelerate zone is invisible (entire right half) — no visual fade needed.
+    // Method kept for API compatibility with GameScene calls.
+  }
+
   // ── Test injection (programmatic input for robot pilot) ──
   injectSpeedTap(): void { this.injectedSpeedTap = true; }
   injectAttack(): void { this.slashPressed = true; }
@@ -359,6 +403,11 @@ export class InputSystem {
     if (this.cursorGraphic) {
       this.cursorGraphic.destroy();
       this.cursorGraphic = null;
+    }
+    if (this.btnGroup) {
+      this.btnGroup.destroy(true); // destroys children (primaryButton) too
+      this.btnGroup = null;
+      this.primaryButton = null;
     }
     // Clean up DOM-level handlers
     const canvas = this.scene.game.canvas;

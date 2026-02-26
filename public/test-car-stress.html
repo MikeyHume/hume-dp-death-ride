@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Car Stress Test</title>
+<style>
+  * { margin: 0; padding: 0; }
+  body { background: #000; overflow: hidden; }
+  #hud {
+    position: fixed; top: 8px; left: 8px; z-index: 10;
+    color: #0f0; font: bold 18px monospace;
+    background: rgba(0,0,0,0.8); padding: 8px 12px;
+    border: 1px solid #0f0; white-space: pre;
+  }
+  #results {
+    position: fixed; bottom: 8px; left: 8px; right: 8px; z-index: 10;
+    color: #0f0; font: 14px monospace;
+    background: rgba(0,0,0,0.9); padding: 8px;
+    border: 1px solid #0f0; max-height: 40vh; overflow-y: auto;
+    display: none;
+  }
+</style>
+</head>
+<body>
+<div id="hud">Loading...</div>
+<div id="results"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+<script>
+// URL params
+const params = new URLSearchParams(location.search);
+const MAX_CARS = parseInt(params.get('max') || '20');
+const STEP = parseInt(params.get('step') || '1');
+const SETTLE_MS = parseInt(params.get('settle') || '5000');
+const MEASURE_MS = parseInt(params.get('measure') || '5000');
+const CRT_ON = params.get('crt') !== '0';
+const MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+// Resolution: full (441x186), mobile/half (220x93), tiny (88x37)
+const RES = params.get('res') || 'full';
+const RES_CONFIG = {
+  full:   { fw: 441, fh: 186, path: (n) => `assets/cars/car_${n}.png` },
+  half:   { fw: 220, fh: 93,  path: (n) => `assets/cars/car_${n}_mobile.png` },
+  mobile: { fw: 220, fh: 93,  path: (n) => `assets/cars/car_${n}_mobile.png` },
+  tiny:   { fw: 88,  fh: 37,  path: (n) => `assets/cars/tiny/car_${n}.png` },
+};
+const RC = RES_CONFIG[RES] || RES_CONFIG.full;
+const ANIM_FRAMES = 59;
+
+const hud = document.getElementById('hud');
+const resultsDiv = document.getElementById('results');
+const allResults = [];
+
+// Expose for WebDriver
+window.__carStressResults = allResults;
+window.__carStressDone = false;
+window.__carStressPhase = 'loading';
+
+class CarStressScene extends Phaser.Scene {
+  constructor() { super('CarStressScene'); }
+
+  preload() {
+    hud.textContent = `Loading ${MAX_CARS} cars (${RES} res)...`;
+    for (let c = 1; c <= MAX_CARS; c++) {
+      const num = String(c).padStart(3, '0');
+      this.load.spritesheet(`car-${num}`, RC.path(num), {
+        frameWidth: RC.fw, frameHeight: RC.fh
+      });
+    }
+    // Road for context
+    this.load.image('road', 'assets/road/road_tile.jpg');
+  }
+
+  create() {
+    const W = this.scale.width;
+    const H = this.scale.height;
+
+    // Dark road background
+    this.add.rectangle(W/2, H/2, W, H, 0x111111);
+
+    this.carSprites = [];
+    this.currentCount = 0;
+    this.phase = 'idle'; // idle -> settling -> measuring -> done
+    this.phaseTimer = 0;
+    this.fpsReadings = [];
+
+    // Create drive animations for all 20 car textures
+    for (let c = 1; c <= 20; c++) {
+      const num = String(c).padStart(3, '0');
+      const key = `car-${num}`;
+      this.anims.create({
+        key: `${key}-drive`,
+        frames: this.anims.generateFrameNumbers(key, { start: 0, end: ANIM_FRAMES - 1 }),
+        frameRate: 12, repeat: -1
+      });
+    }
+
+    // Start ramp-up
+    this.time.delayedCall(500, () => this.addCarsAndTest(STEP));
+  }
+
+  addCarsAndTest(count) {
+    const W = this.scale.width;
+    const H = this.scale.height;
+
+    // Add 'count' more car sprites
+    for (let i = 0; i < count && this.currentCount < MAX_CARS; i++) {
+      this.currentCount++;
+      const num = String(((this.currentCount - 1) % 20) + 1).padStart(3, '0');
+      const key = `car-${num}`;
+
+      const sprite = this.add.sprite(
+        Phaser.Math.Between(50, W - 50),
+        Phaser.Math.Between(50, H - 50),
+        key
+      );
+
+      // Scale to reasonable on-screen size
+      const targetH = H * 0.08;
+      sprite.setScale(targetH / sprite.height);
+
+      // Play drive animation
+      sprite.play(`${key}-drive`);
+
+      // Give them movement so GPU is actually working
+      sprite.setData('vx', Phaser.Math.Between(-200, -50));
+      sprite.setData('vy', Phaser.Math.FloatBetween(-20, 20));
+
+      this.carSprites.push(sprite);
+    }
+
+    hud.textContent = `Cars: ${this.currentCount} | Settling...`;
+    window.__carStressPhase = `settling-${this.currentCount}`;
+    this.phase = 'settling';
+    this.phaseTimer = 0;
+    this.fpsReadings = [];
+  }
+
+  update(time, delta) {
+    const W = this.scale.width;
+
+    // Move all cars (simulate gameplay)
+    for (const s of this.carSprites) {
+      s.x += s.getData('vx') * (delta / 1000);
+      s.y += s.getData('vy') * (delta / 1000);
+      // Wrap around
+      if (s.x < -50) s.x = W + 50;
+      if (s.y < 10 || s.y > this.scale.height - 10) s.setData('vy', -s.getData('vy'));
+    }
+
+    if (this.phase === 'settling') {
+      this.phaseTimer += delta;
+      if (this.phaseTimer >= SETTLE_MS) {
+        this.phase = 'measuring';
+        this.phaseTimer = 0;
+        this.fpsReadings = [];
+        hud.textContent = `Cars: ${this.currentCount} | Measuring...`;
+        window.__carStressPhase = `measuring-${this.currentCount}`;
+      }
+    } else if (this.phase === 'measuring') {
+      this.phaseTimer += delta;
+      this.fpsReadings.push(this.game.loop.actualFps);
+
+      if (this.phaseTimer >= MEASURE_MS) {
+        // Calculate results
+        const avg = this.fpsReadings.reduce((a, b) => a + b, 0) / this.fpsReadings.length;
+        const min = Math.min(...this.fpsReadings);
+        const max = Math.max(...this.fpsReadings);
+        const result = {
+          cars: this.currentCount,
+          avgFps: Math.round(avg * 10) / 10,
+          minFps: Math.round(min * 10) / 10,
+          maxFps: Math.round(max * 10) / 10,
+          samples: this.fpsReadings.length
+        };
+        allResults.push(result);
+
+        // Show result
+        resultsDiv.style.display = 'block';
+        resultsDiv.innerHTML = allResults.map(r =>
+          `Cars: ${String(r.cars).padStart(2)} | AVG: ${String(r.avgFps).padStart(5)} | MIN: ${String(r.minFps).padStart(5)} | MAX: ${String(r.maxFps).padStart(5)}`
+        ).join('\n');
+
+        hud.textContent = `Cars: ${this.currentCount} | FPS: ${result.avgFps} (min ${result.minFps})`;
+
+        // Next step or done
+        if (this.currentCount >= MAX_CARS) {
+          this.phase = 'done';
+          window.__carStressDone = true;
+          window.__carStressPhase = 'done';
+          hud.textContent += '\n--- DONE ---';
+        } else {
+          this.time.delayedCall(1000, () => this.addCarsAndTest(STEP));
+          this.phase = 'idle';
+        }
+      }
+    }
+  }
+}
+
+const config = {
+  type: Phaser.WEBGL,
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: MOBILE ? 960 : 1920,
+    height: MOBILE ? 540 : 1080,
+  },
+  backgroundColor: '#000000',
+  scene: CarStressScene,
+  audio: { noAudio: true },
+  banner: false,
+};
+
+new Phaser.Game(config);
+</script>
+</body>
+</html>

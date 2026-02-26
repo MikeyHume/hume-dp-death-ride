@@ -1,0 +1,402 @@
+{
+  "timestamp": "2026-02-25T06:33:44.503Z",
+  "device": "iPhone 12 Mini (Braelynn)",
+  "runsPerVariant": 3,
+  "settleMs": 12000,
+  "samplesPerRun": 5,
+  "elapsedSeconds": 674,
+  "variants": [
+    {
+      "name": "desktop",
+      "description": "Full CRT — bloom + beam + mask + chroma + noise",
+      "texLookups": 16,
+      "features": {
+        "bloom": true,
+        "beam": true,
+        "mask": true,
+        "chroma": true,
+        "scanlines": true,
+        "noise": true
+      },
+      "crtProfile": null,
+      "runs": [
+        {
+          "variant": "desktop",
+          "run": 0,
+          "fpsSamples": [
+            35,
+            36,
+            35,
+            35,
+            36
+          ],
+          "fpsAvg": 35,
+          "fpsMin": 35,
+          "fpsMax": 36,
+          "crashed": false,
+          "gameState": "unknown"
+        },
+        {
+          "variant": "desktop",
+          "run": 1,
+          "fpsSamples": [],
+          "fpsAvg": 0,
+          "fpsMin": 0,
+          "fpsMax": 0,
+          "crashed": false,
+          "gameState": "unknown"
+        },
+        {
+          "variant": "desktop",
+          "run": 2,
+          "fpsSamples": [
+            35,
+            35,
+            35,
+            35,
+            36
+          ],
+          "fpsAvg": 35,
+          "fpsMin": 35,
+          "fpsMax": 36,
+          "crashed": false,
+          "gameState": "unknown"
+        }
+      ],
+      "medianFps": 35,
+      "bestFps": 35,
+      "worstFps": 35,
+      "crashCount": 0,
+      "status": "SMOOTH"
+    },
+    {
+      "name": "no-bloom",
+      "description": "Bloom disabled — biggest single GPU win (-9 lookups)",
+      "texLookups": 7,
+      "features": {
+        "bloom": false,
+        "beam": true,
+        "mask": true,
+        "chroma": true,
+        "scanlines": true,
+        "noise": true
+      },
+      "crtProfile": "no-bloom",
+      "runs": [
+        {
+          "variant": "no-bloom",
+          "run": 0,
+          "fpsSamples": [
+            35,
+            35,
+            35,
+            35,
+            35
+          ],
+          "fpsAvg": 35,
+          "fpsMin": 35,
+          "fpsMax": 35,
+          "crashed": false,
+          "gameState": "unknown"
+        },
+        {
+          "variant": "no-bloom",
+          "run": 1,
+          "fpsSamples": [
+            35,
+            35
+          ],
+          "fpsAvg": 35,
+          "fpsMin": 35,
+          "fpsMax": 35,
+          "crashed": false,
+          "gameState": "unknown"
+        },
+        {
+          "variant": "no-bloom",
+          "run": 2,
+          "fpsSamples": [],
+          "fpsAvg": 0,
+          "fpsMin": 0,
+          "fpsMax": 0,
+          "crashed": true,
+          "gameState": "unknown"
+        }
+      ],
+      "medianFps": 35,
+      "bestFps": 35,
+      "worstFps": 35,
+      "crashCount": 1,
+      "status": "SMOOTH"
+    },
+    {
+      "name": "no-beam",
+      "description": "Beam focus disabled (-4 lookups)",
+      "texLookups": 12,
+      "features": {
+        "bloom": true,
+        "beam": false,
+        "mask": true,
+        "chroma": true,
+        "scanlines": true,
+        "noise": true
+      },
+      "crtProfile": "no-beam",
+      "runs": [
+        {
+          "variant": "no-beam",
+          "run": 0,
+          "fpsSamples": [
+            35,
+            35,
+            35,
+            35,
+            36
+          ],
+          "fpsAvg": 35,
+          "fpsMin": 35,
+          "fpsMax": 36,
+          "crashed": false,
+          "gameState": "unknown"
+        },
+        {
+          "variant": "no-beam",
+          "run": 1,
+          "fpsSamples": [],
+          "fpsAvg": 0,
+          "fpsMin": 0,
+          "fpsMax": 0,
+          "crashed": true,
+          "gameState": "unknown"
+        },
+        {
+          "variant": "no-beam",
+          "run": 2,
+          "fpsSamples": [],
+          "fpsAvg": 0,
+          "fpsMin": 0,
+          "fpsMax": 0,
+          "crashed": true,
+          "gameState": "unknown"
+        }
+      ],
+      "medianFps": 35,
+      "bestFps": 35,
+      "worstFps": 35,
+      "crashCount": 2,
+      "status": "SMOOTH"
+    },
+    {
+      "name": "lean",
+      "description": "No bloom + no beam — major GPU reduction (-13 lookups)",
+      "texLookups": 3,
+      "features": {
+        "bloom": false,
+        "beam": false,
+        "mask": true,
+        "chroma": true,
+        "scanlines": true,
+        "noise": true
+      },
+      "crtProfile": "lean",
+      "runs": [
+        {
+          "variant": "lean",
+          "run": 0,
+          "fpsSamples": [
+            35
+          ],
+          "fpsAvg": 35,
+          "fpsMin": 35,
+          "fpsMax": 35,
+          "crashed": false,
+          "gameState": "unknown"
+        },
+        {
+          "variant": "lean",
+          "run": 1,
+          "fpsSamples": [],
+          "fpsAvg": 0,
+          "fpsMin": 0,
+          "fpsMax": 0,
+          "crashed": true,
+          "gameState": "unknown"
+        },
+        {
+          "variant": "lean",
+          "run": 2,
+          "fpsSamples": [],
+          "fpsAvg": 0,
+          "fpsMin": 0,
+          "fpsMax": 0,
+          "crashed": true,
+          "gameState": "unknown"
+        }
+      ],
+      "medianFps": 35,
+      "bestFps": 35,
+      "worstFps": 35,
+      "crashCount": 2,
+      "status": "SMOOTH"
+    },
+    {
+      "name": "essential",
+      "description": "lean + no chroma/convergence — 1 texture lookup",
+      "texLookups": 1,
+      "features": {
+        "bloom": false,
+        "beam": false,
+        "mask": true,
+        "chroma": false,
+        "scanlines": true,
+        "noise": true
+      },
+      "crtProfile": "essential",
+      "runs": [
+        {
+          "variant": "essential",
+          "run": 0,
+          "fpsSamples": [
+            35,
+            35,
+            35,
+            35,
+            36
+          ],
+          "fpsAvg": 35,
+          "fpsMin": 35,
+          "fpsMax": 36,
+          "crashed": false,
+          "gameState": "unknown"
+        },
+        {
+          "variant": "essential",
+          "run": 1,
+          "fpsSamples": [],
+          "fpsAvg": 0,
+          "fpsMin": 0,
+          "fpsMax": 0,
+          "crashed": false,
+          "gameState": "unknown"
+        },
+        {
+          "variant": "essential",
+          "run": 2,
+          "fpsSamples": [],
+          "fpsAvg": 0,
+          "fpsMin": 0,
+          "fpsMax": 0,
+          "crashed": true,
+          "gameState": "unknown"
+        }
+      ],
+      "medianFps": 35,
+      "bestFps": 35,
+      "worstFps": 35,
+      "crashCount": 1,
+      "status": "SMOOTH"
+    },
+    {
+      "name": "scan-mask",
+      "description": "Only scanlines + mask + brightness (no noise/jitter)",
+      "texLookups": 1,
+      "features": {
+        "bloom": false,
+        "beam": false,
+        "mask": true,
+        "chroma": false,
+        "scanlines": true,
+        "noise": false
+      },
+      "crtProfile": "scan-mask",
+      "runs": [
+        {
+          "variant": "scan-mask",
+          "run": 0,
+          "fpsSamples": [],
+          "fpsAvg": 0,
+          "fpsMin": 0,
+          "fpsMax": 0,
+          "crashed": true,
+          "gameState": "unknown"
+        },
+        {
+          "variant": "scan-mask",
+          "run": 1,
+          "fpsSamples": [],
+          "fpsAvg": 0,
+          "fpsMin": 0,
+          "fpsMax": 0,
+          "crashed": true,
+          "gameState": "unknown"
+        },
+        {
+          "variant": "scan-mask",
+          "run": 2,
+          "fpsSamples": [],
+          "fpsAvg": 0,
+          "fpsMin": 0,
+          "fpsMax": 0,
+          "crashed": true,
+          "gameState": "unknown"
+        }
+      ],
+      "medianFps": 0,
+      "bestFps": 0,
+      "worstFps": 0,
+      "crashCount": 3,
+      "status": "CRASH"
+    },
+    {
+      "name": "passthrough",
+      "description": "All CRT effects off — shader overhead baseline",
+      "texLookups": 1,
+      "features": {
+        "bloom": false,
+        "beam": false,
+        "mask": false,
+        "chroma": false,
+        "scanlines": false,
+        "noise": false
+      },
+      "crtProfile": "passthrough",
+      "runs": [
+        {
+          "variant": "passthrough",
+          "run": 0,
+          "fpsSamples": [],
+          "fpsAvg": 0,
+          "fpsMin": 0,
+          "fpsMax": 0,
+          "crashed": true,
+          "gameState": "unknown"
+        },
+        {
+          "variant": "passthrough",
+          "run": 1,
+          "fpsSamples": [],
+          "fpsAvg": 0,
+          "fpsMin": 0,
+          "fpsMax": 0,
+          "crashed": true,
+          "gameState": "unknown"
+        },
+        {
+          "variant": "passthrough",
+          "run": 2,
+          "fpsSamples": [],
+          "fpsAvg": 0,
+          "fpsMin": 0,
+          "fpsMax": 0,
+          "crashed": true,
+          "gameState": "unknown"
+        }
+      ],
+      "medianFps": 0,
+      "bestFps": 0,
+      "worstFps": 0,
+      "crashCount": 3,
+      "status": "CRASH"
+    }
+  ]
+}
