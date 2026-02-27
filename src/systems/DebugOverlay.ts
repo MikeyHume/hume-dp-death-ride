@@ -32,6 +32,11 @@ export class DebugOverlay {
   private sendBtn: HTMLButtonElement;
   private hitboxBtn: HTMLButtonElement;
   private inspectBtn: HTMLButtonElement;
+  private fakeSpotifyBtn: HTMLButtonElement;
+  private fakeSpotifyLog: HTMLDivElement;
+
+  // Callback for fake spotify auth (wired by GameScene)
+  private _onFakeSpotify: (() => string[]) | null = null;
 
   // Toggle list panel
   private listPanel: HTMLDivElement;
@@ -206,6 +211,53 @@ export class DebugOverlay {
     });
     this.panel.appendChild(this.inspectBtn);
 
+    // Separator before audio debug
+    const sep2 = document.createElement('div');
+    sep2.style.borderTop = '1px solid rgba(100,255,100,0.3)';
+    sep2.style.marginTop = '4px';
+    this.panel.appendChild(sep2);
+
+    // Fake Spotify Auth button
+    this.fakeSpotifyBtn = document.createElement('button');
+    Object.assign(this.fakeSpotifyBtn.style, {
+      marginTop: '4px',
+      padding: '6px 12px',
+      background: 'rgba(30,215,96,0.3)',
+      border: '1px solid rgba(30,215,96,0.6)',
+      borderRadius: '4px',
+      color: '#1ed760',
+      fontSize: '11px',
+      fontFamily: 'monospace',
+      fontWeight: 'bold',
+      cursor: 'pointer',
+    });
+    this.fakeSpotifyBtn.textContent = 'FAKE SPOTIFY AUTH';
+    this.fakeSpotifyBtn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      this.runFakeSpotify();
+    });
+    this.panel.appendChild(this.fakeSpotifyBtn);
+
+    // Log output for fake spotify
+    this.fakeSpotifyLog = document.createElement('div');
+    Object.assign(this.fakeSpotifyLog.style, {
+      display: 'none',
+      marginTop: '4px',
+      padding: '6px',
+      background: 'rgba(0,0,0,0.6)',
+      border: '1px solid rgba(30,215,96,0.3)',
+      borderRadius: '4px',
+      color: '#aaffaa',
+      fontSize: '9px',
+      fontFamily: 'monospace',
+      lineHeight: '1.4',
+      maxHeight: '200px',
+      overflowY: 'auto',
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'break-all',
+    });
+    this.panel.appendChild(this.fakeSpotifyLog);
+
     // ── Toggle list panel (appears when CLICKABLE is ON) ──
     this.listPanel = document.createElement('div');
     Object.assign(this.listPanel.style, {
@@ -337,7 +389,29 @@ export class DebugOverlay {
     this._hitboxViz = viz;
   }
 
+  /** Wire the fake Spotify auth callback. */
+  setFakeSpotifyHandler(fn: () => string[]): void {
+    this._onFakeSpotify = fn;
+  }
+
   /* ============ Internal ============ */
+
+  private runFakeSpotify(): void {
+    if (!this._onFakeSpotify) {
+      this.fakeSpotifyLog.textContent = 'Not wired — no handler set';
+      this.fakeSpotifyLog.style.display = 'block';
+      return;
+    }
+    this.fakeSpotifyBtn.textContent = 'RUNNING...';
+    this.fakeSpotifyBtn.style.color = '#ffff00';
+    const log = this._onFakeSpotify();
+    this.fakeSpotifyLog.textContent = log.join('\n');
+    this.fakeSpotifyLog.style.display = 'block';
+    setTimeout(() => {
+      this.fakeSpotifyBtn.textContent = 'FAKE SPOTIFY AUTH';
+      this.fakeSpotifyBtn.style.color = '#1ed760';
+    }, 3000);
+  }
 
   private toggleHitboxes(): void {
     this.hitboxesOn = !this.hitboxesOn;

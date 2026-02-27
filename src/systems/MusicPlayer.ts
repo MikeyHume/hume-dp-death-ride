@@ -1243,6 +1243,83 @@ export class MusicPlayer {
     }
   }
 
+  /**
+   * DEBUG: Simulate a Spotify auth transition without actual Spotify credentials.
+   * Runs the exact same YouTube→Spotify handoff code so you can hear if YouTube
+   * audio leaks. Returns a log of what happened for the debug panel.
+   */
+  debugFakeSpotifyAuth(): string[] {
+    const log: string[] = [];
+    const ytState = (s: number) => ({ '-1': 'unstarted', '0': 'ended', '1': 'playing', '2': 'paused', '3': 'buffering', '5': 'cued' }[s] || `unknown(${s})`);
+
+    log.push(`── FAKE SPOTIFY AUTH ──`);
+    log.push(`source: ${this.source}`);
+    log.push(`titleTrackPlaying: ${this.titleTrackPlaying}`);
+    log.push(`playlistStarted: ${this.playlistStarted}`);
+    log.push(`titlePlaylistLoaded: ${this.titlePlaylistLoaded}`);
+    log.push(`spotifyPlayer: ${this.spotifyPlayer ? 'exists' : 'null'}`);
+    log.push(`ytReady: ${this.ytReady}`);
+
+    if (this.ytPlayer) {
+      try {
+        log.push(`YT BEFORE: state=${ytState(this.ytPlayer.getPlayerState())} muted=${this.ytPlayer.isMuted()} vol=${this.ytPlayer.getVolume()}`);
+      } catch { log.push(`YT BEFORE: error reading state`); }
+    } else {
+      log.push(`YT BEFORE: no ytPlayer`);
+    }
+
+    // Now run the EXACT same transition code from tryInitSpotify lines 914-931
+    if (this.playlistStarted || (this.titlePlaylistLoaded && this.source === 'youtube')) {
+      log.push(`PATH: playlist/titlePlaylist → stopping YT, switching to spotify`);
+      if (this.ytPlayer) {
+        try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch (e) { log.push(`YT STOP ERROR: ${e}`); }
+      }
+      this.source = 'spotify';
+      // DON'T call startSpotifyPlaylist — no real Spotify player
+      log.push(`(skipped startSpotifyPlaylist — no real Spotify)`);
+    } else if (this.titleTrackPlaying && this.source === 'youtube') {
+      log.push(`PATH: title track YT→Spotify handoff`);
+      if (this.ytPlayer) {
+        try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch (e) { log.push(`YT STOP ERROR: ${e}`); }
+      }
+      this.source = 'spotify';
+      // DON'T call spotifyPlayer.playTrack — no real Spotify player
+      log.push(`(skipped playTrack — no real Spotify)`);
+    } else {
+      log.push(`PATH: no active playback to transition`);
+    }
+
+    // Read YouTube state AFTER the stop attempt
+    if (this.ytPlayer) {
+      try {
+        log.push(`YT AFTER: state=${ytState(this.ytPlayer.getPlayerState())} muted=${this.ytPlayer.isMuted()} vol=${this.ytPlayer.getVolume()}`);
+      } catch { log.push(`YT AFTER: error reading state`); }
+    }
+
+    log.push(`source NOW: ${this.source}`);
+    log.push(`── END ──`);
+
+    // Also dump to console for safaridriver capture
+    console.log('[DEBUG] ' + log.join('\n[DEBUG] '));
+
+    // Revert source back to youtube so playback continues (this is just a test)
+    setTimeout(() => {
+      if (this.source === 'spotify' && !this.spotifyPlayer?.isReady()) {
+        this.source = 'youtube';
+        if (this.ytPlayer) {
+          try {
+            this.ytPlayer.unMute();
+            this.applyUserVolume();
+            this.ytPlayer.playVideo();
+          } catch {}
+        }
+        console.log('[DEBUG] Reverted source back to youtube (fake auth cleanup)');
+      }
+    }, 3000);
+
+    return log;
+  }
+
   private startYTPlaylist(): void {
     if (!this.ytPlayer) return;
     // Never start YouTube playlist when Spotify is the intended source

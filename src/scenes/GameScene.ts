@@ -707,6 +707,7 @@ export class GameScene extends Phaser.Scene {
     this.hitboxVisualizer = new HitboxVisualizer();
     this.hitboxVisualizer.setGame(this.game);
     this.debugOverlay.setHitboxVisualizer(this.hitboxVisualizer);
+    this.debugOverlay.setFakeSpotifyHandler(() => this.musicPlayer.debugFakeSpotifyAuth());
 
     // --- Settings Popup (opens on settings button in music player) ---
     this.settingsPopup = new SettingsPopup(this, {
