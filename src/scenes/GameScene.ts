@@ -19,6 +19,9 @@ import { DamageFlashPipeline } from '../fx/DamageFlashPipeline';
 import { CRT_TUNING } from '../config/crtTuning';
 import { ProfileHud } from '../ui/ProfileHud';
 import { ProfilePopup, AVATAR_TEXTURE_KEY } from '../ui/ProfilePopup';
+import { SettingsPopup } from '../ui/SettingsPopup';
+import { DebugOverlay } from '../systems/DebugOverlay';
+import { HitboxVisualizer } from '../systems/HitboxVisualizer';
 import { ShieldSystem } from '../systems/ShieldSystem';
 import { TimeDilationSystem } from '../systems/TimeDilationSystem';
 import { PerfSystem } from '../systems/PerfSystem';
@@ -32,7 +35,7 @@ import { fetchBeatData, getDominantColor } from '../systems/MusicCatalogService'
 import { CourseRunner, loadCourseData, CourseData } from '../systems/CourseRunner';
 import { SongSelectScreen } from '../ui/SongSelectScreen';
 import { TEST_MODE } from '../util/testMode';
-import { TITLE_LOOP_FRAME_COUNT, TITLE_START_FRAME_COUNT } from './BootScene';
+import { TITLE_LOOP_FRAME_COUNT, TITLE_START_FRAME_COUNT, PRE_START_FRAME_COUNT, INTRO_TO_TUT_FRAME_COUNT } from './BootScene';
 
 enum GameState {
   TITLE,
@@ -140,6 +143,9 @@ export class GameScene extends Phaser.Scene {
   private rocketSystem!: RocketSystem;
   private profileHud!: ProfileHud;
   private profilePopup!: ProfilePopup;
+  private settingsPopup!: SettingsPopup;
+  private debugOverlay!: DebugOverlay;
+  private hitboxVisualizer!: HitboxVisualizer;
   private profileWasOpen = false;
   private perfSystem!: PerfSystem;
   private orientationOverlay: OrientationOverlay | null = null;
@@ -390,6 +396,7 @@ export class GameScene extends Phaser.Scene {
   private tutorialTimer: number = 0;
   private tutorialAdvance: boolean = false;
   private tutorialSkipBtn!: Phaser.GameObjects.Image;
+  private _cutsceneTexturesFreed: boolean = false;
 
   // CRT post-processing
   private crtEnabled: boolean = true;
@@ -417,29 +424,8 @@ export class GameScene extends Phaser.Scene {
         this.profilePopup.handleKey(event);
         return;
       }
-      if (k === 'escape') {
-        if (this.state === GameState.SONG_SELECT) {
-          // SongSelectScreen handles its own ESC — don't also returnToTitle
-          return;
-        }
-        if (this.state === GameState.NAME_ENTRY) {
-          if (this.nameSkipConfirmPending) {
-            // Second Escape — confirmed skip
-            this.returnToTitle();
-          } else {
-            // First Escape — show warning
-            this.nameSkipConfirmPending = true;
-            this.nameSkipWarning.setVisible(true);
-          }
-        } else if (this.state === GameState.DEAD && this.rhythmMode) {
-          // Rhythm mode death → back to song select
-          this.returnToTitle();
-          this.enterSongSelect();
-        } else if (this.state !== GameState.TITLE) {
-          this.returnToTitle();
-        }
-        return;
-      }
+      // ESC key disabled — death→replay loop never returns to title
+      if (k === 'escape') return;
       // Debug keys — don't advance game state (map Phaser key names to event.key values)
       const phaserToEventKey: Record<string, string> = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', plus: '+', minus: '-', backtick: '`' };
       // Also block shared-key variants ('='→'+', '_'→'-', '~'→'`')
@@ -646,6 +632,7 @@ export class GameScene extends Phaser.Scene {
       this.actionBtnTop = this.add.sprite(topX, topY, 'btn-rocket', 0)
         .setScale(scTop).setDepth(dep).setScrollFactor(0).setVisible(false)
         .setInteractive({ useHandCursor: true });
+      this.actionBtnTop.name = 'rocket-button';
       this.actionBtnTop.on('pointerdown', () => {
         this.actionBtnTop.play('btn-rocket-press');
         this.actionBtnTop.once('animationcomplete', () => {
@@ -662,6 +649,7 @@ export class GameScene extends Phaser.Scene {
       this.actionBtnBottom = this.add.sprite(botX, botY, 'btn-slash', 0)
         .setScale(scBot).setDepth(dep).setScrollFactor(0).setVisible(false)
         .setInteractive({ useHandCursor: true });
+      this.actionBtnBottom.name = 'slash-button';
       this.actionBtnBottom.on('pointerdown', () => {
         this.actionBtnBottom.play('btn-slash-press');
         this.actionBtnBottom.once('animationcomplete', () => {
@@ -710,6 +698,38 @@ export class GameScene extends Phaser.Scene {
         this.tweens.add({ targets: this.crosshair, alpha: 1, duration: 200 });
       }
     });
+
+    // --- Debug Overlay (HTML HUD, outside Phaser) ---
+    this.debugOverlay = new DebugOverlay();
+    this.debugOverlay.setEnabled(this.debugMasterEnabled);
+
+    // --- Hitbox Visualizer (HTML canvas overlay for debug) ---
+    this.hitboxVisualizer = new HitboxVisualizer();
+    this.hitboxVisualizer.setGame(this.game);
+    this.debugOverlay.setHitboxVisualizer(this.hitboxVisualizer);
+
+    // --- Settings Popup (opens on settings button in music player) ---
+    this.settingsPopup = new SettingsPopup(this, {
+      debugEnabled: this.debugMasterEnabled,
+      onDebugToggle: (enabled) => {
+        this.debugMasterEnabled = enabled;
+        this.debugOverlay.setEnabled(enabled);
+      },
+    });
+    this.musicPlayer.onSettingsClick(() => {
+      if (this.profilePopup.isOpen()) this.profilePopup.close();
+      this.musicPlayer.closeWMP();
+      this.settingsPopup.toggle();
+    });
+    this.settingsPopup.onClose(() => {
+      // Restore crosshair if needed
+      if (this.crosshair && this.crosshairHiddenByWMP && this.crosshairActive) {
+        this.crosshairHiddenByWMP = false;
+        this.tweens.killTweensOf(this.crosshair);
+        this.tweens.add({ targets: this.crosshair, alpha: 1, duration: 200 });
+      }
+    });
+
     this.profilePopup.onProfileChanged((name, hasAvatar) => {
       if (hasAvatar) {
         const key = this.profilePopup.getAvatarTextureKey();
@@ -960,6 +980,7 @@ export class GameScene extends Phaser.Scene {
         fontStyle: 'bold',
       }
     ).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    this.nameInputText.name = 'name-input';
     this.nameInputText.on('pointerdown', () => {
       if (this.nameHiddenInput) this.nameHiddenInput.focus();
     });
@@ -987,6 +1008,7 @@ export class GameScene extends Phaser.Scene {
         padding: { x: 72, y: 36 },
       }
     ).setOrigin(0.5).setDepth(211).setInteractive({ useHandCursor: true });
+    this.nameEnterBtn.name = 'name-enter-btn';
     this.nameEnterBtn.on('pointerover', () => {
       this.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME });
       this.nameEnterBtn.setColor('#ffffff').setBackgroundColor('#006600');
@@ -1023,6 +1045,7 @@ export class GameScene extends Phaser.Scene {
       TUNING.GAME_WIDTH / 2 - 300, TUNING.GAME_HEIGHT / 2 + 380,
       'YES', { ...btnStyle, color: '#ff4444', backgroundColor: '#330000' }
     ).setOrigin(0.5).setDepth(212).setInteractive({ useHandCursor: true }).setVisible(false);
+    this.emptyNameYesBtn.name = 'empty-yes';
     this.emptyNameYesBtn.on('pointerover', () => { this.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }); this.emptyNameYesBtn.setColor('#ffffff').setBackgroundColor('#660000'); });
     this.emptyNameYesBtn.on('pointerout', () => this.emptyNameYesBtn.setColor('#ff4444').setBackgroundColor('#330000'));
     this.emptyNameYesBtn.on('pointerdown', () => {
@@ -1036,6 +1059,7 @@ export class GameScene extends Phaser.Scene {
       TUNING.GAME_WIDTH / 2 + 300, TUNING.GAME_HEIGHT / 2 + 380,
       'NO', { ...btnStyle, color: '#00ff00', backgroundColor: '#003300' }
     ).setOrigin(0.5).setDepth(212).setInteractive({ useHandCursor: true }).setVisible(false);
+    this.emptyNameNoBtn.name = 'empty-no';
     this.emptyNameNoBtn.on('pointerover', () => { this.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }); this.emptyNameNoBtn.setColor('#ffffff').setBackgroundColor('#006600'); });
     this.emptyNameNoBtn.on('pointerout', () => this.emptyNameNoBtn.setColor('#00ff00').setBackgroundColor('#003300'));
     this.emptyNameNoBtn.on('pointerdown', () => {
@@ -1114,6 +1138,7 @@ export class GameScene extends Phaser.Scene {
     // Tutorial skip button (bottom-right, above tutorial content, below black overlay)
     this.tutorialSkipBtn = this.add.image(0, 0, 'tutorial-skip')
       .setOrigin(0.5, 0.5).setScale(SKIP_BTN_SCALE).setAlpha(SKIP_BTN_PULSE_MAX).setDepth(248).setVisible(false).setInteractive({ useHandCursor: true }).setTintFill(0xffffff);
+    this.tutorialSkipBtn.name = 'tutorial-skip';
     // Position from right/bottom edges (margin is distance from edge to button center)
     this.tutorialSkipBtn.setPosition(
       TUNING.GAME_WIDTH - SKIP_BTN_MARGIN_RIGHT,
@@ -1715,6 +1740,8 @@ export class GameScene extends Phaser.Scene {
         // M = master toggle
         if (k === 'M') {
           this.debugMasterEnabled = !this.debugMasterEnabled;
+          this.settingsPopup.setDebugEnabled(this.debugMasterEnabled);
+          this.debugOverlay.setEnabled(this.debugMasterEnabled);
           refreshPanel();
           return;
         }
@@ -1843,6 +1870,9 @@ export class GameScene extends Phaser.Scene {
     // ── Robot pilot: process injected commands before anything else ──
     this.processTestCommands();
 
+    // ── Enforce YouTube mute when Spotify is active (prevents dual audio) ──
+    this.musicPlayer?.enforceSourceMute();
+
     // Block all game input while debug panel is open
     if (this.debugPanelOpen) {
       this.inputSystem.getAttackPressed();
@@ -1889,6 +1919,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.perfSystem.update(dt);
+    this.hitboxVisualizer.update(this);
 
     // Poll for track changes — hue-shift background + load beat/course data in Rhythm Mode
     const curTrackId = this.musicPlayer.getTrackId();
@@ -3072,6 +3103,65 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Free ALL pre-gameplay textures from VRAM. Called once when first gameplay starts.
+   *  The death → replay loop never goes back to title/tutorial/cutscenes, so these are
+   *  permanently one-shot assets: title animations, intro-tut cutscene, tutorial images,
+   *  pre-start cutscene, and countdown visuals.
+   *  Saves ~300 MB on desktop, ~200 MB on mobile. */
+  private _freePreGameTextures(): void {
+    if (this._cutsceneTexturesFreed) return;
+    let freed = 0;
+
+    const safeRemove = (key: string) => {
+      if (this.textures.exists(key)) { this.textures.remove(key); freed++; }
+    };
+
+    // --- Title animation spritesheets (~103 MB) ---
+    this.titleLoopSprite?.stop();
+    this.titleLoopSprite?.setVisible(false);
+    safeRemove('loop-sheet');
+    safeRemove('play-sheet');
+    safeRemove('start-loop-00');
+
+    // --- Pre-start cutscene frames (46 frames, ~91 MB mobile / ~190 MB desktop) ---
+    this.preStartSprite?.stop();
+    this.preStartSprite?.setVisible(false);
+    for (let i = 0; i < PRE_START_FRAME_COUNT; i++) {
+      safeRemove(`pre-start-${String(i).padStart(5, '0')}`);
+    }
+
+    // --- Intro-to-tutorial cutscene frames (27 frames, ~53 MB mobile / ~110 MB desktop) ---
+    this.introTutSprite?.stop();
+    this.introTutSprite?.setVisible(false);
+    for (let i = 0; i < INTRO_TO_TUT_FRAME_COUNT; i++) {
+      safeRemove(`intro-tut-${String(i).padStart(5, '0')}`);
+    }
+
+    // --- Tutorial images ---
+    this.tutorialControlsSprite?.stop();
+    this.tutorialControlsSprite?.setVisible(false);
+    this.tutorialRageSprite?.stop();
+    this.tutorialRageSprite?.setVisible(false);
+    this.tutorialBlank?.setVisible(false);
+    this.tutorialObstaclesImage?.setVisible(false);
+    safeRemove('tutorial-blank');
+    safeRemove('tutorial-obstacles');
+    safeRemove('tutorial-skip');
+    // Controls (desktop: 29 frames, mobile: 1)
+    const controlsCount = GAME_MODE.mobileMode ? 1 : TUNING.TUTORIAL_CONTROLS_FRAMES;
+    for (let i = 0; i < controlsCount; i++) {
+      safeRemove(`tutorial-controls-${String(i).padStart(2, '0')}`);
+    }
+    // Rage (desktop: 4 frames, mobile: 1)
+    const rageCount = GAME_MODE.mobileMode ? 1 : TUNING.TUTORIAL_RAGE_FRAMES;
+    for (let i = 0; i < rageCount; i++) {
+      safeRemove(`tutorial-rage-${i}`);
+    }
+
+    this._cutsceneTexturesFreed = true;
+    console.log(`[VRAM] Freed ${freed} pre-game textures — title anims, cutscenes, tutorial`);
+  }
+
   private enterStarting(): void {
     this.state = GameState.STARTING;
     // Show mobile cursor (green triangle) — gameplay is about to begin
@@ -3403,6 +3493,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private startGame(): void {
+    this._freePreGameTextures(); // One-shot: free title/cutscene/tutorial VRAM (~200-300 MB)
     this.state = GameState.PLAYING;
     this.setCrosshairMode(true);
     this.musicPlayer.setCompact(false);

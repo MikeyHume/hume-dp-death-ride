@@ -383,11 +383,11 @@ export const TUNING = {
   MUSIC_UI_PHONE_BACKDROP_ALPHA: 0.6, // backdrop opacity behind phone popup
   MUSIC_UI_PHONE_ANIM_MS: 350,        // phone popup expand/collapse animation duration (ms)
 
-  // Action buttons (upper-right, spritesheet buttons — 640x640 native)
-  ACTION_BTN_SCALE_TOP: 0.25,        // rocket button scale (0.1=64px, 0.15=96px, 0.2=128px)
+  // Action buttons (upper-right, spritesheet buttons — 320x320 native, downscaled from 640)
+  ACTION_BTN_SCALE_TOP: 0.5,         // rocket button scale (was 0.25 at 640px, now 0.5 at 320px = same 160px display)
   ACTION_BTN_PAD_RIGHT_TOP: 180,      // rocket button px from right edge of screen
   ACTION_BTN_PAD_TOP_TOP: 120,        // rocket button px from top edge of screen
-  ACTION_BTN_SCALE_BOT: 0.5,         // slash button scale (bigger than rocket)
+  ACTION_BTN_SCALE_BOT: 1.0,         // slash button scale (was 0.5 at 640px, now 1.0 at 320px = same 320px display)
   ACTION_BTN_PAD_RIGHT_BOT: 340,      // slash button px from right edge of screen
   ACTION_BTN_PAD_TOP_BOT: 350,       // slash button px from top edge of screen
   ACTION_BTN_DEPTH: 300,             // render depth (above HUD, below modals)

@@ -28,6 +28,7 @@ export class DisconnectModal {
       .setScrollFactor(0)
       .setInteractive()
       .setVisible(false);
+    this.backdrop.name = 'disconnect-backdrop';
     this.backdrop.on('pointerdown', (_ptr: Phaser.Input.Pointer, _lx: number, _ly: number, _ev: Phaser.Types.Input.EventData) => {
       // Only dismiss if tap is OUTSIDE the dialog panel
       const px = _ptr.x - cx;
@@ -78,6 +79,7 @@ export class DisconnectModal {
     // DEBUG: pink hit area so we can see where the tap zone is
     const yesHit = scene.add.rectangle(yesX, btnY, BTN_W, BTN_H, 0xff00ff, 0.3)
       .setInteractive({ useHandCursor: true });
+    yesHit.name = 'disconnect-yes';
     yesHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
     yesHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER }); this.answer(true); });
     this.container.add(yesHit);
@@ -100,6 +102,7 @@ export class DisconnectModal {
     // DEBUG: pink hit area so we can see where the tap zone is
     const noHit = scene.add.rectangle(noX, btnY, BTN_W, BTN_H, 0xff00ff, 0.3)
       .setInteractive({ useHandCursor: true });
+    noHit.name = 'disconnect-no';
     noHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
     noHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER }); this.answer(false); });
     this.container.add(noHit);

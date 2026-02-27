@@ -35,6 +35,7 @@ export class MusicPlayer {
   private ytPlayer: any = null;
   private ytReady: boolean = false;
   private pendingPlay: boolean = false;
+  private pendingSpotifyPlay: boolean = false;
   private playlistStarted: boolean = false;
   private lastSkipTime: number = 0;
   private container!: HTMLDivElement;
@@ -104,6 +105,7 @@ export class MusicPlayer {
   private humePlayer: HumePlayerSystem;
   private onWMPOpenCb: (() => void) | null = null;
   private onWMPCloseCb: (() => void) | null = null;
+  private onSettingsClickCb: (() => void) | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -229,9 +231,11 @@ export class MusicPlayer {
     // Mute while loading to prevent cached-position audio leaking
     this.ytPlayer.mute();
     this.ytPlayer.loadVideoById(TITLE_YT_VIDEO_ID);
-    // Unmute after video starts from the beginning
+    // Unmute after video starts from the beginning (only if YouTube is still the audio source)
     setTimeout(() => {
-      try { this.ytPlayer.unMute(); this.applyUserVolume(); } catch {}
+      if (this.source !== 'spotify') {
+        try { this.ytPlayer.unMute(); this.applyUserVolume(); } catch {}
+      }
     }, 500);
   }
 
@@ -267,13 +271,10 @@ export class MusicPlayer {
   private startMutedYTVideo(): void {
     if (!this.ytPlayer || !this.ytReady) return;
     try {
-      this.ytPlayer.setVolume(0);
       this.ytPlayer.mute();
-      this.ytPlayer.loadVideoById(TITLE_YT_VIDEO_ID);
-      // Re-assert mute after loading begins (mute may not stick on a fresh player)
-      setTimeout(() => {
-        try { this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
-      }, 200);
+      this.ytPlayer.setVolume(0);
+      this.ytPlayer.cueVideoById(TITLE_YT_VIDEO_ID);
+      this.ytPlayer.playVideo();  // starts muted — cue doesn't auto-play
       this.wmpPopup?.setVideoActive(true);
     } catch {}
   }
@@ -297,12 +298,12 @@ export class MusicPlayer {
       spotifyTrackId, '', '', null,
     ).then((ytId) => {
       if (ytId && this.ytPlayer && this.ytReady) {
-        // Exact match — load muted YouTube video
+        // Exact match — cue (don't auto-play) muted YouTube video as visual companion
         try {
-          this.ytPlayer.pauseVideo();
-          this.ytPlayer.loadVideoById({ videoId: ytId });
           this.ytPlayer.mute();
           this.ytPlayer.setVolume(0);
+          this.ytPlayer.cueVideoById({ videoId: ytId });
+          this.ytPlayer.playVideo();  // starts muted — cue doesn't auto-play
           this.wmpPopup?.hideAlbumFallback();
           this.wmpPopup?.setVideoActive(true);
         } catch {}
@@ -472,6 +473,7 @@ export class MusicPlayer {
       opacity: '0',    // invisible — Phaser sprite renders the visual through CRT
     });
     this.thumbnailImg.crossOrigin = 'anonymous';
+    thumbLink.setAttribute('data-hitbox', 'music-thumbnail');
     thumbLink.appendChild(this.thumbnailImg);
 
     // Mobile: tap thumbnail to expand; tap again to collapse
@@ -536,18 +538,22 @@ export class MusicPlayer {
     this.trackTitle.addEventListener('mouseleave', () => {
       this.trackTitle.style.textDecoration = 'none';
     });
+    this.trackTitle.setAttribute('data-hitbox', 'music-title');
     this.titleClip.appendChild(this.trackTitle);
 
     // Control buttons row with source indicator
     const btnContainer = document.createElement('div');
     Object.assign(btnContainer.style, { display: 'flex', justifyContent: 'flex-end', gap: '14px', alignItems: 'center', transform: `scale(${MUSIC_BTN_SCALE})`, transformOrigin: 'bottom right' });
-    const menuBtn = this.createIconButton('ui/music menu.png', () => {
-      if (!this.wmpPopup?.getIsOpen()) this.onWMPOpenCb?.();
-      this.wmpPopup?.toggle();
+    const settingsBtn = this.createIconButton('ui/music menu.png', () => {
+      this.onSettingsClickCb?.();
     });
+    settingsBtn.setAttribute('data-hitbox', 'music-settings');
     const prevBtn = this.createIconButton('ui/skip.png', () => this.prev(), true);
+    prevBtn.setAttribute('data-hitbox', 'music-prev');
     const nextBtn = this.createIconButton('ui/skip.png', () => this.next());
+    nextBtn.setAttribute('data-hitbox', 'music-next');
     this.muteBtn = this.createIconButton('ui/unmuted.png', () => this.toggleMute());
+    this.muteBtn.setAttribute('data-hitbox', 'music-mute');
     this.muteBtnImg = this.muteBtn.querySelector('img') as HTMLImageElement;
 
     // Heart (favorite) button — same size as icon buttons but renders via Phaser Text
@@ -558,6 +564,7 @@ export class MusicPlayer {
       width: '44px', height: '44px', cursor: 'none',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     });
+    this.heartBtn.setAttribute('data-hitbox', 'music-heart');
     this.heartBtn.addEventListener('click', () => {
       if (this.scene.cache.audio.exists('sfx-click')) this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
       const trackId = this.getCurrentTrackId();
@@ -567,7 +574,7 @@ export class MusicPlayer {
       }
     });
 
-    btnContainer.append(this.heartBtn, prevBtn, nextBtn, this.muteBtn, menuBtn);
+    btnContainer.append(this.heartBtn, prevBtn, nextBtn, this.muteBtn, settingsBtn);
 
     rightColumn.append(this.titleClip, btnContainer);
     this.container.append(thumbLink, rightColumn);
@@ -576,9 +583,9 @@ export class MusicPlayer {
     const prevSprite = this.scene.add.image(0, 0, 'ui-skip').setFlipX(true);
     const nextSprite = this.scene.add.image(0, 0, 'ui-skip');
     this.muteBtnSprite = this.scene.add.image(0, 0, 'ui-unmuted');
-    const menuSprite = this.scene.add.image(0, 0, 'ui-music-menu');
-    this.btnSprites = [prevSprite, nextSprite, this.muteBtnSprite, menuSprite];
-    this.btnElements = [prevBtn, nextBtn, this.muteBtn, menuBtn];
+    const settingsSprite = this.scene.add.image(0, 0, 'ui-settings');
+    this.btnSprites = [prevSprite, nextSprite, this.muteBtnSprite, settingsSprite];
+    this.btnElements = [prevBtn, nextBtn, this.muteBtn, settingsBtn];
     for (let i = 0; i < this.btnSprites.length; i++) {
       this.btnSprites[i].setDepth(1000).setScrollFactor(0).setVisible(false).setAlpha(0);
       const sprite = this.btnSprites[i];
@@ -721,7 +728,14 @@ export class MusicPlayer {
             this.playTitleVideo();
           } else if (this.pendingPlay) {
             this.pendingPlay = false;
-            this.startYTPlaylist();
+            // Only start YouTube if it's actually the intended source
+            if (this.source === 'spotify' && this.spotifyPlayer) {
+              this.startSpotifyPlaylist();
+            } else if (this.source === 'spotify' && !this.spotifyPlayer) {
+              this.pendingSpotifyPlay = true;  // Wait for Spotify init
+            } else {
+              this.startYTPlaylist();
+            }
           } else if (this.titleTrackPlaying && this.source === 'spotify') {
             // Spotify already playing title track — start YouTube video muted as visual
             this.startMutedYTVideo();
@@ -730,7 +744,10 @@ export class MusicPlayer {
         onStateChange: (event: any) => {
           // Loop title video when it ends
           if (event.data === 0 && this.titleTrackPlaying && !this.playlistStarted) {
-            this.ytPlayer.loadVideoById(TITLE_YT_VIDEO_ID);
+            this.ytPlayer.mute();
+            this.ytPlayer.setVolume(0);
+            this.ytPlayer.cueVideoById(TITLE_YT_VIDEO_ID);
+            this.ytPlayer.playVideo();
             return;
           }
           // Restart playlist if it ends (state 0 = ended)
@@ -738,9 +755,20 @@ export class MusicPlayer {
             this.ytPlayer.setShuffle(true);
             this.ytPlayer.playVideo();
           }
-          // Ensure YouTube stays muted when playing as visual companion for Spotify
+          // Safety net: if YouTube starts playing while Spotify is active, ensure it's silent
           if (event.data === 1 && this.source === 'spotify') {
-            try { this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+            try {
+              // If YouTube is unmuted, it's leaking audio — stop it completely
+              if (!this.ytPlayer.isMuted() || this.ytPlayer.getVolume() > 0) {
+                console.warn('[MusicPlayer] SAFETY NET: YouTube playing unmuted while Spotify active — killing');
+                this.ytPlayer.pauseVideo();
+              }
+              this.ytPlayer.mute();
+              this.ytPlayer.setVolume(0);
+              setTimeout(() => {
+                try { this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+              }, 50);
+            } catch {}
           }
           // Update track info when a playlist video starts playing (state 1 = playing)
           if (event.data === 1 && this.source === 'youtube' && (this.playlistStarted || this.titlePlaylistLoaded)) {
@@ -874,23 +902,32 @@ export class MusicPlayer {
         }
       });
 
+      // If playlist was waiting for Spotify to init, start it now
+      if (this.pendingSpotifyPlay) {
+        this.pendingSpotifyPlay = false;
+        console.log('[MusicPlayer] Spotify init complete — starting queued playlist');
+        this.startSpotifyPlaylist();
+        return;
+      }
+
       // Switch to Spotify based on current game state
       if (this.playlistStarted || (this.titlePlaylistLoaded && this.source === 'youtube')) {
         // Gameplay or title playlist — switch directly without countdown audio
-        this.source = 'spotify';
-        // Mute YouTube — onTrackChanged will search for matching video
+        // STOP YouTube FIRST (pauseVideo + mute + volume 0) before starting Spotify
         if (this.ytPlayer) {
-          try { this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+          try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
         }
+        this.source = 'spotify';
         this.startSpotifyPlaylist();
       } else if (this.titleTrackPlaying && this.source === 'youtube') {
         // Title track already playing on YouTube — switch audio to Spotify, keep YT as muted visual
+        // STOP YouTube FIRST before starting Spotify
+        if (this.ytPlayer) {
+          try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+        }
         this.source = 'spotify';
         this.spotifyPlayer!.playTrack(TITLE_SPOTIFY_TRACK_ID, true);
         this.applyUserVolume();
-        if (this.ytPlayer) {
-          try { this.ytPlayer.mute(); } catch {}
-        }
         this.wmpPopup?.setVideoActive(true);
       }
     }).catch(() => {
@@ -1130,10 +1167,27 @@ export class MusicPlayer {
     }
     if (this.source === 'spotify' && this.spotifyPlayer) {
       this.startSpotifyPlaylist();
+    } else if (this.source === 'spotify' && !this.spotifyPlayer) {
+      // Spotify still initializing — DON'T fall through to YouTube. Wait for init.
+      console.log('[MusicPlayer] startPlaylistNow: Spotify init pending, queuing play');
+      this.pendingSpotifyPlay = true;
     } else if (this.ytReady) {
       this.startYTPlaylist();
     } else {
       this.pendingPlay = true;
+    }
+  }
+
+  /** Call every frame from GameScene. Ensures YouTube never leaks audio while Spotify is active. */
+  enforceSourceMute(): void {
+    if (this.source === 'spotify' && this.ytPlayer && this.ytReady) {
+      try {
+        if (!this.ytPlayer.isMuted() || this.ytPlayer.getVolume() > 0) {
+          console.warn('[MusicPlayer] ENFORCE: YouTube unmuted while Spotify active — forcing mute');
+          this.ytPlayer.mute();
+          this.ytPlayer.setVolume(0);
+        }
+      } catch {}
     }
   }
 
@@ -1173,12 +1227,12 @@ export class MusicPlayer {
 
     // Restore to best available source
     if (this.spotifyPlayer?.isReady()) {
+      // STOP YouTube FIRST before starting Spotify
+      if (this.ytPlayer) {
+        try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+      }
       this.source = 'spotify';
       this.startSpotifyPlaylist();
-      // Re-enable YouTube as muted visual companion
-      if (this.ytPlayer) {
-        try { this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
-      }
     } else {
       this.source = 'youtube';
       if (this.ytReady) {
@@ -1191,6 +1245,11 @@ export class MusicPlayer {
 
   private startYTPlaylist(): void {
     if (!this.ytPlayer) return;
+    // Never start YouTube playlist when Spotify is the intended source
+    if (this.source === 'spotify') {
+      console.warn('[MusicPlayer] startYTPlaylist blocked — source is spotify');
+      return;
+    }
     // Stop local title audio if it was playing (phone mode)
     if (this.mobileTitleAudio) { this.mobileTitleAudio.pause(); this.mobileTitleAudio = null; }
     this.source = 'youtube';
@@ -1621,6 +1680,11 @@ export class MusicPlayer {
     this.onWMPCloseCb = cb;
   }
 
+  /** Register a callback fired when the settings button is clicked. */
+  onSettingsClick(cb: () => void): void {
+    this.onSettingsClickCb = cb;
+  }
+
   /** Hide/show WMP iframe when another popup needs to be on top. */
   setWMPBehind(behind: boolean): void {
     this.wmpPopup?.setIframeBehind(behind);
@@ -1737,17 +1801,25 @@ export class MusicPlayer {
         });
       }
 
-      // Reposition container: centered popup
+      // Reposition container: centered popup with equal padding
+      // Width/height constrained by padding so content never goes off-screen
+      const hPad = pad;  // horizontal padding (left + right equal)
+      const vPad = pad;  // vertical padding (top + bottom equal)
       Object.assign(this.container.style, {
         position: 'absolute',
-        top: '50%',
-        left: '50%',
-        right: 'auto',
-        width: `calc(100% - ${pad * 2}px)`,
-        transform: `translate(-50%, -50%) scale(${scale})`,
+        top: `${vPad}px`,
+        left: `${hPad}px`,
+        right: `${hPad}px`,
+        bottom: `${vPad}px`,
+        width: 'auto',
+        transform: `scale(${scale})`,
         transformOrigin: 'center center',
-        transition: `transform ${animMs}ms ease, width ${animMs}ms ease, top ${animMs}ms ease, left ${animMs}ms ease`,
+        transition: `transform ${animMs}ms ease, top ${animMs}ms ease, left ${animMs}ms ease, right ${animMs}ms ease, bottom ${animMs}ms ease`,
         gap: '40px',
+        zIndex: '1',  // above backdrop
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       });
       this.rightColumnEl.style.opacity = '1';
 
@@ -1801,11 +1873,15 @@ export class MusicPlayer {
         top: this.phoneCollapsedTopPct,
         left: 'auto',
         right: this.phoneCollapsedRightPct,
+        bottom: 'auto',
         width: `${thumbW + 2 * 20}px`,
         transform: `scale(${MUSIC_UI_SCALE})`,
         transformOrigin: 'top right',
         transition: `transform ${animMs}ms ease, width ${animMs}ms ease, top ${animMs}ms ease, right ${animMs}ms ease`,
         gap: '0px',
+        zIndex: 'auto',
+        justifyContent: 'flex-start',
+        alignItems: 'flex-start',
       });
       this.rightColumnEl.style.opacity = '0';
 

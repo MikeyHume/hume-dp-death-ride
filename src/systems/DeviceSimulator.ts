@@ -19,6 +19,7 @@
 
 import { getDeviceBySlug, ALL_DEVICES } from '../config/deviceLibrary';
 import type { DeviceSpec } from '../config/deviceLibrary';
+import { TIER_DEFAULTS } from '../util/device';
 import type { DeviceProfile, DeviceTier } from '../util/device';
 
 // ── Simulation state ────────────────────────────────────────────
@@ -57,12 +58,8 @@ export function initSimulation(): DeviceProfile | null {
   // Special case: 'gen-mobile' is a tier, not a specific device
   if (slug === 'gen-mobile') {
     const genProfile: DeviceProfile = {
-      tier: 'gen-mobile' as DeviceTier,
+      ...TIER_DEFAULTS['gen-mobile'],
       label: 'GEN Mobile (simulated)',
-      crt: true, reflections: true, carCount: 2,
-      parallaxLayers: 6, maxParallelLoads: 2, musicUIScale: 1.3,
-      titleAnimLevel: 35, renderScale: 0.5,
-      reflectionRTScale: 0.35, reflectionTexScale: 0.15, reflectionSkip: 3,
     };
     // Create a synthetic device for the info bar
     const genDevice: DeviceSpec = {
@@ -176,44 +173,11 @@ function getSafariChromeHeight(device: DeviceSpec): number {
 // ── Profile builder ─────────────────────────────────────────────
 
 function buildProfileFromSpec(spec: DeviceSpec): DeviceProfile {
-  // Map tier to feature flags
-  switch (spec.tier) {
-    case 'phone-high':
-      return {
-        tier: 'phone-high', label: `${spec.name} (sim)`,
-        crt: true, reflections: true, carCount: 2,
-        parallaxLayers: 6, maxParallelLoads: 2, musicUIScale: 1.4, titleAnimLevel: 25,
-        renderScale: 0.75, reflectionRTScale: 0.5, reflectionTexScale: 0.2, reflectionSkip: 2,
-      };
-    case 'gen-mobile':
-      return {
-        tier: 'gen-mobile', label: `${spec.name} (sim)`,
-        crt: true, reflections: true, carCount: 2,
-        parallaxLayers: 6, maxParallelLoads: 2, musicUIScale: 1.3, titleAnimLevel: 35,
-        renderScale: 0.5, reflectionRTScale: 0.35, reflectionTexScale: 0.15, reflectionSkip: 3,
-      };
-    case 'phone-low':
-      return {
-        tier: 'phone-low', label: `${spec.name} (sim)`,
-        crt: true, reflections: true, carCount: 1,
-        parallaxLayers: 8, maxParallelLoads: 2, musicUIScale: 1.2, titleAnimLevel: 35,
-        renderScale: 0.5, reflectionRTScale: 0.25, reflectionTexScale: 0.1, reflectionSkip: 4,
-      };
-    case 'tablet':
-      return {
-        tier: 'tablet', label: `${spec.name} (sim)`,
-        crt: true, reflections: true, carCount: 5,
-        parallaxLayers: 8, maxParallelLoads: 4, musicUIScale: 1.0, titleAnimLevel: 0,
-        renderScale: 1.0, reflectionRTScale: 0.5, reflectionTexScale: 0.2, reflectionSkip: 1,
-      };
-    default:
-      return {
-        tier: 'desktop', label: `${spec.name} (sim)`,
-        crt: true, reflections: true, carCount: 5,
-        parallaxLayers: 8, maxParallelLoads: 32, musicUIScale: 1.0, titleAnimLevel: 0,
-        renderScale: 1.0, reflectionRTScale: 0.5, reflectionTexScale: 0.2, reflectionSkip: 1,
-      };
-  }
+  const tier = (spec.tier in TIER_DEFAULTS ? spec.tier : 'desktop') as DeviceTier;
+  return {
+    ...TIER_DEFAULTS[tier],
+    label: `${spec.name} (sim)`,
+  };
 }
 
 // ── Canvas constraints ──────────────────────────────────────────

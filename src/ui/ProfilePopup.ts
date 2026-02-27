@@ -215,6 +215,7 @@ export class ProfilePopup {
     /* ---------- Backdrop ---------- */
     this.backdrop = scene.add.rectangle(cx, cy, GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT, 0x000000, BACKDROP_ALPHA)
       .setDepth(POPUP_DEPTH).setScrollFactor(0).setInteractive().setVisible(false);
+    this.backdrop.name = 'profile-backdrop';
 
     /* ---------- Container ---------- */
     this.container = scene.add.container(cx, cy)
@@ -266,6 +267,7 @@ export class ProfilePopup {
         new Phaser.Geom.Circle(AVATAR_RADIUS, AVATAR_RADIUS, AVATAR_RADIUS),
         Phaser.Geom.Circle.Contains,
       );
+    this.avatarHit.name = 'profile-avatar';
     this.avatarHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
     this.avatarHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER }); this.openFilePicker(); });
     this.container.add(this.avatarHit);
@@ -304,6 +306,7 @@ export class ProfilePopup {
 
     const nameHit = scene.add.zone(RIGHT_CENTER_X, nameBoxY, RIGHT_BOX_W, NAME_BOX_H)
       .setInteractive({ useHandCursor: true });
+    nameHit.name = 'profile-name-edit';
     nameHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
     nameHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER }); this.startNameEditing(); });
     this.container.add(nameHit);
@@ -330,6 +333,7 @@ export class ProfilePopup {
     // Hit zone for spotify button (inside container for reliable mobile input)
     this.spotifyHit = scene.add.zone(SPOTIFY_BTN_CENTER_X, this.spotifyBtnY, SPOTIFY_BTN_W_EFF, SPOTIFY_BTN_H_EFF)
       .setInteractive({ useHandCursor: true });
+    this.spotifyHit.name = 'profile-spotify-btn';
     this.spotifyHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
     this.spotifyHit.on('pointerdown', async () => {
       this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER });
@@ -417,6 +421,7 @@ export class ProfilePopup {
       this.scrollAreaHeight,
     ).setDepth(POPUP_DEPTH + 2).setScrollFactor(0)
       .setInteractive({ useHandCursor: true }).setVisible(false);
+    this.scrollbarHit.name = 'profile-scrollbar';
 
     this.scrollbarHit.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.scrollbarDragging = true;
@@ -452,6 +457,7 @@ export class ProfilePopup {
 
     const exitHit = scene.add.zone(0, EXIT_Y, EXIT_BTN_W, EXIT_BTN_H)
       .setInteractive({ useHandCursor: true });
+    exitHit.name = 'profile-exit';
     exitHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
     exitHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER }); this.close(); });
     this.container.add(exitHit);

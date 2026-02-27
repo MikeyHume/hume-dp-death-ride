@@ -118,6 +118,7 @@ export class ProfileHud {
     // --- Clickable hit zone (covers full HUD area for easy mobile tapping) ---
     const hitZone = scene.add.zone(debugW / 2, debugH / 2, debugW, debugH)
       .setInteractive();
+    hitZone.name = 'hud-profile';
     // White overlay for hover brightness (inserted after avatar image, before hit zone)
     this.avatarHoverOverlay = scene.add.circle(AVATAR_X, AVATAR_Y, AVATAR_RADIUS, 0xffffff, 0.1)
       .setBlendMode(Phaser.BlendModes.ADD)

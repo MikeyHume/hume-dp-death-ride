@@ -20,11 +20,14 @@ if (simProfile) {
 // Set phone mode flag after device profile is finalized (incl. simulation override)
 GAME_MODE.isPhoneMode = isPhoneTier(DEVICE_PROFILE.tier);
 
-// Lite mode: previously required on phones to prevent OOM from ~88MB of animation textures.
-// renderScale now reduces framebuffer by 4x (1920×1080→960×540), freeing enough VRAM headroom.
-// Disabled by default. Use ?lite=1 to force-enable if OOM issues resurface.
+// liteMode: driven by device tier (phone-low/gen-mobile = true, others = false).
+// ?lite=1 forces ON, ?lite=0 forces OFF (for testing tier promotions).
 const liteParam = new URLSearchParams(location.search).get('lite');
-GAME_MODE.liteMode = liteParam === '1';
+if (liteParam !== null) {
+  GAME_MODE.liteMode = liteParam === '1';
+} else {
+  GAME_MODE.liteMode = DEVICE_PROFILE.liteMode;
+}
 
 // Expose device profile globally for debugging + WebDriver inspection
 (window as any).__deviceProfile = DEVICE_PROFILE;
