@@ -8,9 +8,10 @@ import { fetchAllTracks, type CatalogTrack } from './MusicCatalogService';
 import { HumePlayerSystem } from './HumePlayerSystem';
 import { GAME_MODE, DEVICE_PROFILE } from '../config/gameMode';
 import { TEST_MODE } from '../util/testMode';
-
-const heightScale = Math.min(screen.width, screen.height) / TUNING.HUD_REF_SCREEN_H;
-const MUSIC_UI_SCALE = TUNING.MUSIC_UI_SCALE * TUNING.MUSIC_UI_SCALE_MULT * heightScale;
+// Fixed UI scale: all phones use 12 Mini's baseline (HUD_HS_FLOOR = 0.96).
+// With fixed 16:9 canvas, Phaser Scale.FIT handles physical screen scaling —
+// no per-device heightScale needed. Every phone renders UI identically.
+const MUSIC_UI_SCALE = TUNING.MUSIC_UI_SCALE * TUNING.MUSIC_UI_SCALE_MULT * TUNING.HUD_HS_FLOOR;
 const MUSIC_BTN_SCALE = TUNING.MUSIC_UI_BTN_SCALE;
 const CROSSFADE_LEAD_S = 3.0;        // fade duration in seconds (audio audibly fades over this)
 const CROSSFADE_STARTUP_S = 2.0;    // estimated startup overhead for startPlaylist() (shuffle+play+skip+wait)
@@ -23,6 +24,9 @@ const TITLE_SPOTIFY_TRACK_ID = '19KIMjXBvqibE0QNq0kGjQ';
 const YT_AVOID_FIRST_IDS = ['GZwNZU7AviA', 'EkPDn519DFs'];
 const YT_THUMB_WIDTH = 171;
 const YT_THUMB_HEIGHT = 96;
+// Avatar circle total game-coord height (including stroke) — must match ProfileHud sizing:
+// (AVATAR_RADIUS*2 + AVATAR_STROKE_WIDTH) * HUD_SCALE * HUD_SCALE_MULT * HUD_HS_FLOOR
+const AVATAR_GAME_H = 138 * TUNING.HUD_SCALE_MULT * TUNING.HUD_HS_FLOOR;
 
 export type MusicSource = 'youtube' | 'spotify' | 'hume';
 
@@ -52,12 +56,13 @@ export class MusicPlayer {
   private hovered: boolean = false;
   private cursorOver: boolean = false;
   private mobileExpanded: boolean = false;  // mobile-only: tracks tap-to-toggle state
-  private phonePopupMode: boolean = false;  // phone-only: currently in centered popup
-  private phoneBackdrop: HTMLDivElement | null = null;  // phone-only: semi-transparent backdrop
-  private phoneBackdropP: Phaser.GameObjects.Rectangle | null = null;  // Phaser backdrop (CRT-rendered)
-  private phoneCollapsedTopPct: string = '';   // saved collapsed-state top %
-  private phoneCollapsedRightPct: string = ''; // saved collapsed-state right %
-  private mobileTitleAudio: HTMLAudioElement | null = null; // local audio for title track on phones
+  private _inGameplay: boolean = false;      // true while game is in PLAYING state
+  private _gameplayScale: number = MUSIC_UI_SCALE;  // cached scale (init to title/tutorial scale)
+  private _gameplayPadRight: number = 0;     // cached padRight from setGameplayMode(true)
+  private _bgPad: number = 7;               // container padding (matches MUSIC_BG_PAD in buildUI)
+  private _avatarMatchH: number = 0;        // cached target thumb CSS height for avatar matching
+  private _origThumbH: number = 0;          // original thumb CSS height for gameplay revert
+  // mobileTitleAudio removed — title track always plays via Spotify or YouTube
 
   // Phaser sprites that mirror HTML buttons (rendered through CRT shader)
   private btnSprites: Phaser.GameObjects.Image[] = [];
@@ -66,7 +71,7 @@ export class MusicPlayer {
 
   // Heart (favorite) button — separate from icon button pool (uses Text, not Image)
   private heartBtn!: HTMLButtonElement;
-  private heartTextP!: Phaser.GameObjects.Text;
+  private heartTextP!: Phaser.GameObjects.Image;
   private heartBounceT = 1;  // bounce progress (1 = idle)
 
   // Phaser background panel behind all music player elements
@@ -74,11 +79,10 @@ export class MusicPlayer {
 
   // Phaser objects mirroring thumbnail and title (rendered through CRT shader)
   private thumbSprite!: Phaser.GameObjects.Image;
-  private thumbHoverOverlay!: Phaser.GameObjects.Rectangle;
-  private thumbHovered: boolean = false;
   private thumbTextureId: number = 0;
   private titleText!: Phaser.GameObjects.Text;
   private titleMaskGfx!: Phaser.GameObjects.Graphics;
+  private titleDebugGfx!: Phaser.GameObjects.Graphics;
   private lastGameFontSize: number = 0;
   private _phaserAlpha: number = 1;  // master alpha for all Phaser proxy sprites (for fade-in)
 
@@ -106,6 +110,8 @@ export class MusicPlayer {
   private onWMPOpenCb: (() => void) | null = null;
   private onWMPCloseCb: (() => void) | null = null;
   private onSettingsClickCb: (() => void) | null = null;
+  private _extraAudioSources: { name: string; getEl: () => HTMLAudioElement | null }[] = [];
+  private _musicTransition: string = '';
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -178,7 +184,11 @@ export class MusicPlayer {
   /** Start the in-game title music. Call from a user gesture handler. */
   startTitleMusic(): void {
     if (TEST_MODE.active && TEST_MODE.skipMusic) return;
-    if (this.titleTrackPlaying || this.playlistStarted) return;
+    if (this.titleTrackPlaying || this.playlistStarted) {
+      console.log('[MusicPlayer] startTitleMusic SKIPPED — titleTrackPlaying:', this.titleTrackPlaying, 'playlistStarted:', this.playlistStarted);
+      return;
+    }
+    console.log('[MusicPlayer] startTitleMusic — source:', this.source, 'ytReady:', this.ytReady, 'spotifyReady:', !!this.spotifyPlayer?.isReady());
 
     this.trackTitle.textContent = `${TUNING.INTRO_TRACK_TITLE} - ${TUNING.INTRO_TRACK_ARTIST}`;
     this.currentTrackName = TUNING.INTRO_TRACK_TITLE;
@@ -200,16 +210,7 @@ export class MusicPlayer {
       return;
     }
 
-    // Phone mode: use local audio file (HTML5 Audio works after touchstart unlock,
-    // YouTube iframe requires its own gesture-context play which we can't guarantee)
-    if (GAME_MODE.isPhoneMode) {
-      this.titleTrackPlaying = true;
-      this.source = 'youtube'; // keep source as youtube for UI consistency
-      this.playTitleAudioLocal();
-      return;
-    }
-
-    // Otherwise use YouTube — show 16:9 thumbnail
+    // Use YouTube — show 16:9 thumbnail
     const s = TUNING.MUSIC_UI_THUMB_SCALE;
     this.thumbnailImg.src = TUNING.INTRO_TRACK_THUMBNAIL;
     this.thumbnailImg.style.width = `${YT_THUMB_WIDTH * s}px`;
@@ -228,42 +229,46 @@ export class MusicPlayer {
   private playTitleVideo(): void {
     if (!this.ytPlayer || this.titleTrackPlaying) return;
     this.titleTrackPlaying = true;
-    // Mute while loading to prevent cached-position audio leaking
-    this.ytPlayer.mute();
+    console.log('[MusicPlayer] playTitleVideo — loadVideoById, source:', this.source);
+    // Don't mute first — just load and play with audio from the start.
+    // The old mute→unmute-after-500ms pattern was failing to unmute on iOS.
     this.ytPlayer.loadVideoById(TITLE_YT_VIDEO_ID);
-    // Unmute after video starts from the beginning (only if YouTube is still the audio source)
-    setTimeout(() => {
-      if (this.source !== 'spotify') {
-        try { this.ytPlayer.unMute(); this.applyUserVolume(); } catch {}
-      }
-    }, 500);
+    this.applyUserVolume();
   }
 
-  /** Play title track via local audio file (phones only — bypasses YT iframe gesture issues). */
-  private playTitleAudioLocal(): void {
-    // Reuse the audio element pre-primed during touchstart gesture (index.html),
-    // or create a new one as fallback. iOS requires first .play() in a gesture context.
-    const primed = (window as any).__mobileTitleAudio as HTMLAudioElement | undefined;
-    const audio = primed || new Audio('assets/audio/music/Rythem_Songs/DEATHPIXIE - RED MALIBU.mp3');
-    audio.loop = true;
-    audio.volume = Math.min(1, this.userVolume * TUNING.MUSIC_VOL_MASTER);
-    audio.currentTime = 0; // restart from beginning (primed version was playing silent)
-    this.mobileTitleAudio = audio;
-
-    // Show thumbnail
-    const s = TUNING.MUSIC_UI_THUMB_SCALE;
-    this.thumbnailImg.src = TUNING.INTRO_TRACK_THUMBNAIL;
-    this.thumbnailImg.style.width = `${YT_THUMB_WIDTH * s}px`;
-    this.thumbnailImg.style.height = `${YT_THUMB_HEIGHT * s}px`;
-    this.thumbnailImg.style.display = 'block';
-
-    // Primed element is already playing (volume was 0 from touchstart) — just set volume.
-    // Non-primed: try to play (may fail without gesture).
-    if (!primed) {
-      audio.play().catch(() => {
-        const retry = () => { audio.play().catch(() => {}); };
-        document.addEventListener('touchstart', retry, { once: true });
-      });
+  /**
+   * Retry YouTube title playback in a user gesture context.
+   * On iOS, YouTube iframe .playVideo() only works inside a tap/touchend handler.
+   * Call this from GameScene's tap handler if YT title track hasn't started yet.
+   */
+  retryTitlePlayback(): void {
+    // Skip if Spotify is handling playback, or YT player not available
+    if (this.source === 'spotify' || !this.ytPlayer || !this.ytReady) {
+      console.log('[MusicPlayer] retryTitlePlayback SKIPPED — source:', this.source, 'ytPlayer:', !!this.ytPlayer, 'ytReady:', this.ytReady);
+      return;
+    }
+    // If title track was marked playing but YT is paused/unstarted/muted, fix it
+    if (this.titleTrackPlaying) {
+      try {
+        const state = this.ytPlayer.getPlayerState();
+        // -1 = unstarted, 2 = paused, 5 = cued — all indicate playback didn't start
+        if (state === -1 || state === 2 || state === 5) {
+          console.log('[MusicPlayer] retryTitlePlayback — YT state', state, ', retrying in gesture context');
+          this.ytPlayer.unMute();
+          this.ytPlayer.playVideo();
+          this.applyUserVolume();
+        } else if (state === 1 && this.ytPlayer.isMuted()) {
+          // Playing but stuck muted — unmute
+          console.log('[MusicPlayer] retryTitlePlayback — YT playing but muted, unmuting');
+          this.ytPlayer.unMute();
+          this.applyUserVolume();
+        }
+      } catch {}
+    }
+    // If title play is still pending (YT API was loading), try now
+    if (this.pendingTitlePlay) {
+      this.pendingTitlePlay = false;
+      this.playTitleVideo();
     }
   }
 
@@ -342,6 +347,8 @@ export class MusicPlayer {
   getPlaybackPosition(): { current: number; duration: number } { return this.getTrackPosition(); }
   getThumbnailImage(): HTMLImageElement { return this.thumbnailImg; }
   getTrackArtist(): string { return this.currentArtist; }
+  /** Returns true if playing the default Ride or Die playlist. */
+  isDefaultPlaylist(): boolean { return this.wmpPopup?.isRideOrDie() ?? true; }
 
   private createUI(): void {
     // Create an overlay div that exactly tracks the game canvas position/size
@@ -383,7 +390,9 @@ export class MusicPlayer {
     const rightPct = (TUNING.MUSIC_UI_PAD_RIGHT / GAME_MODE.canvasWidth) * 100;
     const uiWidth = GAME_MODE.mobileMode ? TUNING.MUSIC_UI_MOBILE_WIDTH : TUNING.MUSIC_UI_WIDTH;
     const widthPct = (uiWidth / GAME_MODE.canvasWidth) * 100;
-    const MUSIC_BG_PAD = 20;  // px padding inside background
+    const MUSIC_BG_PAD = 7;  // px padding inside background (1/3 of original 20)
+    const MUSIC_TRANSITION = 'width 0.4s ease, gap 0.4s ease, left 0.4s ease, right 0.4s ease, top 0.4s ease, transform 0.4s ease';
+    this._musicTransition = MUSIC_TRANSITION;
     Object.assign(this.container.style, {
       position: 'absolute',
       top: `${topPct}%`,
@@ -396,7 +405,7 @@ export class MusicPlayer {
       transform: `scale(${MUSIC_UI_SCALE})`,
       transformOrigin: 'top right',
       overflow: 'hidden',
-      transition: 'width 0.4s ease, gap 0.4s ease, right 0.4s ease, transform 0.4s ease',
+      transition: MUSIC_TRANSITION,
       padding: `${MUSIC_BG_PAD}px`,
       boxSizing: 'border-box',
     });
@@ -419,33 +428,8 @@ export class MusicPlayer {
     });
     this.canvasOverlay.appendChild(this.container);
 
-    // Phone mode: save collapsed position + create fullscreen backdrop
-    if (GAME_MODE.isPhoneMode) {
-      this.phoneCollapsedTopPct = `${topPct}%`;
-      this.phoneCollapsedRightPct = `${rightPct}%`;
-
-      this.phoneBackdrop = document.createElement('div');
-      Object.assign(this.phoneBackdrop.style, {
-        position: 'absolute',
-        top: '0', left: '0', width: '100%', height: '100%',
-        background: `rgba(0, 0, 0, ${TUNING.MUSIC_UI_PHONE_BACKDROP_ALPHA})`,
-        opacity: '0',
-        display: 'none',
-        pointerEvents: 'auto',
-        transition: `opacity ${TUNING.MUSIC_UI_PHONE_ANIM_MS}ms ease`,
-        zIndex: '0',  // behind container in overlay stacking
-      });
-      this.phoneBackdrop.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
-        this.mobileCollapse();
-      });
-      // Insert backdrop before container so it renders behind it
-      this.canvasOverlay.insertBefore(this.phoneBackdrop, this.container);
-    }
-
-    // Mobile: tap or touch outside the player → collapse
-    if (GAME_MODE.mobileMode && !GAME_MODE.isPhoneMode) {
-      // Tablet-only: original outside-tap handler (phones use phoneBackdrop instead)
+    // Mobile: tap or touch outside the player → collapse (no stopPropagation — taps pass through)
+    if (GAME_MODE.mobileMode) {
       document.addEventListener('pointerdown', (e) => {
         if (!this.mobileExpanded) return;
         if (this.container.contains(e.target as Node)) return;
@@ -462,10 +446,11 @@ export class MusicPlayer {
     thumbLink.style.flexShrink = '0';
 
     const thumbScale = TUNING.MUSIC_UI_THUMB_SCALE;
+    this._origThumbH = YT_THUMB_HEIGHT * thumbScale;
     this.thumbnailImg = document.createElement('img');
     Object.assign(this.thumbnailImg.style, {
-      width: `${YT_THUMB_HEIGHT * thumbScale}px`,   // start square for intro track
-      height: `${YT_THUMB_HEIGHT * thumbScale}px`,
+      width: `${this._origThumbH}px`,   // start square for intro track
+      height: `${this._origThumbH}px`,
       objectFit: 'cover',
       borderRadius: '4px',
       border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -487,10 +472,6 @@ export class MusicPlayer {
         }
       });
     }
-
-    // Thumbnail hover brightness
-    thumbLink.addEventListener('mouseenter', () => { this.thumbHovered = true; });
-    thumbLink.addEventListener('mouseleave', () => { this.thumbHovered = false; });
 
     // Right side: track title stacked above controls (height matches thumbnail)
     const rightColumn = document.createElement('div');
@@ -588,33 +569,20 @@ export class MusicPlayer {
     this.btnElements = [prevBtn, nextBtn, this.muteBtn, settingsBtn];
     for (let i = 0; i < this.btnSprites.length; i++) {
       this.btnSprites[i].setDepth(1000).setScrollFactor(0).setVisible(false).setAlpha(0);
-      const sprite = this.btnSprites[i];
-      this.btnElements[i].addEventListener('mouseenter', () => { sprite.setAlpha(0.7); });
-      this.btnElements[i].addEventListener('mouseleave', () => { sprite.setAlpha(this.compact && !this.hovered ? 0 : 1); });
     }
 
     // Semi-transparent background panel (Phaser, rendered through CRT behind all content)
-    this.bgPanel = this.scene.add.rectangle(0, 0, 1, 1, 0x000000, 0.55)
+    this.bgPanel = this.scene.add.rectangle(0, 0, 1, 1, 0x000000, 1)
       .setDepth(999).setScrollFactor(0).setOrigin(0, 0).setVisible(false);
-
-    // Phone popup fullscreen backdrop (Phaser, rendered through CRT)
-    if (GAME_MODE.isPhoneMode) {
-      this.phoneBackdropP = this.scene.add.rectangle(
-        0, 0, GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT,
-        0x000000, TUNING.MUSIC_UI_PHONE_BACKDROP_ALPHA,
-      ).setDepth(998).setScrollFactor(0).setOrigin(0, 0).setVisible(false);
-    }
 
     // Thumbnail CRT sprite (mirrors HTML thumbnail through CRT shader)
     this.thumbSprite = this.scene.add.image(0, 0, '__DEFAULT')
       .setDepth(1000).setScrollFactor(0).setVisible(false);
-    this.thumbHoverOverlay = this.scene.add.rectangle(0, 0, 1, 1, 0xffffff, 0.1)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setDepth(1001).setScrollFactor(0).setVisible(false);
     this.thumbnailImg.addEventListener('load', () => this.updateThumbTexture());
 
     // Song title CRT text (mirrors scrolling track title through CRT shader)
-    this.titleMaskGfx = this.scene.add.graphics().setVisible(false);
+    this.titleMaskGfx = this.scene.add.graphics().setScrollFactor(0).setVisible(false);
+    this.titleDebugGfx = this.scene.add.graphics().setDepth(1100).setScrollFactor(0);
     this.titleText = this.scene.add.text(0, 0, '', {
       fontFamily: '"Early GameBoy"',
       fontSize: '24px',
@@ -622,22 +590,13 @@ export class MusicPlayer {
     }).setDepth(1000).setScrollFactor(0).setOrigin(0, 0.5).setVisible(false).setAlpha(0);
     this.titleText.setMask(this.titleMaskGfx.createGeometryMask());
 
-    // Heart (favorite) CRT text — white outline, purple fill when favorited
-    this.heartTextP = this.scene.add.text(0, 0, '\u2665', {
-      fontFamily: 'Arial',
-      fontSize: '24px',
-      color: 'rgba(0,0,0,0)',
-      stroke: '#ffffff',
-      strokeThickness: 2,
-    }).setDepth(1000).setScrollFactor(0).setOrigin(0.5, 0.5).setVisible(false).setAlpha(0);
+    // Heart (favorite) CRT sprite — white by default, red tint when favorited
+    this.heartTextP = this.scene.add.image(0, 0, 'ui-heart')
+      .setDepth(1000).setScrollFactor(0).setOrigin(0.5, 0.5).setVisible(false).setAlpha(0);
 
-    // Heart hover events (match btn sprite hover pattern)
+    // Heart hover — sfx only (alpha managed by syncBtnSprites loop)
     this.heartBtn.addEventListener('mouseenter', () => {
       if (this.scene.cache.audio.exists('sfx-hover')) this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME });
-      this.heartTextP.setAlpha(0.7);
-    });
-    this.heartBtn.addEventListener('mouseleave', () => {
-      this.heartTextP.setAlpha(this.compact && !this.hovered ? 0 : 1);
     });
 
     // Hidden YouTube player container (1x1 pixel, bottom-right corner)
@@ -952,13 +911,9 @@ export class MusicPlayer {
       return;
     }
 
-    // Stop streaming title track (all sources including mobile local audio)
+    // Stop streaming title track
     if (this.titleTrackPlaying) {
       this.titleTrackPlaying = false;
-      if (this.mobileTitleAudio) {
-        this.mobileTitleAudio.pause();
-        this.mobileTitleAudio = null;
-      }
       if (this.source === 'spotify' && this.spotifyPlayer) {
         this.spotifyPlayer.pause();
       } else if (this.ytPlayer) {
@@ -969,7 +924,7 @@ export class MusicPlayer {
     // If Spotify player is ready, use it
     if (this.spotifyPlayer?.isReady()) {
       console.log('[MusicPlayer] switchToPlaylist() → Spotify path');
-      if (GAME_MODE.isPhoneMode) {
+      if (GAME_MODE.isMobileMode) {
         // Mobile: skip Phaser countdown audio — GameScene plays it via HTML5 Audio.
         // Just set source and mute YouTube. GameScene will call startPlaylistNow() when countdown ends.
         this.source = 'spotify';
@@ -984,7 +939,7 @@ export class MusicPlayer {
 
     // Otherwise use YouTube: play countdown audio, then start playlist
     this.source = 'youtube';
-    if (GAME_MODE.isPhoneMode) {
+    if (GAME_MODE.isMobileMode) {
       // Mobile: skip Phaser countdown audio — GameScene plays it via HTML5 Audio.
       // GameScene will call startPlaylistNow() when countdown ends.
       console.log('[MusicPlayer] switchToPlaylist() → YouTube path (mobile, no Phaser countdown)');
@@ -1179,6 +1134,11 @@ export class MusicPlayer {
   }
 
   /** Call every frame from GameScene. Ensures YouTube never leaks audio while Spotify is active. */
+  /** Register external audio elements for the debug panel (e.g. countdownAudioEl from GameScene). */
+  registerExtraAudio(name: string, getEl: () => HTMLAudioElement | null): void {
+    this._extraAudioSources.push({ name, getEl });
+  }
+
   enforceSourceMute(): void {
     if (this.source === 'spotify' && this.ytPlayer && this.ytReady) {
       try {
@@ -1188,6 +1148,116 @@ export class MusicPlayer {
           this.ytPlayer.setVolume(0);
         }
       } catch {}
+    }
+  }
+
+  /** Returns state of ALL audio sources for the debug overlay. */
+  getSourceStates(): { name: string; active: boolean; playing: boolean; muted: boolean; volume: number }[] {
+    const active = this.source;
+    const states: { name: string; active: boolean; playing: boolean; muted: boolean; volume: number }[] = [];
+
+    // Spotify
+    const sp = this.spotifyPlayer;
+    states.push({
+      name: 'Spotify',
+      active: active === 'spotify',
+      playing: sp ? sp.isPlaying() : false,
+      muted: sp ? sp.isMuted() : true,
+      volume: sp ? sp.getVolumeLevel() : 0,
+    });
+
+    // YouTube
+    let ytPlaying = false;
+    let ytMuted = true;
+    let ytVol = 0;
+    if (this.ytPlayer && this.ytReady) {
+      try {
+        ytPlaying = this.ytPlayer.getPlayerState() === 1;
+        ytMuted = this.ytPlayer.isMuted();
+        ytVol = this.ytPlayer.getVolume() / 100;
+      } catch {}
+    }
+    states.push({
+      name: 'YouTube',
+      active: active === 'youtube',
+      playing: ytPlaying,
+      muted: ytMuted,
+      volume: ytVol,
+    });
+
+    // Hume
+    states.push({
+      name: 'hume',
+      active: active === 'hume',
+      playing: !this.humePlayer.isPaused(),
+      muted: this.humePlayer.isMuted(),
+      volume: this.userVolume,
+    });
+
+    // Spotify preview (non-Premium 30s preview)
+    if (this.previewAudio) {
+      states.push({
+        name: 'Preview',
+        active: true,
+        playing: !this.previewAudio.paused,
+        muted: this.previewAudio.muted || false,
+        volume: this.previewAudio.volume,
+      });
+    }
+
+    // Countdown music (Phaser sound — desktop)
+    if (this.countdownMusic) {
+      states.push({
+        name: 'Countdown',
+        active: true,
+        playing: this.countdownMusic.isPlaying,
+        muted: false,
+        volume: (this.countdownMusic as any).volume ?? 1,
+      });
+    }
+
+    // External audio sources (e.g. countdownAudioEl from GameScene)
+    for (const ext of this._extraAudioSources) {
+      const el = ext.getEl();
+      if (el) {
+        states.push({
+          name: ext.name,
+          active: true,
+          playing: !el.paused,
+          muted: el.muted,
+          volume: el.volume,
+        });
+      }
+    }
+
+    return states;
+  }
+
+  /** Mute/unmute a specific source by name (for debug panel isolation). */
+  debugToggleSourceMute(sourceName: string): void {
+    if (sourceName === 'Spotify' && this.spotifyPlayer) {
+      this.spotifyPlayer.toggleMute();
+    } else if (sourceName === 'YouTube' && this.ytPlayer && this.ytReady) {
+      try {
+        if (this.ytPlayer.isMuted()) this.ytPlayer.unMute();
+        else this.ytPlayer.mute();
+      } catch {}
+    } else if (sourceName === 'hume') {
+      this.humePlayer.toggleMute();
+    } else if (sourceName === 'Preview' && this.previewAudio) {
+      this.previewAudio.muted = !this.previewAudio.muted;
+    } else if (sourceName === 'Countdown' && this.countdownMusic) {
+      if (this.countdownMusic.isPlaying) this.countdownMusic.pause();
+      else this.countdownMusic.resume();
+    } else {
+      // Check extra audio sources
+      for (const ext of this._extraAudioSources) {
+        if (ext.name === sourceName) {
+          const el = ext.getEl();
+          if (el) el.muted = !el.muted;
+          break;
+        }
+      }
     }
   }
 
@@ -1327,8 +1397,6 @@ export class MusicPlayer {
       console.warn('[MusicPlayer] startYTPlaylist blocked — source is spotify');
       return;
     }
-    // Stop local title audio if it was playing (phone mode)
-    if (this.mobileTitleAudio) { this.mobileTitleAudio.pause(); this.mobileTitleAudio = null; }
     this.source = 'youtube';
     this.titleTrackPlaying = false;
     this.ytPlayer.unMute();
@@ -1567,11 +1635,6 @@ export class MusicPlayer {
           this.muteBtnSprite.setTexture(m ? 'ui-muted' : 'ui-unmuted');
         });
       }
-    } else if (this.mobileTitleAudio && this.titleTrackPlaying) {
-      // Phone local audio mute toggle
-      this.mobileTitleAudio.muted = !this.mobileTitleAudio.muted;
-      this.muteBtnImg.src = this.mobileTitleAudio.muted ? 'ui/muted.png' : 'ui/unmuted.png';
-      this.muteBtnSprite.setTexture(this.mobileTitleAudio.muted ? 'ui-muted' : 'ui-unmuted');
     } else if (this.ytPlayer && (this.titleTrackPlaying || this.playlistStarted || this.titlePlaylistLoaded)) {
       // Toggle YouTube mute
       if (this.ytPlayer.isMuted()) {
@@ -1595,9 +1658,6 @@ export class MusicPlayer {
       const pos = this.spotifyPlayer.getPositionSync();
       this.syncYTVideoToSpotify(pos.current);
       return pos;
-    }
-    if (this.mobileTitleAudio && this.titleTrackPlaying) {
-      return { current: this.mobileTitleAudio.currentTime || 0, duration: this.mobileTitleAudio.duration || 0 };
     }
     if (this.source === 'youtube' && this.ytPlayer && (this.titleTrackPlaying || this.playlistStarted || this.titlePlaylistLoaded)) {
       try {
@@ -1645,7 +1705,6 @@ export class MusicPlayer {
     } else if (this.source === 'youtube' && this.ytPlayer) {
       this.ytPlayer.setVolume(Math.round(scaled * 100));
     }
-    if (this.mobileTitleAudio) this.mobileTitleAudio.volume = scaled;
     if (this.previewAudio) this.previewAudio.volume = scaled;
   }
 
@@ -1769,10 +1828,29 @@ export class MusicPlayer {
 
   /** Shift music player left + shrink for gameplay, revert for title/tutorial */
   setGameplayMode(playing: boolean): void {
-    const padRight = playing ? TUNING.MUSIC_UI_PAD_RIGHT_PLAY : TUNING.MUSIC_UI_PAD_RIGHT;
+    this._inGameplay = playing;
+    const dampHS = TUNING.HUD_HS_FLOOR;
+    const basePad = playing ? TUNING.MUSIC_UI_PAD_RIGHT_PLAY : TUNING.MUSIC_UI_PAD_RIGHT;
+    // On bigger phones, shrink padRight to push thumbnail closer to right edge
+    const padRight = playing
+      ? basePad * Math.min(1, TUNING.HUD_HS_FLOOR / dampHS)
+      : basePad;
     const scale = playing
-      ? TUNING.MUSIC_UI_SCALE_PLAY * TUNING.MUSIC_UI_SCALE_MULT * (Math.min(screen.width, screen.height) / TUNING.HUD_REF_SCREEN_H)
+      ? TUNING.MUSIC_UI_SCALE_PLAY * TUNING.MUSIC_UI_SCALE_MULT * dampHS
       : MUSIC_UI_SCALE;
+    this._gameplayScale = scale;
+    this._gameplayPadRight = padRight;
+
+    // Revert thumbnail to original size for gameplay; avatar matching re-applies on title/tutorial
+    if (playing) {
+      this.thumbnailImg.style.height = `${this._origThumbH}px`;
+      this.thumbnailImg.style.width = `${this._origThumbH}px`;
+      this._avatarMatchH = 0;  // force recalc when returning to title
+    }
+
+    // Don't override position when phone player is centered-expanded
+    if (GAME_MODE.isMobileMode && this.mobileExpanded) return;
+
     const rightPct = (padRight / GAME_MODE.canvasWidth) * 100;
     this.container.style.right = `${rightPct}%`;
     this.container.style.transform = `scale(${scale})`;
@@ -1780,25 +1858,16 @@ export class MusicPlayer {
 
   setCompact(value: boolean): void {
     this.compact = value;
-    if (GAME_MODE.isPhoneMode) {
-      // Phone mode: always stay collapsed (thumbnail-only) unless in popup mode
-      if (!this.phonePopupMode) this.collapseUI();
-      return;
-    }
     if (value && !this.hovered) {
       this.collapseUI();
-    } else {
+    } else if (!value) {
+      // On phone, user controls expand/collapse via tap — don't auto-expand
+      if (GAME_MODE.isMobileMode) return;
       this.expandUI();
     }
   }
 
   private collapseUI(animate: boolean = true): void {
-    // Phone mode delegates to mobileCollapse for the popup behavior
-    if (GAME_MODE.isPhoneMode && this.phonePopupMode) {
-      this.mobileCollapse();
-      return;
-    }
-
     if (!animate) {
       this.container.style.transition = 'none';
       this.rightColumnEl.style.transition = 'none';
@@ -1806,8 +1875,9 @@ export class MusicPlayer {
 
     const thumbW = parseFloat(this.thumbnailImg.style.width) || (YT_THUMB_HEIGHT * TUNING.MUSIC_UI_THUMB_SCALE);
 
-    this.container.style.width = `${thumbW + 2 * 20}px`; // thumb + padding (box-sizing: border-box)
+    this.container.style.width = `${thumbW + 2 * this._bgPad}px`; // thumb + padding (box-sizing: border-box)
     this.container.style.gap = '0px';
+    this.rightColumnEl.style.display = 'none';
     this.rightColumnEl.style.opacity = '0';
 
     // Fade Phaser button sprites, title text, and heart to match
@@ -1822,155 +1892,114 @@ export class MusicPlayer {
 
     if (!animate) {
       void this.container.offsetHeight; // force reflow
-      this.container.style.transition = 'width 0.4s ease, gap 0.4s ease';
+      this.container.style.transition = this._musicTransition;
       this.rightColumnEl.style.transition = 'opacity 0.4s ease';
     }
   }
 
   private expandUI(): void {
-    // Phone mode delegates to mobileExpand for the popup behavior
-    if (GAME_MODE.isPhoneMode) {
-      this.mobileExpand();
-      return;
+    if (GAME_MODE.isMobileMode) {
+      let totalW = TUNING.MUSIC_UI_PHONE_EXPANDED_W;
+      // YouTube 16:9 thumb is wider than Spotify square — add the difference
+      const imgW = parseFloat(this.thumbnailImg.style.width) || 0;
+      const imgH = parseFloat(this.thumbnailImg.style.height) || 0;
+      const isSquare = imgW > 0 && Math.abs(imgW - imgH) < 2;
+      if (!isSquare && imgW > 0) {
+        totalW += (imgW - imgH);  // add extra thumb width (~97px)
+      }
+      this.container.style.width = `${totalW}px`;
+    } else {
+      const uiWidth = GAME_MODE.mobileMode ? TUNING.MUSIC_UI_MOBILE_WIDTH : TUNING.MUSIC_UI_WIDTH;
+      const widthPct = (uiWidth / GAME_MODE.canvasWidth) * 100;
+      this.container.style.width = `calc(${widthPct}% + ${2 * this._bgPad}px)`;
     }
-
-    const uiWidth = GAME_MODE.mobileMode ? TUNING.MUSIC_UI_MOBILE_WIDTH : TUNING.MUSIC_UI_WIDTH;
-    const widthPct = (uiWidth / GAME_MODE.canvasWidth) * 100;
-    this.container.style.width = `calc(${widthPct}% + ${2 * 20}px)`;
-    this.container.style.gap = GAME_MODE.mobileMode ? '40px' : '14px';
+    this.container.style.gap = GAME_MODE.isMobileMode
+      ? `${TUNING.MUSIC_UI_PHONE_THUMB_GAP}px`
+      : (GAME_MODE.mobileMode ? '40px' : '14px');
+    this.rightColumnEl.style.display = 'flex';
     this.rightColumnEl.style.opacity = '1';
 
-    // Fade Phaser button sprites, title text, and heart in
-    for (const s of [...this.btnSprites, this.titleText, this.heartTextP]) {
+    // Fade Phaser sprites in — phone: only title (no buttons/heart yet)
+    const showBtns = !GAME_MODE.isMobileMode;
+    for (const s of [...(showBtns ? this.btnSprites : []), this.titleText, ...(showBtns ? [this.heartTextP] : [])]) {
       this.scene.tweens.killTweensOf(s);
       this.scene.tweens.add({ targets: s, alpha: 1, duration: 400, ease: 'Sine.easeInOut' });
     }
   }
 
-  /** Mobile: expand the music player via tap */
+  /** Mobile: expand the music player via tap (FLIP animation) */
   private mobileExpand(): void {
     this.mobileExpanded = true;
     this.hovered = true;
 
-    if (GAME_MODE.isPhoneMode) {
-      // ── Phone popup mode: center on screen with backdrop ──
-      this.phonePopupMode = true;
-      const animMs = TUNING.MUSIC_UI_PHONE_ANIM_MS;
-      const scale = DEVICE_PROFILE.musicUIScale;
-      const pad = TUNING.MUSIC_UI_PHONE_PAD;
+    if (GAME_MODE.isMobileMode) {
+      // FLIP: First — capture current visual position
+      const first = this.container.getBoundingClientRect();
 
-      // Show + fade in HTML backdrop
-      if (this.phoneBackdrop) {
-        this.phoneBackdrop.style.display = 'block';
-        void this.phoneBackdrop.offsetHeight; // force reflow before transition
-        this.phoneBackdrop.style.opacity = '1';
-      }
+      // Apply all final state instantly (no transition)
+      this.container.style.transition = 'none';
+      this.expandUI();
+      this.container.style.right = 'auto';
+      this.container.style.left = '50%';
+      this.container.style.top = '50%';
+      this.container.style.transform = `translate(-50%, -50%) scale(${MUSIC_UI_SCALE})`;
+      this.container.style.transformOrigin = 'center center';
+      void this.container.offsetHeight;
 
-      // Show Phaser backdrop
-      if (this.phoneBackdropP) this.phoneBackdropP.setVisible(true).setAlpha(0);
-      if (this.phoneBackdropP) {
-        this.scene.tweens.killTweensOf(this.phoneBackdropP);
-        this.scene.tweens.add({
-          targets: this.phoneBackdropP,
-          alpha: TUNING.MUSIC_UI_PHONE_BACKDROP_ALPHA,
-          duration: animMs,
-          ease: 'Sine.easeInOut',
-        });
-      }
+      // FLIP: Last — capture final position
+      const last = this.container.getBoundingClientRect();
 
-      // Reposition container: centered popup with equal padding
-      // Width/height constrained by padding so content never goes off-screen
-      const hPad = pad;  // horizontal padding (left + right equal)
-      const vPad = pad;  // vertical padding (top + bottom equal)
-      Object.assign(this.container.style, {
-        position: 'absolute',
-        top: `${vPad}px`,
-        left: `${hPad}px`,
-        right: `${hPad}px`,
-        bottom: `${vPad}px`,
-        width: 'auto',
-        transform: `scale(${scale})`,
-        transformOrigin: 'center center',
-        transition: `transform ${animMs}ms ease, top ${animMs}ms ease, left ${animMs}ms ease, right ${animMs}ms ease, bottom ${animMs}ms ease`,
-        gap: '40px',
-        zIndex: '1',  // above backdrop
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      });
-      this.rightColumnEl.style.opacity = '1';
+      // FLIP: Invert — offset back to start position
+      const dx = first.left - last.left;
+      const dy = first.top - last.top;
+      this.container.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(${MUSIC_UI_SCALE})`;
+      void this.container.offsetHeight;
 
-      // Fade in Phaser button sprites, title text, and heart
-      for (const s of [...this.btnSprites, this.titleText, this.heartTextP]) {
-        this.scene.tweens.killTweensOf(s);
-        this.scene.tweens.add({ targets: s, alpha: 1, duration: animMs, ease: 'Sine.easeInOut' });
-      }
+      // FLIP: Play — animate to final
+      this.container.style.transition = this._musicTransition;
+      this.container.style.transform = `translate(-50%, -50%) scale(${MUSIC_UI_SCALE})`;
     } else {
-      // Tablet: just expand inline
       this.expandUI();
     }
   }
 
-  /** Mobile: collapse the music player via tap or outside touch */
+  /** Mobile: collapse the music player via tap (FLIP animation) */
   private mobileCollapse(): void {
     this.mobileExpanded = false;
     this.hovered = false;
 
-    if (GAME_MODE.isPhoneMode) {
-      // ── Phone popup mode: restore to collapsed thumbnail in corner ──
-      this.phonePopupMode = false;
-      const animMs = TUNING.MUSIC_UI_PHONE_ANIM_MS;
+    if (GAME_MODE.isMobileMode) {
+      // FLIP: First — capture current centered position
+      const first = this.container.getBoundingClientRect();
 
-      // Fade out HTML backdrop
-      if (this.phoneBackdrop) {
-        this.phoneBackdrop.style.opacity = '0';
-        setTimeout(() => {
-          if (this.phoneBackdrop && !this.phonePopupMode) {
-            this.phoneBackdrop.style.display = 'none';
-          }
-        }, animMs);
-      }
+      // Apply final corner state instantly — use gameplay position if playing
+      this.container.style.transition = 'none';
+      const topPct = (TUNING.MUSIC_UI_PAD_TOP / TUNING.GAME_HEIGHT) * 100;
+      const padRight = this._inGameplay ? this._gameplayPadRight : TUNING.MUSIC_UI_PAD_RIGHT;
+      const scale = this._inGameplay ? this._gameplayScale : MUSIC_UI_SCALE;
+      const rightPct = (padRight / GAME_MODE.canvasWidth) * 100;
+      this.container.style.left = 'auto';
+      this.container.style.top = `${topPct}%`;
+      this.container.style.right = `${rightPct}%`;
+      this.container.style.transform = `scale(${scale})`;
+      this.container.style.transformOrigin = 'top right';
+      void this.container.offsetHeight;
 
-      // Fade out Phaser backdrop
-      if (this.phoneBackdropP) {
-        this.scene.tweens.killTweensOf(this.phoneBackdropP);
-        this.scene.tweens.add({
-          targets: this.phoneBackdropP,
-          alpha: 0,
-          duration: animMs,
-          ease: 'Sine.easeInOut',
-          onComplete: () => { this.phoneBackdropP?.setVisible(false); },
-        });
-      }
+      // FLIP: Last
+      const last = this.container.getBoundingClientRect();
 
-      // Restore container to collapsed position in corner
-      const thumbW = parseFloat(this.thumbnailImg.style.width) || (YT_THUMB_HEIGHT * TUNING.MUSIC_UI_THUMB_SCALE);
-      Object.assign(this.container.style, {
-        position: 'absolute',
-        top: this.phoneCollapsedTopPct,
-        left: 'auto',
-        right: this.phoneCollapsedRightPct,
-        bottom: 'auto',
-        width: `${thumbW + 2 * 20}px`,
-        transform: `scale(${MUSIC_UI_SCALE})`,
-        transformOrigin: 'top right',
-        transition: `transform ${animMs}ms ease, width ${animMs}ms ease, top ${animMs}ms ease, right ${animMs}ms ease`,
-        gap: '0px',
-        zIndex: 'auto',
-        justifyContent: 'flex-start',
-        alignItems: 'flex-start',
-      });
-      this.rightColumnEl.style.opacity = '0';
+      // FLIP: Invert — offset back to centered position
+      const dx = first.left - last.left;
+      const dy = first.top - last.top;
+      this.container.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+      void this.container.offsetHeight;
 
-      // Fade out Phaser button sprites, title text, and heart
-      for (const s of [...this.btnSprites, this.titleText, this.heartTextP]) {
-        this.scene.tweens.killTweensOf(s);
-        this.scene.tweens.add({ targets: s, alpha: 0, duration: animMs, ease: 'Sine.easeInOut' });
-      }
-    } else {
-      // Tablet: collapse inline
-      this.collapseUI();
+      // FLIP: Play — animate to corner
+      this.container.style.transition = this._musicTransition;
+      this.container.style.transform = `scale(${scale})`;
     }
+
+    this.collapseUI();
   }
 
   /** Reveal music player during gameplay: fade in thumbnail, wait 1.5s, then expand */
@@ -1995,7 +2024,7 @@ export class MusicPlayer {
     });
 
     // Phone mode: stay collapsed (thumbnail only), no auto-expand
-    if (GAME_MODE.isPhoneMode) return;
+    if (GAME_MODE.isMobileMode) return;
 
     // After 1.5s, expand to show full UI
     this.revealTimer = this.scene.time.delayedCall(1500, () => {
@@ -2023,35 +2052,17 @@ export class MusicPlayer {
       if (t < 1) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-    setTimeout(() => { this.container.style.transition = ''; }, durationMs + 50);
+    setTimeout(() => { this.container.style.transition = this._musicTransition; }, durationMs + 50);
   }
 
   setVisible(visible: boolean): void {
     this.container.style.display = visible ? 'flex' : 'none';
     if (!visible) {
-      // If phone popup is open, close it instantly
-      if (this.phonePopupMode) {
-        this.phonePopupMode = false;
+      // If mobile-expanded, reset to collapsed state instantly
+      if (this.mobileExpanded) {
         this.mobileExpanded = false;
         this.hovered = false;
-        if (this.phoneBackdrop) {
-          this.phoneBackdrop.style.display = 'none';
-          this.phoneBackdrop.style.opacity = '0';
-        }
-        if (this.phoneBackdropP) this.phoneBackdropP.setVisible(false);
-        // Restore collapsed position for next show
-        const thumbW = parseFloat(this.thumbnailImg.style.width) || (YT_THUMB_HEIGHT * TUNING.MUSIC_UI_THUMB_SCALE);
-        Object.assign(this.container.style, {
-          position: 'absolute',
-          top: this.phoneCollapsedTopPct,
-          left: 'auto',
-          right: this.phoneCollapsedRightPct,
-          width: `${thumbW + 2 * 20}px`,
-          transform: `scale(${MUSIC_UI_SCALE})`,
-          transformOrigin: 'top right',
-          gap: '0px',
-        });
-        this.rightColumnEl.style.opacity = '0';
+        this.collapseUI(false);
       }
       if (this.revealTimer) {
         this.revealTimer.destroy();
@@ -2102,6 +2113,23 @@ export class MusicPlayer {
     const ow = overlayRect.width || 1;
     const oh = overlayRect.height || 1;
 
+    // --- Match thumbnail+bg height to avatar circle+stroke on title/tutorial ---
+    if (!this._inGameplay && containerVisible) {
+      const scale = this._gameplayScale || MUSIC_UI_SCALE;
+      const targetBgCSS = AVATAR_GAME_H / TUNING.GAME_HEIGHT * oh;
+      const containerLocalH = targetBgCSS / scale;
+      const targetThumbH = containerLocalH - 2 * this._bgPad;
+      // Compare against actual CSS (track-change handlers may reset to original size)
+      const currentH = parseFloat(this.thumbnailImg.style.height) || 0;
+      if (targetThumbH > 0 && Math.abs(targetThumbH - currentH) > 1) {
+        this.thumbnailImg.style.height = `${targetThumbH}px`;
+        const isSquare = this.source !== 'youtube';
+        this.thumbnailImg.style.width = isSquare
+          ? `${targetThumbH}px`
+          : `${targetThumbH * (YT_THUMB_WIDTH / YT_THUMB_HEIGHT)}px`;
+      }
+    }
+
     // --- Background panel ---
     if (containerVisible) {
       const cRect = this.container.getBoundingClientRect();
@@ -2109,7 +2137,7 @@ export class MusicPlayer {
       const bgY = (cRect.top - overlayRect.top) / oh * TUNING.GAME_HEIGHT;
       const bgW = (cRect.width / ow) * GAME_MODE.canvasWidth;
       const bgH = (cRect.height / oh) * TUNING.GAME_HEIGHT;
-      this.bgPanel.setPosition(bgX, bgY).setDisplaySize(bgW, bgH).setVisible(true).setAlpha(0.55 * this._phaserAlpha);
+      this.bgPanel.setPosition(bgX, bgY).setDisplaySize(bgW, bgH).setVisible(true).setAlpha(0.80 * this._phaserAlpha);
 
       // Rounded corners via postFX — Phaser rectangles don't natively support borderRadius,
       // but the CRT shader makes it look good enough with the slight warp
@@ -2143,13 +2171,10 @@ export class MusicPlayer {
       this.thumbSprite.setPosition((tcx / ow) * GAME_MODE.canvasWidth, (tcy / oh) * TUNING.GAME_HEIGHT);
       this.thumbSprite.setDisplaySize((tr.width / ow) * GAME_MODE.canvasWidth, (tr.height / oh) * TUNING.GAME_HEIGHT);
       this.thumbSprite.setVisible(true).setAlpha(this._phaserAlpha);
-      // Hover brightness overlay
-      this.thumbHoverOverlay.setPosition(this.thumbSprite.x, this.thumbSprite.y);
-      this.thumbHoverOverlay.setDisplaySize(this.thumbSprite.displayWidth, this.thumbSprite.displayHeight);
-      this.thumbHoverOverlay.setVisible(this.thumbHovered);
+
+      // (v0.01.89: Spotify thumb right-align hack removed — inside-out width handles thumb sizing)
     } else {
       this.thumbSprite.setVisible(false);
-      this.thumbHoverOverlay.setVisible(false);
     }
 
     // --- Title text ---
@@ -2171,26 +2196,31 @@ export class MusicPlayer {
 
       // Position text from HTML trackTitle bounding rect (includes scroll offset)
       const titleRect = this.trackTitle.getBoundingClientRect();
-      const titleLeft = (titleRect.left - overlayRect.left) / ow * GAME_MODE.canvasWidth;
+      let titleLeft = (titleRect.left - overlayRect.left) / ow * GAME_MODE.canvasWidth;
       const titleMidY = (titleRect.top + titleRect.height / 2 - overlayRect.top) / oh * TUNING.GAME_HEIGHT;
-      this.titleText.setPosition(titleLeft, titleMidY);
-      this.titleText.setVisible(true).setAlpha(this._phaserAlpha);
 
       // Update geometry mask to match titleClip bounds
       const clipRect = this.titleClip.getBoundingClientRect();
-      const clipLeft = (clipRect.left - overlayRect.left) / ow * GAME_MODE.canvasWidth;
+      const clipLeftDefault = (clipRect.left - overlayRect.left) / ow * GAME_MODE.canvasWidth;
       const clipTop = (clipRect.top - overlayRect.top) / oh * TUNING.GAME_HEIGHT;
-      const clipW = (clipRect.width / ow) * GAME_MODE.canvasWidth;
+      let clipLeft = clipLeftDefault;
+      let clipW = (clipRect.width / ow) * GAME_MODE.canvasWidth;
       const clipH = (clipRect.height / oh) * TUNING.GAME_HEIGHT;
+
+
+      this.titleText.setPosition(titleLeft, titleMidY);
+      this.titleText.setVisible(true).setAlpha(this._phaserAlpha);
       this.titleMaskGfx.clear();
       this.titleMaskGfx.fillStyle(0xffffff);
       this.titleMaskGfx.fillRect(clipLeft, clipTop, clipW, clipH);
+
+      this.titleDebugGfx.clear();
     } else {
       this.titleText.setVisible(false);
     }
 
-    // --- Heart (favorite) text ---
-    const heartVisible = containerVisible && !!this.currentTrackId;
+    // --- Heart (favorite) sprite ---
+    const heartVisible = containerVisible && !!this.currentTrackId && (!this.compact || this.hovered);
     if (heartVisible) {
       const hRect = this.heartBtn.getBoundingClientRect();
       const hcx = hRect.left + hRect.width / 2 - overlayRect.left;
@@ -2198,15 +2228,17 @@ export class MusicPlayer {
       const gameHX = (hcx / ow) * GAME_MODE.canvasWidth;
       const gameHY = (hcy / oh) * TUNING.GAME_HEIGHT;
       const gameHSize = (hRect.width / ow) * GAME_MODE.canvasWidth;
-      const heartFontSize = Math.round(gameHSize * 0.7);
       this.heartTextP.setPosition(gameHX, gameHY);
-      this.heartTextP.setFontSize(heartFontSize);
-      this.heartTextP.setStroke('#ffffff', Math.max(1, heartFontSize * 0.08));
+      this.heartTextP.setDisplaySize(gameHSize, gameHSize);
       this.heartTextP.setVisible(true).setAlpha(this._phaserAlpha * 0.7);
 
-      // Favorite state coloring
+      // Favorite state — red tint when favorited, white (no tint) when not
       const isFav = this.wmpPopup?.isFavorited(this.currentTrackId!) ?? false;
-      this.heartTextP.setColor(isFav ? '#4a0080' : 'rgba(0,0,0,0)');
+      if (isFav) {
+        this.heartTextP.setTint(0xff0000);
+      } else {
+        this.heartTextP.clearTint();
+      }
 
       // Bounce animation (tick at ~60fps via rAF)
       if (this.heartBounceT < 1) {
@@ -2219,6 +2251,7 @@ export class MusicPlayer {
     } else {
       this.heartTextP.setVisible(false);
     }
+
   }
 
   destroy(): void {
@@ -2226,12 +2259,10 @@ export class MusicPlayer {
     for (const s of this.btnSprites) s.destroy();
     this.btnSprites.length = 0;
     this.bgPanel.destroy();
-    if (this.phoneBackdropP) this.phoneBackdropP.destroy();
-    if (this.phoneBackdrop) this.phoneBackdrop.remove();
     this.thumbSprite.destroy();
-    this.thumbHoverOverlay.destroy();
     this.titleText.destroy();
     this.titleMaskGfx.destroy();
+    this.titleDebugGfx.destroy();
     this.heartTextP.destroy();
     if (this.crossfadeTimer) window.clearTimeout(this.crossfadeTimer);
     if (this.crossfadeAnim) cancelAnimationFrame(this.crossfadeAnim);
@@ -2243,7 +2274,6 @@ export class MusicPlayer {
     if (this.spotifyPlayer) {
       this.spotifyPlayer.destroy();
     }
-    if (this.mobileTitleAudio) { this.mobileTitleAudio.pause(); this.mobileTitleAudio = null; }
     this.humePlayer.destroy();
     this.canvasOverlay.remove();
     const ytEl = document.getElementById('yt-player');

@@ -212,6 +212,8 @@ export class SkyGlowSystem {
   }
 
   /** Reset hue rotation back to original (0°). */
+  isHueActive(): boolean { return this.hueTween !== null; }
+
   clearHue(): void {
     if (this.hueTween) { this.hueTween.stop(); this.hueTween = null; }
     this.tweenTarget.angle = 0;

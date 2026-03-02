@@ -76,10 +76,16 @@ export class DisconnectModal {
     }).setOrigin(0.5);
     this.container.add(yesLabel);
 
-    // DEBUG: pink hit area so we can see where the tap zone is
-    const yesHit = scene.add.rectangle(yesX, btnY, BTN_W, BTN_H, 0xff00ff, 0.3)
-      .setInteractive({ useHandCursor: true });
+    // Debug overlay (invisible by default — HitboxVisualizer toggles it)
+    const yesDebug = scene.add.rectangle(yesX, btnY, BTN_W, BTN_H, 0xff4444, 0.0);
+    yesDebug.setStrokeStyle(2, 0xff4444, 0.0);
+    this.container.add(yesDebug);
+
+    const yesHit = scene.add.zone(yesX, btnY, BTN_W, BTN_H)
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0);
     yesHit.name = 'disconnect-yes';
+    yesHit.setData('debugOverlay', yesDebug);
     yesHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
     yesHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER }); this.answer(true); });
     this.container.add(yesHit);
@@ -99,10 +105,16 @@ export class DisconnectModal {
     }).setOrigin(0.5);
     this.container.add(noLabel);
 
-    // DEBUG: pink hit area so we can see where the tap zone is
-    const noHit = scene.add.rectangle(noX, btnY, BTN_W, BTN_H, 0xff00ff, 0.3)
-      .setInteractive({ useHandCursor: true });
+    // Debug overlay (invisible by default — HitboxVisualizer toggles it)
+    const noDebug = scene.add.rectangle(noX, btnY, BTN_W, BTN_H, 0xff4444, 0.0);
+    noDebug.setStrokeStyle(2, 0xff4444, 0.0);
+    this.container.add(noDebug);
+
+    const noHit = scene.add.zone(noX, btnY, BTN_W, BTN_H)
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0);
     noHit.name = 'disconnect-no';
+    noHit.setData('debugOverlay', noDebug);
     noHit.on('pointerover', () => this.scene.sound.play('sfx-hover', { volume: TUNING.SFX_HOVER_VOLUME }));
     noHit.on('pointerdown', () => { this.scene.sound.play('sfx-click', { volume: TUNING.SFX_CLICK_VOLUME * TUNING.SFX_CLICK_MASTER }); this.answer(false); });
     this.container.add(noHit);
@@ -125,6 +137,9 @@ export class DisconnectModal {
       this.resolvePromise = null;
     }
   }
+
+  getContainer(): Phaser.GameObjects.Container { return this.container; }
+  getBackdrop(): Phaser.GameObjects.Rectangle { return this.backdrop; }
 
   destroy(): void {
     this.container.destroy();

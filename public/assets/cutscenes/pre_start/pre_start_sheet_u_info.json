@@ -1,0 +1,13 @@
+{
+  "key": "pre_start_sheet",
+  "url": "assets/cutscenes/pre_start/pre_start_sheet_u.jpg",
+  "frameWidth": 960,
+  "frameHeight": 540,
+  "frameCount": 46,
+  "columns": 6,
+  "rows": 8,
+  "sheetWidth": 5760,
+  "sheetHeight": 4320,
+  "vramMB": 94.9,
+  "scale": "unified"
+}

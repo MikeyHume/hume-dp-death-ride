@@ -1,0 +1,13 @@
+{
+  "key": "tut_controls_sheet",
+  "url": "assets/tutorial/tut_controls_sheet_u.jpg",
+  "frameWidth": 960,
+  "frameHeight": 540,
+  "frameCount": 29,
+  "columns": 5,
+  "rows": 6,
+  "sheetWidth": 4800,
+  "sheetHeight": 3240,
+  "vramMB": 59.3,
+  "scale": "unified"
+}

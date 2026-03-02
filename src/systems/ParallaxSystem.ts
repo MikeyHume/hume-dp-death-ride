@@ -70,7 +70,7 @@ export class ParallaxSystem {
     // --- Static background (layer 8): sky image, fill width + 10px taller, top-aligned ---
     this.staticBg = scene.add.image(TUNING.GAME_WIDTH / 2, 0, 'sky-img');
     this.staticBg.setOrigin(0.5, 0);
-    const skyBaseScale = GAME_MODE.canvasWidth / this.staticBg.width;
+    const skyBaseScale = TUNING.GAME_WIDTH / this.staticBg.width;
     const skyBaseH = this.staticBg.height * skyBaseScale;
     const skyScale = (skyBaseH + 10) / this.staticBg.height;
     this.staticBg.setScale(skyScale);
@@ -87,7 +87,7 @@ export class ParallaxSystem {
         const srcImg = tex.getSourceImage() as HTMLImageElement;
         const imgW = srcImg.width;
         const imgH = srcImg.height;
-        const scale = GAME_MODE.canvasWidth / imgW;
+        const scale = TUNING.GAME_WIDTH / imgW;
         const scaledH = imgH * scale;
         const adjBottom = bottomY + BUILDINGS_BACK_OFFSET_Y;
 
@@ -109,7 +109,7 @@ export class ParallaxSystem {
         const srcImg = tex.getSourceImage() as HTMLImageElement;
         const imgW = srcImg.width;
         const imgH = srcImg.height;
-        const baseScale = GAME_MODE.canvasWidth / imgW;
+        const baseScale = TUNING.GAME_WIDTH / imgW;
         const scale = baseScale * BUILDINGS_BIG_SCALE;
         const scaledH = imgH * scale;
         const adjBottom = bottomY + BUILDINGS_BIG_OFFSET_Y;
@@ -132,7 +132,7 @@ export class ParallaxSystem {
         const srcImg = tex.getSourceImage() as HTMLImageElement;
         const imgW = srcImg.width;
         const imgH = srcImg.height;
-        const baseScale = GAME_MODE.canvasWidth / imgW;
+        const baseScale = TUNING.GAME_WIDTH / imgW;
         const scale = baseScale * BUILDINGS_CLOSE_SCALE;
         const scaledH = imgH * scale;
         const adjBottom = bottomY + BUILDINGS_CLOSE_OFFSET_Y;
@@ -155,7 +155,7 @@ export class ParallaxSystem {
         const srcImg = tex.getSourceImage() as HTMLImageElement;
         const imgW = srcImg.width;
         const imgH = srcImg.height;
-        const baseScale = GAME_MODE.canvasWidth / imgW;
+        const baseScale = TUNING.GAME_WIDTH / imgW;
         const scale = baseScale * BUILDINGS_MID_SCALE;
         const scaledH = imgH * scale;
         const adjBottom = bottomY + BUILDINGS_MID_OFFSET_Y;
@@ -178,7 +178,7 @@ export class ParallaxSystem {
         const srcImg = tex.getSourceImage() as HTMLImageElement;
         const imgW = srcImg.width;
         const imgH = srcImg.height;
-        const baseScale = GAME_MODE.canvasWidth / imgW;
+        const baseScale = TUNING.GAME_WIDTH / imgW;
         const scale = baseScale * BUILDINGS_FRONT_SCALE;
         const scaledH = imgH * scale;
         const adjBottom = bottomY + BUILDINGS_FRONT_OFFSET_Y;

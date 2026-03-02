@@ -1,0 +1,100 @@
+{
+  "frames": {
+    "tut-rage-00": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 960,
+        "h": 540
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 960,
+        "h": 540
+      },
+      "sourceSize": {
+        "w": 960,
+        "h": 540
+      }
+    },
+    "tut-rage-01": {
+      "frame": {
+        "x": 960,
+        "y": 0,
+        "w": 960,
+        "h": 540
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 960,
+        "h": 540
+      },
+      "sourceSize": {
+        "w": 960,
+        "h": 540
+      }
+    },
+    "tut-rage-02": {
+      "frame": {
+        "x": 0,
+        "y": 540,
+        "w": 960,
+        "h": 540
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 960,
+        "h": 540
+      },
+      "sourceSize": {
+        "w": 960,
+        "h": 540
+      }
+    },
+    "tut-rage-03": {
+      "frame": {
+        "x": 960,
+        "y": 540,
+        "w": 960,
+        "h": 540
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 960,
+        "h": 540
+      },
+      "sourceSize": {
+        "w": 960,
+        "h": 540
+      }
+    }
+  },
+  "meta": {
+    "app": "pack-spritesheet.mjs",
+    "version": "1.0",
+    "image": "tut_rage_sheet_u.jpg",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1920,
+      "h": 1080
+    },
+    "scale": "unified",
+    "frameWidth": 960,
+    "frameHeight": 540,
+    "frameCount": 4,
+    "cols": 2,
+    "rows": 2
+  }
+}

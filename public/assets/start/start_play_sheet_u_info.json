@@ -1,0 +1,13 @@
+{
+  "key": "start_play_sheet",
+  "url": "assets/start/start_play_sheet_u.jpg",
+  "frameWidth": 960,
+  "frameHeight": 540,
+  "frameCount": 25,
+  "columns": 5,
+  "rows": 5,
+  "sheetWidth": 4800,
+  "sheetHeight": 2700,
+  "vramMB": 49.4,
+  "scale": "unified"
+}

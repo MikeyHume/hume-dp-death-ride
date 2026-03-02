@@ -1930,6 +1930,9 @@ export class WMPPopup {
     }
   }
 
+  /** Returns true if the "Ride or Die" playlist is currently selected. */
+  isRideOrDie(): boolean { return this.selectedPlaylistIdx === 1; }
+
   /** Get tracks to display in the library for the current tab/playlist. */
   private getDisplayTracks(): CatalogTrack[] {
     if (this.activeTab === 0) return this.getArtistTracks();

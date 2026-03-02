@@ -1,0 +1,13 @@
+{
+  "key": "pre_start_mobile_sheet",
+  "url": "assets/cutscenes/pre_start/pre_start_mobile_sheet.jpg",
+  "frameWidth": 962,
+  "frameHeight": 538,
+  "frameCount": 46,
+  "columns": 2,
+  "rows": 23,
+  "sheetWidth": 1924,
+  "sheetHeight": 12374,
+  "vramMB": 90.8,
+  "scale": 1
+}

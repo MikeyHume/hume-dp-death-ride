@@ -575,6 +575,28 @@ function telemetryPlugin(): Plugin {
           return json(res, { ok: true, crashes: crashes.length, ndjsonBytes: ndjsonSize, crashFiles: crashes.slice(-10) });
         }
 
+        // ─── Perf Telemetry (silent FPS gathering) ────────────
+        if (req.url === '/perf-tele' && req.method === 'POST') {
+          readBody(req).then((raw) => {
+            try {
+              const snap = JSON.parse(raw);
+              const ts = new Date(snap.ts).toLocaleTimeString();
+              const fps = snap.fps?.toFixed(1) ?? '?';
+              const avg = snap.fps_avg?.toFixed(1) ?? '?';
+              console.log(`\x1b[90m[perf] ${ts} fps=${fps} avg=${avg} state=${snap.game_state} tier=${snap.tier} crt=${snap.crt_level}\x1b[0m`);
+              // Append to ndjson log
+              fs.appendFileSync(NDJSON_PATH, JSON.stringify({ _type: 'perf-tele', _rx: Date.now(), ...snap }) + '\n');
+            } catch {}
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end('{"ok":true}');
+          });
+          return;
+        }
+        if (req.url === '/perf-tele' && req.method === 'GET') {
+          // Return latest perf snapshot (if any) — useful for external readers
+          return json(res, { ok: true, message: 'POST perf data to this endpoint' });
+        }
+
         // ─── Test Mode State Relay (seq/ack) ────────────────
         // Game pushes {state, ackSeq} via POST → server returns unacked commands.
         // Runner reads state via GET.

@@ -5,7 +5,8 @@ import { handleCallback } from './systems/SpotifyAuthSystem';
 import { GAME_MODE, DEVICE_PROFILE } from './config/gameMode';
 import { initTelemetry } from './util/telemetry';
 import { initTestMode, TEST_MODE } from './util/testMode';
-import { isiOS, isPhoneTier } from './util/device';
+import { initPerfTelemetry } from './util/perfTelemetry';
+import { isiOS, isPhoneTier, isMobileTier } from './util/device';
 import { initSimulation, isSimulating, applyFpsThrottle, createDeviceCycler } from './systems/DeviceSimulator';
 
 // Device simulation: ?simulate=<slug> overrides DEVICE_PROFILE before anything runs
@@ -19,6 +20,7 @@ if (simProfile) {
 
 // Set phone mode flag after device profile is finalized (incl. simulation override)
 GAME_MODE.isPhoneMode = isPhoneTier(DEVICE_PROFILE.tier);
+GAME_MODE.isMobileMode = isMobileTier(DEVICE_PROFILE.tier);
 
 // liteMode: driven by device tier (phone-low/gen-mobile = true, others = false).
 // ?lite=1 forces ON, ?lite=0 forces OFF (for testing tier promotions).
@@ -122,12 +124,8 @@ handleCallback().then((wasCallback) => {
   // VRAM budget cap: renderScale was tuned for 1920px width. Wider canvases (adaptive width)
   // would exceed the tested VRAM budget. Auto-reduce renderScale so total pixel count stays
   // within what was validated at 1920×1080 per device profile.
-  let rs = DEVICE_PROFILE.renderScale;
-  const budgetPixels = Math.round(TUNING.GAME_WIDTH * rs) * Math.round(TUNING.GAME_HEIGHT * rs);
-  const rawPixels = Math.round(adaptiveW * rs) * Math.round(TUNING.GAME_HEIGHT * rs);
-  if (rawPixels > budgetPixels && adaptiveW > TUNING.GAME_WIDTH) {
-    rs = rs * Math.sqrt(budgetPixels / rawPixels);
-  }
+  // PERF TEST: locked renderScale — no adaptive budget cap
+  const rs = DEVICE_PROFILE.renderScale;
   GAME_MODE.renderScale = rs;
   const renderW = Math.round(adaptiveW * rs);
   const renderH = Math.round(TUNING.GAME_HEIGHT * rs);
@@ -143,6 +141,13 @@ handleCallback().then((wasCallback) => {
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH
+    },
+    fps: new URLSearchParams(location.search).has('uncap_fps') ? {
+      target: 120,
+      forceSetTimeOut: true,  // bypass rAF 60Hz cap — allows measuring true headroom
+    } : {
+      target: 60,
+      forceSetTimeOut: false,
     },
     dom: {
       createContainer: true
@@ -162,6 +167,11 @@ handleCallback().then((wasCallback) => {
 
   // Expose game instance so BIOS overlay can unlock Phaser's audio context
   (window as any).__phaserGame = game;
+
+  // Perf telemetry: activate when ?uncap_fps is in URL (silent FPS gathering)
+  if (new URLSearchParams(location.search).has('uncap_fps')) {
+    initPerfTelemetry();
+  }
 
   // Device cycle button (desktop dev tool — visible when ?devices=1 or always on desktop)
   createDeviceCycler();

@@ -1,0 +1,13 @@
+{
+  "key": "tut_rage_sheet",
+  "url": "assets/tutorial/tut_rage_sheet_u.jpg",
+  "frameWidth": 960,
+  "frameHeight": 540,
+  "frameCount": 4,
+  "columns": 2,
+  "rows": 2,
+  "sheetWidth": 1920,
+  "sheetHeight": 1080,
+  "vramMB": 7.9,
+  "scale": "unified"
+}

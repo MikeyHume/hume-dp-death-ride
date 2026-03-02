@@ -1,0 +1,13 @@
+{
+  "key": "intro_tut_desktop_sheet",
+  "url": "assets/cutscenes/intro_to_tut/intro_tut_desktop_sheet.jpg",
+  "frameWidth": 2752,
+  "frameHeight": 1536,
+  "frameCount": 27,
+  "columns": 3,
+  "rows": 9,
+  "sheetWidth": 8256,
+  "sheetHeight": 13824,
+  "vramMB": 435.4,
+  "scale": 1
+}

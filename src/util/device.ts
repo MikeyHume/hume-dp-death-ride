@@ -24,6 +24,10 @@ export function isPhoneTier(tier: string): boolean {
   return tier === 'phone-high' || tier === 'gen-mobile' || tier === 'phone-low';
 }
 
+export function isMobileTier(tier: string): boolean {
+  return tier === 'phone-high' || tier === 'gen-mobile' || tier === 'phone-low' || tier === 'tablet';
+}
+
 /** Auto-compute musicUIScale for unknown devices based on screen dimensions.
  *  Smaller screens get higher scale so the popup content is readable. */
 function autoMusicUIScale(): number {
@@ -71,11 +75,11 @@ export const TIER_DEFAULTS: Record<DeviceTier, DeviceProfile> = {
     maxParallelLoads: 32,
     musicUIScale: 1.0,
     titleAnimLevel: 0,    // full-res originals
-    renderScale: 1.0,
+    renderScale: 0.3,   // locked 0.35 for all devices (perf test)
     reflectionRTScale: 0.5,
     reflectionTexScale: 0.2,
     reflectionSkip: 1,
-    liteMode: false,
+    liteMode: true,       // All tiers use lite assets (lighter railing, procedural textures)
     spriteTier: 's100',   // full-res spritesheets (376 MB VRAM)
   },
   'tablet': {
@@ -88,11 +92,11 @@ export const TIER_DEFAULTS: Record<DeviceTier, DeviceProfile> = {
     maxParallelLoads: 4,
     musicUIScale: 1.0,
     titleAnimLevel: 0,    // full-res originals
-    renderScale: 1.0,
+    renderScale: 0.3,   // locked 0.35 for all devices (perf test)
     reflectionRTScale: 0.5,
     reflectionTexScale: 0.2,
     reflectionSkip: 1,
-    liteMode: false,
+    liteMode: true,       // All tiers use lite assets (lighter railing, procedural textures)
     spriteTier: 's75',    // 75% spritesheets (211 MB VRAM) — iPads have 4-6GB
   },
   'phone-high': {
@@ -105,11 +109,11 @@ export const TIER_DEFAULTS: Record<DeviceTier, DeviceProfile> = {
     maxParallelLoads: 2,
     musicUIScale: 1.4,
     titleAnimLevel: 25,   // 960x540 — tested smooth on 12 Mini with CRT
-    renderScale: 0.75,    // 1440x810 — A14+ can handle 75%
+    renderScale: 0.3,    // 672x378 — locked 0.35 for all phones (perf test)
     reflectionRTScale: 0.5,
     reflectionTexScale: 0.2,
     reflectionSkip: 2,
-    liteMode: false,      // Proven capable — 12 Mini stable at 35 FPS
+    liteMode: true,       // All tiers use lite assets (lighter railing, procedural textures)
     spriteTier: 's50',    // 50% spritesheets (94 MB VRAM) — 4GB phones
   },
   'gen-mobile': {
@@ -122,7 +126,7 @@ export const TIER_DEFAULTS: Record<DeviceTier, DeviceProfile> = {
     maxParallelLoads: 2,
     musicUIScale: 1.3,
     titleAnimLevel: 35,   // 576x324 — conservative for unknowns
-    renderScale: 0.5,     // 960x540 — safe default for unknowns
+    renderScale: 0.3,    // 672x378 — locked 0.35 for all phones (perf test)
     reflectionRTScale: 0.35,
     reflectionTexScale: 0.15,
     reflectionSkip: 3,
@@ -139,7 +143,7 @@ export const TIER_DEFAULTS: Record<DeviceTier, DeviceProfile> = {
     maxParallelLoads: 2,
     musicUIScale: 1.2,
     titleAnimLevel: 35,  // 576x324 — tested 31 FPS on 12 Mini (no CRT)
-    renderScale: 0.5,    // 960x540 — 4x fewer pixels, targeting 30+ FPS
+    renderScale: 0.3,   // 672x378 — locked 0.35 for all phones (perf test)
     reflectionRTScale: 0.5,   // Same as desktop — start safe, reduce after testing
     reflectionTexScale: 0.2,  // Same as desktop — start safe, reduce after testing
     reflectionSkip: 3,        // Redraw every 3rd frame

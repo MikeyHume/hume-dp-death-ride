@@ -16,6 +16,12 @@ import type { HitboxVisualizer } from './HitboxVisualizer';
 
 export type DebugState = 'ready' | 'collecting' | 'compressing' | 'sending';
 
+export interface BgEffectState {
+  name: string;
+  active: boolean;
+  value?: string;  // optional current value label (e.g. "1.6")
+}
+
 // ── Layout ──
 const PILL_SIZE = '36px';
 const PANEL_PAD = '10px';
@@ -32,11 +38,29 @@ export class DebugOverlay {
   private sendBtn: HTMLButtonElement;
   private hitboxBtn: HTMLButtonElement;
   private inspectBtn: HTMLButtonElement;
+  private avatarOverlayBtn: HTMLButtonElement;
   private fakeSpotifyBtn: HTMLButtonElement;
   private fakeSpotifyLog: HTMLDivElement;
 
   // Callback for fake spotify auth (wired by GameScene)
   private _onFakeSpotify: (() => string[]) | null = null;
+
+  // Music debug panel
+  private musicBtn: HTMLButtonElement;
+  private musicPanel: HTMLDivElement;
+  private musicRows: HTMLDivElement[] = [];
+  private musicOpen = false;
+  private musicRefreshId = 0;
+  private _getMusicStates: (() => { name: string; active: boolean; playing: boolean; muted: boolean; volume: number }[]) | null = null;
+  private _toggleSourceMute: ((name: string) => void) | null = null;
+
+  // BG Effects debug panel
+  private bgEffectsBtn!: HTMLButtonElement;
+  private bgEffectsPanel!: HTMLDivElement;
+  private bgEffectsOpen = false;
+  private bgEffectsRefreshId = 0;
+  private _getBgEffectStates: (() => BgEffectState[]) | null = null;
+  private _toggleBgEffect: ((idx: number) => void) | null = null;
 
   // Toggle list panel
   private listPanel: HTMLDivElement;
@@ -51,6 +75,8 @@ export class DebugOverlay {
   private _state: DebugState = 'ready';
   private hitboxesOn = false;
   private _hitboxViz: HitboxVisualizer | null = null;
+  private avatarOverlayOn = false;
+  private _profilePopup: any = null;
 
   // FPS tracking
   private frames = 0;
@@ -258,6 +284,148 @@ export class DebugOverlay {
     });
     this.panel.appendChild(this.fakeSpotifyLog);
 
+    // ── Music debug button (in debug panel) ──
+    const sepMusic = document.createElement('div');
+    sepMusic.style.borderTop = '1px solid rgba(100,255,100,0.3)';
+    sepMusic.style.marginTop = '4px';
+    this.panel.appendChild(sepMusic);
+
+    this.musicBtn = document.createElement('button');
+    Object.assign(this.musicBtn.style, {
+      marginTop: '4px',
+      padding: '6px 12px',
+      background: 'rgba(100,0,180,0.4)',
+      border: '1px solid rgba(180,100,255,0.5)',
+      borderRadius: '4px',
+      color: '#cc88ff',
+      fontSize: '11px',
+      fontFamily: 'monospace',
+      fontWeight: 'bold',
+      cursor: 'pointer',
+    });
+    this.musicBtn.textContent = 'MUSIC';
+    this.musicBtn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      this.toggleMusicPanel();
+    });
+    this.panel.appendChild(this.musicBtn);
+
+    // Avatar overlay debug toggle
+    this.avatarOverlayBtn = document.createElement('button');
+    Object.assign(this.avatarOverlayBtn.style, {
+      marginTop: '4px',
+      padding: '6px 12px',
+      background: 'rgba(60,0,80,0.6)',
+      border: '1px solid rgba(200,68,255,0.5)',
+      borderRadius: '4px',
+      color: '#cc44ff',
+      fontSize: '11px',
+      fontFamily: 'monospace',
+      fontWeight: 'bold',
+      cursor: 'pointer',
+    });
+    this.avatarOverlayBtn.textContent = 'AVATAR: OFF';
+    this.avatarOverlayBtn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      this.toggleAvatarOverlay();
+    });
+    this.panel.appendChild(this.avatarOverlayBtn);
+
+    // ── BG Effects button ──
+    const sepBg = document.createElement('div');
+    sepBg.style.borderTop = '1px solid rgba(100,255,100,0.3)';
+    sepBg.style.marginTop = '4px';
+    this.panel.appendChild(sepBg);
+
+    this.bgEffectsBtn = document.createElement('button');
+    Object.assign(this.bgEffectsBtn.style, {
+      marginTop: '4px',
+      padding: '6px 12px',
+      background: 'rgba(0,80,100,0.4)',
+      border: '1px solid rgba(0,200,220,0.5)',
+      borderRadius: '4px',
+      color: '#00ccdd',
+      fontSize: '11px',
+      fontFamily: 'monospace',
+      fontWeight: 'bold',
+      cursor: 'pointer',
+    });
+    this.bgEffectsBtn.textContent = 'BG EFFECTS';
+    this.bgEffectsBtn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      this.toggleBgEffectsPanel();
+    });
+    this.panel.appendChild(this.bgEffectsBtn);
+
+    // ── BG Effects floating panel ──
+    this.bgEffectsPanel = document.createElement('div');
+    Object.assign(this.bgEffectsPanel.style, {
+      position: 'fixed',
+      top: '200px',
+      right: '8px',
+      display: 'none',
+      flexDirection: 'column',
+      gap: '2px',
+      padding: '10px',
+      background: BG,
+      border: '1px solid rgba(0,200,220,0.5)',
+      borderRadius: '6px',
+      zIndex: Z,
+      pointerEvents: 'auto',
+      maxWidth: '50vw',
+      minWidth: '220px',
+    });
+    const bgTitle = document.createElement('div');
+    Object.assign(bgTitle.style, {
+      fontSize: '13px',
+      fontFamily: 'monospace',
+      fontWeight: 'bold',
+      color: '#00ccdd',
+      borderBottom: '1px solid rgba(0,200,220,0.3)',
+      paddingBottom: '4px',
+      marginBottom: '4px',
+      letterSpacing: '1px',
+    });
+    bgTitle.textContent = 'BACKGROUND EFFECTS';
+    this.bgEffectsPanel.appendChild(bgTitle);
+    document.body.appendChild(this.bgEffectsPanel);
+
+    // ── Music floating panel (standalone, right side of screen) ──
+    this.musicPanel = document.createElement('div');
+    Object.assign(this.musicPanel.style, {
+      position: 'fixed',
+      top: '8px',
+      right: '8px',
+      display: 'none',
+      flexDirection: 'column',
+      gap: '4px',
+      padding: '10px',
+      background: BG,
+      border: '1px solid rgba(180,100,255,0.5)',
+      borderRadius: '6px',
+      zIndex: Z,
+      pointerEvents: 'auto',
+      maxWidth: '45vw',
+      minWidth: '200px',
+      maxHeight: 'calc(100vh - 16px)',
+      overflowY: 'auto',
+    });
+    // Title bar for the floating panel
+    const musicTitle = document.createElement('div');
+    Object.assign(musicTitle.style, {
+      fontSize: '13px',
+      fontFamily: 'monospace',
+      fontWeight: 'bold',
+      color: '#cc88ff',
+      borderBottom: '1px solid rgba(180,100,255,0.3)',
+      paddingBottom: '4px',
+      marginBottom: '2px',
+      letterSpacing: '1px',
+    });
+    musicTitle.textContent = 'AUDIO SOURCES';
+    this.musicPanel.appendChild(musicTitle);
+    document.body.appendChild(this.musicPanel);
+
     // ── Toggle list panel (appears when CLICKABLE is ON) ──
     this.listPanel = document.createElement('div');
     Object.assign(this.listPanel.style, {
@@ -343,6 +511,22 @@ export class DebugOverlay {
         this.listPanel.style.display = 'none';
         this.stopListRefresh();
       }
+      // Turn off BG effects panel
+      if (this.bgEffectsOpen) {
+        this.bgEffectsOpen = false;
+        this.bgEffectsPanel.style.display = 'none';
+        this.bgEffectsBtn.textContent = 'BG EFFECTS';
+        this.bgEffectsBtn.style.color = '#00ccdd';
+        if (this.bgEffectsRefreshId) { clearInterval(this.bgEffectsRefreshId); this.bgEffectsRefreshId = 0; }
+      }
+      // Turn off music panel
+      if (this.musicOpen) {
+        this.musicOpen = false;
+        this.musicPanel.style.display = 'none';
+        this.musicBtn.textContent = 'MUSIC';
+        this.musicBtn.style.color = '#cc88ff';
+        if (this.musicRefreshId) { clearInterval(this.musicRefreshId); this.musicRefreshId = 0; }
+      }
     }
   }
 
@@ -389,9 +573,31 @@ export class DebugOverlay {
     this._hitboxViz = viz;
   }
 
+  setProfilePopup(popup: { setAvatarOverlayDebug(on: boolean): void }): void {
+    this._profilePopup = popup;
+  }
+
   /** Wire the fake Spotify auth callback. */
   setFakeSpotifyHandler(fn: () => string[]): void {
     this._onFakeSpotify = fn;
+  }
+
+  /** Wire background effects state getter + toggler (from GameScene). */
+  setBgEffectsHandler(
+    getStates: () => BgEffectState[],
+    toggle: (idx: number) => void,
+  ): void {
+    this._getBgEffectStates = getStates;
+    this._toggleBgEffect = toggle;
+  }
+
+  /** Wire music source state getter (from MusicPlayer). */
+  setMusicStateGetter(
+    getter: () => { name: string; active: boolean; playing: boolean; muted: boolean; volume: number }[],
+    toggleMute: (name: string) => void,
+  ): void {
+    this._getMusicStates = getter;
+    this._toggleSourceMute = toggleMute;
   }
 
   /* ============ Internal ============ */
@@ -435,6 +641,15 @@ export class DebugOverlay {
       this.inspectBtn.textContent = 'INSPECT: OFF';
       this.inspectBtn.style.color = '#ffcc00';
     }
+  }
+
+  private toggleAvatarOverlay(): void {
+    this.avatarOverlayOn = !this.avatarOverlayOn;
+    this._profilePopup?.setAvatarOverlayDebug(this.avatarOverlayOn);
+    this.avatarOverlayBtn.textContent = `AVATAR: ${this.avatarOverlayOn ? 'ON' : 'OFF'}`;
+    this.avatarOverlayBtn.style.color = this.avatarOverlayOn ? '#ff44ff' : '#cc44ff';
+    this.avatarOverlayBtn.style.background = this.avatarOverlayOn ? 'rgba(80,0,80,0.6)' : 'rgba(60,0,80,0.6)';
+    this.avatarOverlayBtn.style.borderColor = this.avatarOverlayOn ? 'rgba(255,68,255,0.5)' : 'rgba(200,68,255,0.5)';
   }
 
   private toggleInspect(): void {
@@ -565,6 +780,192 @@ export class DebugOverlay {
       row.appendChild(label);
       row.appendChild(cb);
       this.listContent.appendChild(row);
+    }
+  }
+
+  private toggleMusicPanel(): void {
+    this.musicOpen = !this.musicOpen;
+    this.musicPanel.style.display = this.musicOpen ? 'flex' : 'none';
+    this.musicBtn.textContent = this.musicOpen ? 'MUSIC: ON' : 'MUSIC';
+    this.musicBtn.style.color = this.musicOpen ? '#ee66ff' : '#cc88ff';
+    this.musicBtn.style.background = this.musicOpen ? 'rgba(140,0,220,0.5)' : 'rgba(100,0,180,0.4)';
+    if (this.musicOpen) {
+      this.refreshMusicPanel();
+      this.musicRefreshId = window.setInterval(() => this.refreshMusicPanel(), 300);
+    } else {
+      if (this.musicRefreshId) { clearInterval(this.musicRefreshId); this.musicRefreshId = 0; }
+    }
+  }
+
+  private refreshMusicPanel(): void {
+    if (!this._getMusicStates) return;
+    const states = this._getMusicStates();
+
+    // Build rows on first call or if count changed
+    if (this.musicRows.length !== states.length) {
+      // Keep the title element (first child), remove everything else
+      while (this.musicPanel.children.length > 1) {
+        this.musicPanel.removeChild(this.musicPanel.lastChild!);
+      }
+      this.musicRows = [];
+      for (const s of states) {
+        const row = document.createElement('div');
+        Object.assign(row.style, {
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '6px 8px',
+          borderRadius: '4px',
+          cursor: 'pointer',
+        });
+        row.addEventListener('pointerdown', (e) => {
+          e.stopPropagation();
+          this._toggleSourceMute?.(s.name);
+          setTimeout(() => this.refreshMusicPanel(), 50);
+        });
+        this.musicPanel.appendChild(row);
+        this.musicRows.push(row);
+      }
+    }
+
+    // Update each row
+    for (let i = 0; i < states.length; i++) {
+      const s = states[i];
+      const row = this.musicRows[i];
+      const muted = s.muted;
+      const playing = s.playing;
+      const active = s.active;
+
+      // Status dot color: green=playing, yellow=active but paused, red=muted, grey=inactive
+      const silent = muted || s.volume < 0.01;
+      let dotColor = '#444';
+      if (active && playing && !muted) dotColor = '#00ff00';
+      else if (active && playing && muted) dotColor = '#ff4444';
+      else if (active && !playing) dotColor = '#ffaa00';
+      else if (!active && playing && !silent) dotColor = '#ff6600'; // real leak
+      else if (!active && playing && silent) dotColor = '#666666';  // muted companion — harmless
+
+      // Status label
+      let status = 'OFF';
+      if (active && playing && !muted) status = 'PLAYING';
+      else if (active && playing && muted) status = 'MUTED';
+      else if (active && !playing) status = 'PAUSED';
+      else if (!active && playing && !silent) status = 'LEAK!';
+      else if (!active && playing && silent) status = 'SILENT';
+      else if (!active && !playing && !muted) status = 'IDLE';
+
+      const volPct = Math.round(s.volume * 100);
+
+      row.innerHTML = '';
+      row.style.background = active ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.3)';
+
+      // Dot
+      const dot = document.createElement('span');
+      Object.assign(dot.style, {
+        width: '10px', height: '10px', borderRadius: '50%',
+        background: dotColor, flexShrink: '0',
+      });
+
+      // Name
+      const nameEl = document.createElement('span');
+      Object.assign(nameEl.style, {
+        fontSize: '14px', fontFamily: 'monospace', fontWeight: 'bold',
+        color: active ? '#ffffff' : '#666666', minWidth: '90px',
+      });
+      nameEl.textContent = s.name;
+
+      // Status
+      const statusEl = document.createElement('span');
+      const statusColor = status === 'LEAK!' ? '#ff0000' : status === 'PLAYING' ? '#00ff00' : status === 'MUTED' ? '#ff4444' : status === 'SILENT' ? '#666666' : '#888888';
+      Object.assign(statusEl.style, {
+        fontSize: '13px', fontFamily: 'monospace', fontWeight: 'bold',
+        color: statusColor, flex: '1',
+      });
+      statusEl.textContent = `${status} ${volPct}%`;
+
+      // Mute toggle indicator
+      const muteEl = document.createElement('span');
+      Object.assign(muteEl.style, {
+        fontSize: '16px', cursor: 'pointer', flexShrink: '0',
+      });
+      muteEl.textContent = muted ? '🔇' : '🔊';
+
+      row.appendChild(dot);
+      row.appendChild(nameEl);
+      row.appendChild(statusEl);
+      row.appendChild(muteEl);
+    }
+  }
+
+  private toggleBgEffectsPanel(): void {
+    this.bgEffectsOpen = !this.bgEffectsOpen;
+    this.bgEffectsPanel.style.display = this.bgEffectsOpen ? 'flex' : 'none';
+    this.bgEffectsBtn.textContent = this.bgEffectsOpen ? 'BG EFFECTS: ON' : 'BG EFFECTS';
+    this.bgEffectsBtn.style.color = this.bgEffectsOpen ? '#00ffee' : '#00ccdd';
+    this.bgEffectsBtn.style.background = this.bgEffectsOpen ? 'rgba(0,120,140,0.5)' : 'rgba(0,80,100,0.4)';
+    if (this.bgEffectsOpen) {
+      this.refreshBgEffects();
+      this.bgEffectsRefreshId = window.setInterval(() => this.refreshBgEffects(), 300);
+    } else {
+      if (this.bgEffectsRefreshId) { clearInterval(this.bgEffectsRefreshId); this.bgEffectsRefreshId = 0; }
+    }
+  }
+
+  private refreshBgEffects(): void {
+    if (!this._getBgEffectStates) return;
+    const states = this._getBgEffectStates();
+
+    // Keep the title element (first child), rebuild rows
+    while (this.bgEffectsPanel.children.length > 1) {
+      this.bgEffectsPanel.removeChild(this.bgEffectsPanel.lastChild!);
+    }
+
+    for (let i = 0; i < states.length; i++) {
+      const s = states[i];
+      const row = document.createElement('div');
+      Object.assign(row.style, {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '8px 10px',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        background: s.active ? 'rgba(0,180,180,0.15)' : 'rgba(0,0,0,0.3)',
+      });
+      const idx = i;
+      row.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        this._toggleBgEffect?.(idx);
+        setTimeout(() => this.refreshBgEffects(), 50);
+      });
+
+      // Status dot
+      const dot = document.createElement('span');
+      Object.assign(dot.style, {
+        width: '10px', height: '10px', borderRadius: '50%',
+        background: s.active ? '#00ff88' : '#ff4444', flexShrink: '0',
+      });
+
+      // Name
+      const nameEl = document.createElement('span');
+      Object.assign(nameEl.style, {
+        fontSize: '13px', fontFamily: 'monospace', fontWeight: 'bold',
+        color: s.active ? '#ffffff' : '#888888', flex: '1',
+      });
+      nameEl.textContent = s.name;
+
+      // Value (optional)
+      const valEl = document.createElement('span');
+      Object.assign(valEl.style, {
+        fontSize: '11px', fontFamily: 'monospace',
+        color: s.active ? '#00ccdd' : '#555555',
+      });
+      valEl.textContent = s.value ?? '';
+
+      row.appendChild(dot);
+      row.appendChild(nameEl);
+      row.appendChild(valEl);
+      this.bgEffectsPanel.appendChild(row);
     }
   }
 

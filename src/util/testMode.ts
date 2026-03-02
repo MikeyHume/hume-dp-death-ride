@@ -124,6 +124,27 @@ export interface TestState {
     mobileMode: boolean;
     simulatedDevice: string | null;
   };
+
+  // ── Cutscene Diagnostics (for ?cutscene_test=1) ────────────
+  /** Cutscene playback diagnostics */
+  cutsceneDiag: {
+    active: string;
+    frameIndex: number;
+    totalFrames: number;
+    frameDeltas: number[];
+    fpsSamples: number[];
+    startTime: number;
+    completed: Array<{
+      name: string;
+      gameFpsAvg: number;
+      gameFpsMin: number;
+      animFpsEffective: number;
+      judderPercent: number;
+      stdDevMs: number;
+      totalDurationMs: number;
+      frameDeltas: number[];
+    }>;
+  };
 }
 
 // ── Config flags ─────────────────────────────────────────────
@@ -211,6 +232,10 @@ export function initTestMode(): void {
     features: {
       crt: false, reflections: false, carCount: 0,
       parallaxLayers: 8, mobileMode: false, simulatedDevice: null,
+    },
+    cutsceneDiag: {
+      active: 'none', frameIndex: 0, totalFrames: 0,
+      frameDeltas: [], fpsSamples: [], startTime: 0, completed: [],
     },
   };
 

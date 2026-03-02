@@ -380,6 +380,8 @@ export const TUNING = {
   MUSIC_UI_WIDTH: 740,             // fixed container width in game units (desktop)
   MUSIC_UI_MOBILE_WIDTH: 1050,     // wider container for mobile (full-size buttons + thumbnail + gap)
   MUSIC_UI_PHONE_PAD: 40,             // px padding on each side of phone popup (screen width - 2*pad = popup width)
+  MUSIC_UI_PHONE_EXPANDED_W: 650,     // CSS px width of phone expanded container (Spotify base; YouTube auto-adds ~97px for wider thumb)
+  MUSIC_UI_PHONE_THUMB_GAP: 20,       // px gap between thumbnail and text/buttons (phone expanded)
   MUSIC_UI_PHONE_BACKDROP_ALPHA: 0.6, // backdrop opacity behind phone popup
   MUSIC_UI_PHONE_ANIM_MS: 350,        // phone popup expand/collapse animation duration (ms)
 
@@ -568,6 +570,7 @@ export const TUNING = {
   HUD_PAD_LEFT: 100,              // px from left screen edge to pink HUD box
   HUD_PAD_TOP: 40,                // px from top screen edge to pink HUD box
   HUD_SCALE_MULT: 1.6,            // manual scale multiplier (tune on iPhone 12 Mini first)
+  HUD_HS_FLOOR: 0.96,             // universal phone UI scale factor (12 Mini baseline: 360/375)
   HUD_REF_SCREEN_H: 375,          // iPhone 12 Mini landscape height (CSS px) — baseline for scaling
   TITLE_HUD_BASE_W: 320,          // natural HUD width at scale 1.0 (pink box width)
 

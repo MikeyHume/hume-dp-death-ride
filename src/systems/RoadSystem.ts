@@ -28,7 +28,6 @@ export class RoadSystem {
 
     // Road container — left-edge aligned (origin 0,0.5) for precise tiling
     // Start tiles at -contentOffsetX so they cover the full visible area
-    // (camera scroll of -contentOffsetX shifts visible area left of x=0)
     const startX = -GAME_MODE.contentOffsetX;
     this.roadContainer = scene.add.container(0, 0);
     for (let i = 0; i < count; i++) {
@@ -53,7 +52,7 @@ export class RoadSystem {
   }
 
   resetScroll(_offsetX: number = 0): void {
-    // Reset sprite positions to initial layout (start at -contentOffsetX to cover full visible area)
+    // Reset sprite positions to initial layout (full visible area)
     const startX = -GAME_MODE.contentOffsetX;
     for (let i = 0; i < this.roadSprites.length; i++) {
       const x = startX + i * this.spriteW;

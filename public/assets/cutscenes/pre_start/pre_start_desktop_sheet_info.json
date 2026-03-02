@@ -1,0 +1,13 @@
+{
+  "key": "pre_start_desktop_sheet",
+  "url": "assets/cutscenes/pre_start/pre_start_desktop_sheet.jpg",
+  "frameWidth": 1924,
+  "frameHeight": 1076,
+  "frameCount": 46,
+  "columns": 6,
+  "rows": 8,
+  "sheetWidth": 11544,
+  "sheetHeight": 8608,
+  "vramMB": 379.1,
+  "scale": 1
+}

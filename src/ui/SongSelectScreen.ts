@@ -654,6 +654,10 @@ export class SongSelectScreen {
     return this.tracks[this.selectedIdx] || null;
   }
 
+  getUIObjects(): Phaser.GameObjects.GameObject[] {
+    return [this.container, this.maskGfx];
+  }
+
   destroy(): void {
     this.container.destroy(true);
     this.maskGfx.destroy();

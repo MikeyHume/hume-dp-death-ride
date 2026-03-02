@@ -16,6 +16,8 @@ export const GAME_MODE = {
   contentOffsetX: 0,
   /** True on phone tiers (phone-high, gen-mobile, phone-low) — NOT tablet or desktop. */
   isPhoneMode: false as boolean,  // set after DEVICE_PROFILE is finalized in main.ts
+  /** True on all mobile tiers (phones + tablets). */
+  isMobileMode: false as boolean,  // set after DEVICE_PROFILE is finalized in main.ts
   /** Lite mode — driven by device tier (phone-low/gen-mobile = true). Overridable via ?lite=0|1. */
   liteMode: false as boolean,     // set in main.ts from DEVICE_PROFILE.liteMode or ?lite= override
   /** Internal render resolution scale (1.0=1920x1080, 0.5=960x540). Set in main.ts. */

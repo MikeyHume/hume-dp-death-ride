@@ -1,0 +1,560 @@
+{
+  "frames": {
+    "intro-tut-00": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-01": {
+      "frame": {
+        "x": 1376,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-02": {
+      "frame": {
+        "x": 2752,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-03": {
+      "frame": {
+        "x": 0,
+        "y": 768,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-04": {
+      "frame": {
+        "x": 1376,
+        "y": 768,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-05": {
+      "frame": {
+        "x": 2752,
+        "y": 768,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-06": {
+      "frame": {
+        "x": 0,
+        "y": 1536,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-07": {
+      "frame": {
+        "x": 1376,
+        "y": 1536,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-08": {
+      "frame": {
+        "x": 2752,
+        "y": 1536,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-09": {
+      "frame": {
+        "x": 0,
+        "y": 2304,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-10": {
+      "frame": {
+        "x": 1376,
+        "y": 2304,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-11": {
+      "frame": {
+        "x": 2752,
+        "y": 2304,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-12": {
+      "frame": {
+        "x": 0,
+        "y": 3072,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-13": {
+      "frame": {
+        "x": 1376,
+        "y": 3072,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-14": {
+      "frame": {
+        "x": 2752,
+        "y": 3072,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-15": {
+      "frame": {
+        "x": 0,
+        "y": 3840,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-16": {
+      "frame": {
+        "x": 1376,
+        "y": 3840,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-17": {
+      "frame": {
+        "x": 2752,
+        "y": 3840,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-18": {
+      "frame": {
+        "x": 0,
+        "y": 4608,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-19": {
+      "frame": {
+        "x": 1376,
+        "y": 4608,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-20": {
+      "frame": {
+        "x": 2752,
+        "y": 4608,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-21": {
+      "frame": {
+        "x": 0,
+        "y": 5376,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-22": {
+      "frame": {
+        "x": 1376,
+        "y": 5376,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-23": {
+      "frame": {
+        "x": 2752,
+        "y": 5376,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-24": {
+      "frame": {
+        "x": 0,
+        "y": 6144,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-25": {
+      "frame": {
+        "x": 1376,
+        "y": 6144,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    },
+    "intro-tut-26": {
+      "frame": {
+        "x": 2752,
+        "y": 6144,
+        "w": 1376,
+        "h": 768
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1376,
+        "h": 768
+      },
+      "sourceSize": {
+        "w": 1376,
+        "h": 768
+      }
+    }
+  },
+  "meta": {
+    "app": "pack-spritesheet.mjs",
+    "version": "1.0",
+    "image": "intro_tut_mobile_sheet.jpg",
+    "format": "RGBA8888",
+    "size": {
+      "w": 4128,
+      "h": 6912
+    },
+    "scale": "1",
+    "frameWidth": 1376,
+    "frameHeight": 768,
+    "frameCount": 27,
+    "cols": 3,
+    "rows": 9
+  }
+}

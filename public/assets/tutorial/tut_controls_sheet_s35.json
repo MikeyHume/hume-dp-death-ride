@@ -1,0 +1,600 @@
+{
+  "frames": {
+    "tut-controls-00000": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00001": {
+      "frame": {
+        "x": 964,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00002": {
+      "frame": {
+        "x": 1928,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00003": {
+      "frame": {
+        "x": 2892,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00004": {
+      "frame": {
+        "x": 3856,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00005": {
+      "frame": {
+        "x": 0,
+        "y": 538,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00006": {
+      "frame": {
+        "x": 964,
+        "y": 538,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00007": {
+      "frame": {
+        "x": 1928,
+        "y": 538,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00008": {
+      "frame": {
+        "x": 2892,
+        "y": 538,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00009": {
+      "frame": {
+        "x": 3856,
+        "y": 538,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00010": {
+      "frame": {
+        "x": 0,
+        "y": 1076,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00011": {
+      "frame": {
+        "x": 964,
+        "y": 1076,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00012": {
+      "frame": {
+        "x": 1928,
+        "y": 1076,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00013": {
+      "frame": {
+        "x": 2892,
+        "y": 1076,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00014": {
+      "frame": {
+        "x": 3856,
+        "y": 1076,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00015": {
+      "frame": {
+        "x": 0,
+        "y": 1614,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00016": {
+      "frame": {
+        "x": 964,
+        "y": 1614,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00017": {
+      "frame": {
+        "x": 1928,
+        "y": 1614,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00018": {
+      "frame": {
+        "x": 2892,
+        "y": 1614,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00019": {
+      "frame": {
+        "x": 3856,
+        "y": 1614,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00020": {
+      "frame": {
+        "x": 0,
+        "y": 2152,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00021": {
+      "frame": {
+        "x": 964,
+        "y": 2152,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00022": {
+      "frame": {
+        "x": 1928,
+        "y": 2152,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00023": {
+      "frame": {
+        "x": 2892,
+        "y": 2152,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00024": {
+      "frame": {
+        "x": 3856,
+        "y": 2152,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00025": {
+      "frame": {
+        "x": 0,
+        "y": 2690,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00026": {
+      "frame": {
+        "x": 964,
+        "y": 2690,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00027": {
+      "frame": {
+        "x": 1928,
+        "y": 2690,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    },
+    "tut-controls-00028": {
+      "frame": {
+        "x": 2892,
+        "y": 2690,
+        "w": 964,
+        "h": 538
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 964,
+        "h": 538
+      },
+      "sourceSize": {
+        "w": 964,
+        "h": 538
+      }
+    }
+  },
+  "meta": {
+    "app": "pack-spritesheet.mjs",
+    "version": "1.0",
+    "image": "tut_controls_sheet_s35.jpg",
+    "format": "RGBA8888",
+    "size": {
+      "w": 4820,
+      "h": 3228
+    },
+    "scale": "0.35",
+    "frameWidth": 964,
+    "frameHeight": 538,
+    "frameCount": 29,
+    "cols": 5,
+    "rows": 6
+  }
+}

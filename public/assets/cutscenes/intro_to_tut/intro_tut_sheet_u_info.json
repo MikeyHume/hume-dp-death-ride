@@ -1,0 +1,13 @@
+{
+  "key": "intro_tut_sheet",
+  "url": "assets/cutscenes/intro_to_tut/intro_tut_sheet_u.jpg",
+  "frameWidth": 960,
+  "frameHeight": 540,
+  "frameCount": 27,
+  "columns": 3,
+  "rows": 9,
+  "sheetWidth": 2880,
+  "sheetHeight": 4860,
+  "vramMB": 53.4,
+  "scale": "unified"
+}

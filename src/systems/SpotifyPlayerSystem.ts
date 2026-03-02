@@ -329,6 +329,7 @@ export class SpotifyPlayerSystem {
   }
 
   isReady(): boolean { return this.ready; }
+  isPlaying(): boolean { return this.ready && !this.isPaused; }
 
   destroy(): void {
     if (this.player) {

@@ -1,0 +1,13 @@
+{
+  "key": "pre_start_sheet",
+  "url": "assets/cutscenes/pre_start/pre_start_sheet_s35.jpg",
+  "frameWidth": 674,
+  "frameHeight": 378,
+  "frameCount": 46,
+  "columns": 6,
+  "rows": 8,
+  "sheetWidth": 4044,
+  "sheetHeight": 3024,
+  "vramMB": 46.7,
+  "scale": 0.35
+}

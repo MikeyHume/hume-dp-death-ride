@@ -20,7 +20,7 @@ import { CRT_TUNING } from '../config/crtTuning';
 import { ProfileHud } from '../ui/ProfileHud';
 import { ProfilePopup, AVATAR_TEXTURE_KEY } from '../ui/ProfilePopup';
 import { SettingsPopup } from '../ui/SettingsPopup';
-import { DebugOverlay } from '../systems/DebugOverlay';
+import { DebugOverlay, type BgEffectState } from '../systems/DebugOverlay';
 import { HitboxVisualizer } from '../systems/HitboxVisualizer';
 import { ShieldSystem } from '../systems/ShieldSystem';
 import { TimeDilationSystem } from '../systems/TimeDilationSystem';
@@ -35,6 +35,7 @@ import { fetchBeatData, getDominantColor } from '../systems/MusicCatalogService'
 import { CourseRunner, loadCourseData, CourseData } from '../systems/CourseRunner';
 import { SongSelectScreen } from '../ui/SongSelectScreen';
 import { TEST_MODE } from '../util/testMode';
+import { PerfBenchmark } from '../util/perfBenchmark';
 import { TITLE_LOOP_FRAME_COUNT, TITLE_START_FRAME_COUNT, PRE_START_FRAME_COUNT, INTRO_TO_TUT_FRAME_COUNT } from './BootScene';
 
 enum GameState {
@@ -87,28 +88,20 @@ const DEBUG_HOTKEYS = {
   clickInspect:   { key: 'B',       active: true },  // click any element to identify it
 };
 
-// ── Death screen leaderboard: Scale multipliers ──
-const DLB_T3_SCALE = 1.5;          // scale multiplier for top 3 font size
-const DLB_REST_SCALE = 1.0;        // scale multiplier for rows 4-10 font size
-
-// ── Death screen leaderboard: Top 3 group ──
-const DLB_T3_X = 560;              // left edge X of the entire top-3 group
+// ── Death screen leaderboard: Top 3 only ──
+const DLB_T3_SCALE = 2.282;        // scale multiplier for top 3 font size (2.535 × 0.9)
+const DLB_T3_X = 270;              // left edge X of the entire top-3 group (centered: ~130px gaps each side)
 const DLB_T3_Y = 0;                // Y offset from leaderboard header bottom
-const DLB_T3_ROW_H = 80;           // row height per top-3 entry
+const DLB_T3_ROW_H = 122;          // row height per top-3 entry (135 × 0.9)
 const DLB_T3_FONT = `${Math.round(34 * DLB_T3_SCALE)}px`;
-const DLB_T3_AVATAR_R = 30;        // avatar circle radius
-const DLB_T3_AVATAR_STROKE = 3;    // medal ring stroke width
-const DLB_T3_AVATAR_X = -55;       // avatar center X relative to group left
-const DLB_T3_RANK_X = 120;           // rank text X relative to group left
-const DLB_T3_NAME_X = 160;          // name text X relative to group left
-const DLB_T3_TIME_X = 600;         // time text X relative to group left
-const DLB_T3_SCORE_X = 900;        // score text X relative to group left
-const DLB_T3_MARKER_X = 960;       // ◄ marker X relative to group left
+const DLB_T3_AVATAR_R = 46;        // avatar circle radius (51 × 0.9)
+const DLB_T3_AVATAR_STROKE = 5;    // medal ring stroke width (3 × 1.69)
+const DLB_T3_AVATAR_X = -93;       // avatar center X relative to group left (× 1.69)
+const DLB_T3_RANK_X = 203;         // rank text X relative to group left (× 1.69)
+const DLB_T3_NAME_X = 270;         // name text X relative to group left (× 1.69)
+const DLB_T3_SCORE_X = 1521;       // score text X relative to group left (× 1.69)
+const DLB_T3_MARKER_X = 1622;      // ◄ marker X relative to group left (× 1.69)
 const DLB_T3_MEDAL_COLORS = [0xFFD700, 0xC0C0C0, 0xCD7F32]; // gold, silver, bronze
-// ── Death screen leaderboard: Rows 4-10 group ──
-const DLB_REST_Y = 8;              // Y gap between top-3 block and 4-10 block
-const DLB_REST_ROW_H = 38;         // row height per 4-10 entry
-const DLB_REST_FONT = `${Math.round(24 * DLB_REST_SCALE)}px`;
 
 export class GameScene extends Phaser.Scene {
   // Systems
@@ -148,6 +141,7 @@ export class GameScene extends Phaser.Scene {
   private hitboxVisualizer!: HitboxVisualizer;
   private profileWasOpen = false;
   private perfSystem!: PerfSystem;
+  private perfBenchmark = new PerfBenchmark();
   private orientationOverlay: OrientationOverlay | null = null;
   private shieldSystem!: ShieldSystem;
   private timeDilation!: TimeDilationSystem;
@@ -156,6 +150,7 @@ export class GameScene extends Phaser.Scene {
   private sliderBar!: Phaser.GameObjects.Image;
   private sliderKnob!: Phaser.GameObjects.Image;
   private wasDilating: boolean = false;
+
 
   // Custom cursor (rendered under CRT) — desktop only, null on touch devices
   private cursorStroke?: Phaser.GameObjects.Image;
@@ -235,9 +230,9 @@ export class GameScene extends Phaser.Scene {
   private _titleAnimSheet: 'loop' | 'play' = 'loop';
   private _titleAnimOnComplete: (() => void) | null = null;
 
-  /** True if title animation frames were loaded (desktop always, mobile with ?anim_level=N). */
+  /** Title animations always loaded (unified spritesheets for all devices). */
   private get titleAnimEnabled(): boolean {
-    return !GAME_MODE.mobileMode || (window as any).__animLevel != null;
+    return true;
   }
 
   /** Start manual frame-stepping animation (bypasses Phaser anim timer for smoother playback). */
@@ -252,12 +247,15 @@ export class GameScene extends Phaser.Scene {
     this._titleAnimOnComplete = null;
     const texKey = sheet === 'loop' ? 'loop-sheet' : 'play-sheet';
     this.titleLoopSprite.setTexture(texKey, 0);
+    this._cutsceneTrackStart(sheet === 'loop' ? 'title-loop' : 'title-start',
+      sheet === 'loop' ? TITLE_LOOP_FRAME_COUNT : TITLE_START_FRAME_COUNT);
   }
 
   /** Stop manual frame-stepping animation. */
   private _titleAnimStop(): void {
     this._titleAnimPlaying = false;
     this._titleAnimOnComplete = null;
+    this._cutsceneTrackEnd();
   }
 
   /** Register a one-time completion callback (for play-once animations like title-start). */
@@ -280,6 +278,7 @@ export class GameScene extends Phaser.Scene {
         this._titleAnimFrame = Math.min(this._titleAnimFrame + steps, this._titleAnimFrameCount - 1);
         if (this._titleAnimFrame >= this._titleAnimFrameCount - 1) {
           this._titleAnimPlaying = false;
+          this._cutsceneTrackEnd();
           const cb = this._titleAnimOnComplete;
           this._titleAnimOnComplete = null;
           if (cb) cb();
@@ -287,6 +286,54 @@ export class GameScene extends Phaser.Scene {
         }
       }
       this.titleLoopSprite.setFrame(this._titleAnimFrame);
+      this._cutsceneTrackFrame(this._titleAnimFrame);
+    }
+  }
+
+  // Cutscene player — manual performance.now() stepping (same pattern as title anims)
+  // Uses individual textures + setTexture() (spritesheets exceeded iOS WebGL 8192px limit)
+  private _csSprite: Phaser.GameObjects.Sprite | null = null;
+  private _csPlaying = false;
+  private _csFrame = 0;
+  private _csLastTime = 0;
+  private _csFrameCount = 0;
+  private _csFps = 8;
+  private _csOnComplete: (() => void) | null = null;
+
+  /** Start manual frame-stepping cutscene using spritesheet (setFrame index). */
+  private _csPlay(sprite: Phaser.GameObjects.Sprite, sheetKey: string, frameCount: number, fps: number, onComplete: () => void): void {
+    // Game loop runs at natural FPS (30+) for smooth CRT effects.
+    // Cutscene frame rate is controlled independently by _csUpdate() via performance.now().
+    this._csSprite = sprite;
+    sprite.setTexture(sheetKey);
+    sprite.setFrame(0);
+    this._csFrame = 0;
+    this._csFrameCount = frameCount;
+    this._csFps = fps;
+    this._csPlaying = true;
+    this._csLastTime = performance.now();
+    this._csOnComplete = onComplete;
+  }
+
+  /** Called every frame from update() — advances cutscene frame using performance.now(). */
+  private _csUpdate(): void {
+    if (!this._csPlaying || !this._csSprite) return;
+    const now = performance.now();
+    const elapsed = now - this._csLastTime;
+    const frameDuration = 1000 / this._csFps;
+    if (elapsed >= frameDuration) {
+      const steps = Math.floor(elapsed / frameDuration);
+      this._csLastTime += steps * frameDuration; // carry remainder
+      this._csFrame = Math.min(this._csFrame + steps, this._csFrameCount - 1);
+      this._csSprite.setFrame(this._csFrame);
+      this._cutsceneTrackFrame(this._csFrame);
+      if (this._csFrame >= this._csFrameCount - 1) {
+        this._csPlaying = false;
+        this._cutsceneTrackEnd();
+        const cb = this._csOnComplete;
+        this._csOnComplete = null;
+        if (cb) cb();
+      }
     }
   }
 
@@ -311,8 +358,9 @@ export class GameScene extends Phaser.Scene {
   private debugHelpBg!: Phaser.GameObjects.Rectangle;
   private debugHelpContainer!: Phaser.GameObjects.Container;
   private debugPanelOpen: boolean = false;
-  private debugMasterEnabled: boolean = true;
+  private debugMasterEnabled: boolean = false;
   private debugFrozen: boolean = false;
+  private _crtDefaults: Record<string, number> | null = null; // stored on first BG effect toggle
   private debugPanelRows: { label: string; text: Phaser.GameObjects.Text }[] = [];
   private debugMasterText!: Phaser.GameObjects.Text;
   private debugVolumeBg!: Phaser.GameObjects.Rectangle;
@@ -370,9 +418,6 @@ export class GameScene extends Phaser.Scene {
   private emptyNameVisible: boolean = false;
   private anyInputPressed: boolean = false;
 
-  // Widescreen side curtains (hide extra canvas width until gameplay reveal)
-  private curtainLeft: Phaser.GameObjects.Rectangle | null = null;
-  private curtainRight: Phaser.GameObjects.Rectangle | null = null;
 
   // Countdown (5→1 before gameplay)
   private countdownSprite!: Phaser.GameObjects.Sprite;
@@ -388,6 +433,7 @@ export class GameScene extends Phaser.Scene {
   // Tutorial (pre-countdown screens)
   private introTutSprite: Phaser.GameObjects.Sprite | null = null;
   private introTutPlaying: boolean = false;
+  private _hasStartedOnce: boolean = false;
   private tutorialBlank!: Phaser.GameObjects.Image;
   private tutorialControlsSprite!: Phaser.GameObjects.Sprite;
   private tutorialObstaclesImage!: Phaser.GameObjects.Image;
@@ -559,7 +605,7 @@ export class GameScene extends Phaser.Scene {
       const laneY = TUNING.ROAD_TOP_Y + laneH * i + laneH / 2;
       const highlight = this.add.rectangle(
         TUNING.GAME_WIDTH / 2, laneY,
-        GAME_MODE.canvasWidth, laneH,
+        TUNING.GAME_WIDTH, laneH,
         0xff0000, 0.1
       ).setDepth(0.5).setVisible(false);
       this.laneHighlights.push(highlight);
@@ -600,6 +646,7 @@ export class GameScene extends Phaser.Scene {
 
     // --- Performance monitor + orientation lock ---
     this.perfSystem = new PerfSystem();
+    this.perfBenchmark.init();
     if (GAME_MODE.mobileMode && !GAME_MODE.isPhoneMode) {
       // Tablets use Phaser overlay; phones use HTML rotate-back overlay (index.html)
       this.orientationOverlay = new OrientationOverlay(this);
@@ -634,6 +681,7 @@ export class GameScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true });
       this.actionBtnTop.name = 'rocket-button';
       this.actionBtnTop.on('pointerdown', () => {
+        if (!this.spectatorMode && this.pickupSystem.getAmmo() <= 0) return;
         this.actionBtnTop.play('btn-rocket-press');
         this.actionBtnTop.once('animationcomplete', () => {
           this.actionBtnTop.setFrame(0);
@@ -707,7 +755,18 @@ export class GameScene extends Phaser.Scene {
     this.hitboxVisualizer = new HitboxVisualizer();
     this.hitboxVisualizer.setGame(this.game);
     this.debugOverlay.setHitboxVisualizer(this.hitboxVisualizer);
+    this.debugOverlay.setProfilePopup(this.profilePopup);
     this.debugOverlay.setFakeSpotifyHandler(() => this.musicPlayer.debugFakeSpotifyAuth());
+    this.debugOverlay.setMusicStateGetter(
+      () => this.musicPlayer.getSourceStates(),
+      (name) => this.musicPlayer.debugToggleSourceMute(name),
+    );
+    this.debugOverlay.setBgEffectsHandler(
+      () => this.getBgEffectStates(),
+      (idx) => this.toggleBgEffect(idx),
+    );
+    // Register GameScene's countdown audio element for the debug panel
+    this.musicPlayer.registerExtraAudio('CountdownEl', () => this.countdownAudioEl);
 
     // --- Settings Popup (opens on settings button in music player) ---
     this.settingsPopup = new SettingsPopup(this, {
@@ -809,7 +868,7 @@ export class GameScene extends Phaser.Scene {
 
     // --- Title reveal overlay (black, fades out after swipe-to-fullscreen completes) ---
     this.titleRevealOverlay = this.add.rectangle(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2,
+      GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2,
       GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT,
       0x000000, 1
     ).setDepth(201).setScrollFactor(0);
@@ -889,31 +948,31 @@ export class GameScene extends Phaser.Scene {
       }
     ).setOrigin(0.5);
     this.deathScoreText = this.add.text(
-      TUNING.GAME_WIDTH / 2, 220,
+      TUNING.GAME_WIDTH / 2, 260,
       '', {
-        fontSize: '36px',
+        fontSize: '72px',
         color: '#ffffff',
         fontFamily: 'Early GameBoy',
       }
     ).setOrigin(0.5);
     this.deathTimeText = this.add.text(
-      TUNING.GAME_WIDTH / 2, 270,
+      TUNING.GAME_WIDTH / 2, 330,
       '', {
-        fontSize: '24px',
+        fontSize: '48px',
         color: '#aaaaaa',
         fontFamily: 'Early GameBoy',
       }
     ).setOrigin(0.5);
     this.deathRankText = this.add.text(
-      TUNING.GAME_WIDTH / 2, 320,
+      TUNING.GAME_WIDTH / 2, 380,
       '', {
-        fontSize: '24px',
+        fontSize: '48px',
         color: '#ffcc00',
         fontFamily: 'Early GameBoy',
       }
     ).setOrigin(0.5);
     this.deathBestText = this.add.text(
-      TUNING.GAME_WIDTH / 2, 350,
+      TUNING.GAME_WIDTH / 2, 410,
       '', {
         fontSize: '20px',
         color: '#aaaaaa',
@@ -921,18 +980,18 @@ export class GameScene extends Phaser.Scene {
       }
     ).setOrigin(0.5);
     this.deathLeaderboardText = this.add.text(
-      TUNING.GAME_WIDTH / 2, 380,
+      TUNING.GAME_WIDTH / 2, 440,
       '', {
-        fontSize: '28px',
+        fontSize: '37px',
         color: '#aaaaaa',
         fontFamily: 'Early GameBoy',
       }
     ).setOrigin(0.5, 0);
     this.deathLbEntriesContainer = this.add.container(0, 0);
     this.deathRestartText = this.add.text(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 450,
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 410,
       GAME_MODE.mobileMode ? 'Tap to try again' : 'Press SPACEBAR to try again', {
-        fontSize: '28px',
+        fontSize: '56px',
         color: '#ffffff',
         fontFamily: 'Early GameBoy',
       }
@@ -948,15 +1007,15 @@ export class GameScene extends Phaser.Scene {
       0x000000, 1
     );
     this.nameTitleText = this.add.text(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 - 300,
+      TUNING.GAME_WIDTH / 2, 320,
       'NEW HIGH SCORE!', {
-        fontSize: '144px',
+        fontSize: '96px',
         color: '#ffcc00',
         fontFamily: 'Early GameBoy',
       }
     ).setOrigin(0.5);
     const nameScoreLabel = this.add.text(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 - 140,
+      TUNING.GAME_WIDTH / 2, 460,
       '', {
         fontSize: '108px',
         color: '#ffffff',
@@ -965,7 +1024,7 @@ export class GameScene extends Phaser.Scene {
     ).setOrigin(0.5);
     nameScoreLabel.setData('id', 'nameScoreLabel');
     const namePrompt = this.add.text(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 20,
+      TUNING.GAME_WIDTH / 2, 600,
       'ENTER YOUR NAME:', {
         fontSize: '72px',
         color: '#aaaaaa',
@@ -973,7 +1032,7 @@ export class GameScene extends Phaser.Scene {
       }
     ).setOrigin(0.5);
     this.nameInputText = this.add.text(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 130,
+      TUNING.GAME_WIDTH / 2, 710,
       '_', {
         fontSize: '108px',
         color: '#ffffff',
@@ -986,7 +1045,7 @@ export class GameScene extends Phaser.Scene {
       if (this.nameHiddenInput) this.nameHiddenInput.focus();
     });
     this.nameSkipWarning = this.add.text(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 350,
+      TUNING.GAME_WIDTH / 2, 960,
       'Your score won\'t be saved! Press ESC again to skip.', {
         fontSize: '66px',
         color: '#ff4444',
@@ -999,14 +1058,14 @@ export class GameScene extends Phaser.Scene {
 
     // ENTER button — scene-level (NOT inside container) so pointer events work reliably
     this.nameEnterBtn = this.add.text(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2 + 300,
+      TUNING.GAME_WIDTH / 2, 870,
       '[ ENTER ]', {
-        fontSize: '96px',
+        fontSize: '76px',
         color: '#00ff00',
         fontFamily: 'monospace',
         fontStyle: 'bold',
         backgroundColor: '#003300',
-        padding: { x: 72, y: 36 },
+        padding: { x: 58, y: 30 },
       }
     ).setOrigin(0.5).setDepth(211).setInteractive({ useHandCursor: true });
     this.nameEnterBtn.name = 'name-enter-btn';
@@ -1070,20 +1129,19 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    // Widescreen side curtains — cover the extra canvas width during title/tutorial/countdown.
-    // Slide off-screen when gameplay starts, slide back on returnToTitle.
+    // Permanent side curtains — crop game world to 16:9 on wider screens
     const cOff = GAME_MODE.contentOffsetX;
     if (cOff > 0) {
-      this.curtainLeft = this.add.rectangle(
+      this.add.rectangle(
         cOff / 2, TUNING.GAME_HEIGHT / 2,
         cOff + 4, TUNING.GAME_HEIGHT,
         0x000000
-      ).setDepth(300).setScrollFactor(0);
-      this.curtainRight = this.add.rectangle(
+      ).setDepth(3).setScrollFactor(0);
+      this.add.rectangle(
         GAME_MODE.canvasWidth - cOff / 2, TUNING.GAME_HEIGHT / 2,
         cOff + 4, TUNING.GAME_HEIGHT,
         0x000000
-      ).setDepth(300).setScrollFactor(0);
+      ).setDepth(3).setScrollFactor(0);
     }
 
     // Black overlay for countdown (covers game world, below countdown numbers)
@@ -1093,16 +1151,15 @@ export class GameScene extends Phaser.Scene {
       0x000000
     ).setDepth(249).setScrollFactor(0).setVisible(false);
 
-    // Pre-start cutscene (fullscreen, plays once after countdown "2" appears — unskippable)
-    // Desktop: full-res PNGs (1924×1076). Mobile: half-res JPGs (962×538, ~68MB VRAM).
+    // Pre-start cutscene spritesheet (fullscreen, plays once after countdown "2" — unskippable)
     this.preStartSprite = this.add.sprite(
-      GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00000'
+      GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-sheet', 0
     ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT)
      .setDepth(248).setScrollFactor(0).setVisible(false);
 
-    // Intro-to-tutorial cutscene (all platforms — unskippable transition)
+    // Intro-to-tutorial cutscene spritesheet (all platforms — unskippable transition)
     this.introTutSprite = this.add.sprite(
-      GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'intro-tut-00000'
+      GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'intro-tut-sheet', 0
     ).setDisplaySize(TUNING.GAME_WIDTH * TUNING.INTRO_TUT_SCALE, TUNING.GAME_HEIGHT)
      .setDepth(248).setScrollFactor(0).setVisible(false);
 
@@ -1125,7 +1182,7 @@ export class GameScene extends Phaser.Scene {
     ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT).setDepth(230).setVisible(false);
 
     this.tutorialControlsSprite = this.add.sprite(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'tutorial-controls-00'
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'tut-controls-sheet', 0
     ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT).setDepth(231).setVisible(false);
 
     this.tutorialObstaclesImage = this.add.image(
@@ -1133,7 +1190,7 @@ export class GameScene extends Phaser.Scene {
     ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT).setDepth(231).setVisible(false);
 
     this.tutorialRageSprite = this.add.sprite(
-      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'tutorial-rage-0'
+      TUNING.GAME_WIDTH / 2, TUNING.GAME_HEIGHT / 2, 'tut-rage-sheet', 0
     ).setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT).setDepth(231).setVisible(false);
 
     // Tutorial skip button (bottom-right, above tutorial content, below black overlay)
@@ -1414,11 +1471,23 @@ export class GameScene extends Phaser.Scene {
           });
         });
       };
+      // Register gesture-context callback for swipe overlay touchstart.
+      // iOS requires YouTube playVideo() inside a real tap/touchstart — scroll events don't count.
+      // Called on EVERY touch until YT is actually playing (index.html removes listener once playing).
+      // First call: tryAutoplayMusic → startTitleMusic → loadVideoById (may fail without gesture or YT not ready)
+      // Subsequent calls: retryTitlePlayback → playVideo() in gesture context (handles YT loaded but not playing)
+      (window as any).__tryAutoplayMusic = () => {
+        this.tryAutoplayMusic();
+        this.musicPlayer.retryTitlePlayback();
+      };
       if ((window as any).__mobileSwipeComplete) {
         this.tryAutoplayMusic();
         fadeReveal(); // must be after tryAutoplayMusic so setContainerOpacity(0) isn't overridden
       } else {
-        (window as any).__onMobileSwipeComplete = () => { this.tryAutoplayMusic(); fadeReveal(); };
+        (window as any).__onMobileSwipeComplete = () => {
+          this.tryAutoplayMusic();
+          fadeReveal();
+        };
       }
     } else if (bootOverlay?.waitForBeep) {
       // Desktop/tablet: music starts after BIOS beep finishes
@@ -1574,14 +1643,13 @@ export class GameScene extends Phaser.Scene {
       for (const t of this.debugSpritePosTexts) t.setVisible(this.debugSpritePosActive);
     });
 
-    // Pre-start last frame overlay (F) — static image for composition reference (desktop only)
-    if (!GAME_MODE.mobileMode && this.textures.exists('pre-start-00045')) {
-      this.debugPreStartOverlay = this.add.image(
-        GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-00045'
+    // Pre-start last frame overlay (F) — static image for composition reference
+    if (this.textures.exists('pre-start-sheet')) {
+      this.debugPreStartOverlay = this.add.sprite(
+        GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'pre-start-sheet', PRE_START_FRAME_COUNT - 1
       ).setDisplaySize(GAME_MODE.canvasWidth, TUNING.GAME_HEIGHT)
        .setDepth(247).setScrollFactor(0).setAlpha(0.5).setVisible(false);
     } else {
-      // Placeholder for mobile — never shown
       this.debugPreStartOverlay = this.add.image(0, 0, '__DEFAULT').setVisible(false);
     }
     this.input.keyboard?.addKey(DEBUG_HOTKEYS.preStartOverlay.key).on('down', () => {
@@ -1863,6 +1931,7 @@ export class GameScene extends Phaser.Scene {
       this.collisionDebug = !this.collisionDebug;
       if (!this.collisionDebug) this.collisionGfx.clear();
     });
+
   }
 
   update(_time: number, delta: number) {
@@ -1890,8 +1959,9 @@ export class GameScene extends Phaser.Scene {
     // Debug freeze — stop all game logic, cursor still tracks
     if (this.debugFrozen) return;
 
-    // Manual frame stepping for title animations (performance.now()-based, bypasses Phaser anim timer)
+    // Manual frame stepping for animations (performance.now()-based, bypasses Phaser anim timer)
     this._titleAnimUpdate();
+    this._csUpdate();
 
     // Fade cursor only when over the YouTube iframe (can't render Phaser on top of HTML video)
     const overIframe = this.musicPlayer.isCursorOverIframe();
@@ -1920,6 +1990,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.perfSystem.update(dt);
+    this.perfBenchmark.recordFrame(delta, this.state === GameState.PLAYING);
     this.hitboxVisualizer.update(this);
 
     // Poll for track changes — hue-shift background + load beat/course data in Rhythm Mode
@@ -1927,11 +1998,10 @@ export class GameScene extends Phaser.Scene {
     if (curTrackId !== this.lastBeatTrackId) {
       this.lastBeatTrackId = curTrackId;
       if (curTrackId) {
-        // Hue-shift background from album art (skip Death Pixie tracks)
-        const artist = this.musicPlayer.getTrackArtist().toLowerCase();
-        const isDeathPixie = artist === TUNING.INTRO_TRACK_ARTIST.toLowerCase();
+        // Hue-shift background from album art — only when user switches off Ride or Die
+        const onDefaultPlaylist = this.musicPlayer.isDefaultPlaylist();
 
-        if (isDeathPixie) {
+        if (onDefaultPlaylist) {
           this.skyGlowSystem.clearHue();
           this.laneHighlightColor = 0xff0000;
           for (const h of this.laneHighlights) h.setFillStyle(0xff0000, 0.1);
@@ -1939,6 +2009,7 @@ export class GameScene extends Phaser.Scene {
           getDominantColor(curTrackId).then((color) => {
             if (this.lastBeatTrackId !== curTrackId) return; // stale
             if (color !== null) {
+              const artist = this.musicPlayer.getTrackArtist();
               console.log(`[SKY HUE] artist=${artist} color=#${color.toString(16).padStart(6,'0')} hue=${SkyGlowSystem.getHueDegrees(color).toFixed(1)}°`);
               this.skyGlowSystem.applyHueFromColor(color);
               this.laneHighlightColor = color;
@@ -2378,6 +2449,14 @@ export class GameScene extends Phaser.Scene {
           this.nameConfirmed = true;
         }
         break;
+      case 'spectator-on':
+        this.spectatorMode = true;
+        this.playerSystem.setSpectator(true);
+        break;
+      case 'spectator-off':
+        this.spectatorMode = false;
+        this.playerSystem.setSpectator(false);
+        break;
       case 'screenshot': {
         const t2 = (window as any).__dpMotoTest;
         if (t2?.captureScreenshot) t2.captureScreenshot();
@@ -2484,6 +2563,75 @@ export class GameScene extends Phaser.Scene {
       if (s.fps < s.fpsMin) s.fpsMin = s.fps;
       if (s.fps > s.fpsMax) s.fpsMax = s.fps;
     }
+  }
+
+  // ── Cutscene Diagnostics (for ?cutscene_test=1) ─────────────
+
+  private _csDiagLastFrameTime = 0;
+
+  /** Signal that a cutscene started (for test mode diagnostics). */
+  private _cutsceneTrackStart(name: string, totalFrames: number): void {
+    const t = (window as any).__dpMotoTest;
+    if (!t) return;
+    const cs = t.state.cutsceneDiag;
+    cs.active = name;
+    cs.frameIndex = 0;
+    cs.totalFrames = totalFrames;
+    cs.frameDeltas = [];
+    cs.fpsSamples = [];
+    cs.startTime = performance.now();
+    this._csDiagLastFrameTime = performance.now();
+  }
+
+  /** Record a frame change in the active cutscene. */
+  private _cutsceneTrackFrame(frameIndex: number): void {
+    const t = (window as any).__dpMotoTest;
+    if (!t) return;
+    const cs = t.state.cutsceneDiag;
+    if (cs.active === 'none') return;
+    const now = performance.now();
+    cs.frameIndex = frameIndex;
+    cs.frameDeltas.push(now - this._csDiagLastFrameTime);
+    this._csDiagLastFrameTime = now;
+    cs.fpsSamples.push(Math.round(this.game.loop.actualFps));
+  }
+
+  /** Signal cutscene ended; compute summary and push to completed array. */
+  private _cutsceneTrackEnd(): void {
+    const t = (window as any).__dpMotoTest;
+    if (!t) return;
+    const cs = t.state.cutsceneDiag;
+    if (cs.active === 'none') return;
+
+    const deltas = cs.frameDeltas;
+    const fps = cs.fpsSamples;
+    const durationMs = performance.now() - cs.startTime;
+
+    // Compute stats
+    const avgDelta = deltas.length > 0 ? deltas.reduce((a: number, b: number) => a + b, 0) / deltas.length : 0;
+    const stdDev = deltas.length > 1
+      ? Math.sqrt(deltas.reduce((s: number, d: number) => s + (d - avgDelta) ** 2, 0) / (deltas.length - 1))
+      : 0;
+    const effectiveAnimFps = avgDelta > 0 ? 1000 / avgDelta : 0;
+    const gameFpsAvg = fps.length > 0 ? fps.reduce((a: number, b: number) => a + b, 0) / fps.length : 0;
+    const gameFpsMin = fps.length > 0 ? Math.min(...fps) : 0;
+    // Judder: % of frames that deviated >50% from average interval
+    const judderCount = deltas.filter((d: number) => Math.abs(d - avgDelta) > avgDelta * 0.5).length;
+    const judder = deltas.length > 0 ? (judderCount / deltas.length) * 100 : 0;
+
+    cs.completed.push({
+      name: cs.active,
+      gameFpsAvg: Math.round(gameFpsAvg * 10) / 10,
+      gameFpsMin,
+      animFpsEffective: Math.round(effectiveAnimFps * 10) / 10,
+      judderPercent: Math.round(judder * 10) / 10,
+      stdDevMs: Math.round(stdDev * 10) / 10,
+      totalDurationMs: Math.round(durationMs),
+      frameDeltas: [...deltas],
+    });
+
+    console.log(`[cutscene-diag] ${cs.active}: avgFPS=${gameFpsAvg.toFixed(1)}, minFPS=${gameFpsMin}, animFPS=${effectiveAnimFps.toFixed(1)}, judder=${judder.toFixed(1)}%, stdDev=${stdDev.toFixed(1)}ms, duration=${durationMs.toFixed(0)}ms`);
+    cs.active = 'none';
   }
 
   private updateTitle(dt: number): void {
@@ -2615,21 +2763,27 @@ export class GameScene extends Phaser.Scene {
       this.musicPlayer.revealForGameplay();
       this.playerSystem.reset();
       // Play pre-start cutscene over the black overlay — unskippable
+      // Uses manual performance.now() stepping (same as title anims — 37% less judder)
       this.introTutPlaying = true;
       this.preStartSprite!.setVisible(true).setAlpha(1);
-      this.preStartSprite!.play('pre-start-cutscene');
-      // Start shuffle music now — countdown audio plays on top, finishes naturally
-      if (GAME_MODE.isPhoneMode) this.musicPlayer.startPlaylistNow();
-      this.preStartSprite!.once('animationcomplete', () => {
+      const preStartFps = 12;
+      this._cutsceneTrackStart('pre-start', PRE_START_FRAME_COUNT);
+      this._csPlay(this.preStartSprite!, 'pre-start-sheet', PRE_START_FRAME_COUNT, preStartFps, () => {
+        // Music init deferred until after cutscene — running it concurrently causes
+        // GPU/CPU contention on phones (46 JPEG texture uploads + Spotify SDK init)
         this.introTutPlaying = false;
-        this.startGame();
         this.spawnGraceTimer = TUNING.COUNTDOWN_SPAWN_DELAY;
+        // Fade last frame out over 1s
         this.tweens.add({
           targets: this.preStartSprite!,
           alpha: 0,
           duration: 1000,
-          onComplete: () => { this.preStartSprite?.setVisible(false); },
+          onComplete: () => {
+            this.preStartSprite?.setVisible(false);
+          },
         });
+        if (GAME_MODE.isPhoneMode) this.musicPlayer.startPlaylistNow();
+        this.startGame();
       });
       // Fade black overlay out during the cutscene
       this.blackOverlay.setAlpha(1).setVisible(true);
@@ -2679,20 +2833,26 @@ export class GameScene extends Phaser.Scene {
           // Start cutscene + block input
           this.introTutPlaying = true;
           this.preStartSprite!.setVisible(true).setAlpha(1);
-          this.preStartSprite!.play('pre-start-cutscene');
-          // Start shuffle music now — countdown audio plays on top, finishes naturally
-          if (GAME_MODE.isPhoneMode) this.musicPlayer.startPlaylistNow();
-          this.preStartSprite!.once('animationcomplete', () => {
+          const preStartFps2 = 12;
+          this._cutsceneTrackStart('pre-start', PRE_START_FRAME_COUNT);
+          this._csPlay(this.preStartSprite!, 'pre-start-sheet', PRE_START_FRAME_COUNT, preStartFps2, () => {
+            // Music init deferred until after cutscene — running it concurrently causes
+            // GPU/CPU contention on phones (46 JPEG texture uploads + Spotify SDK init)
             this.introTutPlaying = false;
             this.countdownPhase = 'done';
-            this.startGame();
             this.spawnGraceTimer = TUNING.COUNTDOWN_SPAWN_DELAY;
+            // Hold last cutscene frame and fade out over 1s, then free VRAM
             this.tweens.add({
               targets: this.preStartSprite!,
               alpha: 0,
               duration: 1000,
-              onComplete: () => { this.preStartSprite?.setVisible(false); },
+              onComplete: () => {
+                this.preStartSprite?.setVisible(false);
+                this._freePreGameTextures();
+              },
             });
+            if (GAME_MODE.isPhoneMode) this.musicPlayer.startPlaylistNow();
+            this.startGame();
           });
 
           // Fade black overlay + cursor out, reveal music UI
@@ -2733,14 +2893,6 @@ export class GameScene extends Phaser.Scene {
     this.setCrosshairMode(false);
     this.elapsed = 0;
 
-    // Reset widescreen curtains back to covering the sides
-    if (this.curtainLeft && this.curtainRight) {
-      const cOff = GAME_MODE.contentOffsetX;
-      this.tweens.killTweensOf(this.curtainLeft);
-      this.tweens.killTweensOf(this.curtainRight);
-      this.curtainLeft.x = cOff / 2;
-      this.curtainRight.x = GAME_MODE.canvasWidth - cOff / 2;
-    }
     // Hide mobile accelerate button
     this.inputSystem.setPrimaryButtonVisible(false);
 
@@ -2872,10 +3024,13 @@ export class GameScene extends Phaser.Scene {
       if (ctx?.state === 'suspended') ctx.resume();
     }
     if (this.state === GameState.TUTORIAL) {
+      this.musicPlayer.retryTitlePlayback(); // Retry YouTube in gesture context if it hasn't started
       this.primeCountdownAudio(); // Bless HTML5 Audio in gesture context for iOS
       this.tutorialAdvance = true;
     } else if (this.state === GameState.TITLE) {
       this.anyInputPressed = true;
+      // Retry YouTube title playback in gesture context — iOS requires playVideo() inside a tap
+      this.musicPlayer.retryTitlePlayback();
     } else if (this.state === GameState.STARTING) {
       this.anyInputPressed = true;
     }
@@ -2920,8 +3075,9 @@ export class GameScene extends Phaser.Scene {
     // Play intro-to-tutorial cutscene over everything (all platforms, unskippable)
     this.introTutPlaying = true;
     this.introTutSprite!.setVisible(true).setAlpha(1);
-    this.introTutSprite!.play('intro-tut-cutscene');
-    this.introTutSprite!.once('animationcomplete', () => {
+    const introTutFps = 12;
+    this._cutsceneTrackStart('intro-tut', INTRO_TO_TUT_FRAME_COUNT);
+    this._csPlay(this.introTutSprite!, 'intro-tut-sheet', INTRO_TO_TUT_FRAME_COUNT, introTutFps, () => {
       // Cutscene finished — fade it out to reveal the tutorial underneath
       this.tweens.add({
         targets: this.introTutSprite!,
@@ -2943,7 +3099,7 @@ export class GameScene extends Phaser.Scene {
     // Prepare tutorial layers underneath the cutscene (hidden by black overlay)
     this.tutorialBlank.setVisible(true);
     this.tutorialControlsSprite.setVisible(true).setAlpha(1);
-    if (!GAME_MODE.mobileMode) this.tutorialControlsSprite.play('tutorial-controls');
+    this.tutorialControlsSprite.play('tutorial-controls');
     this.tutorialObstaclesImage.setVisible(false).setAlpha(0);
     this.tutorialRageSprite.setVisible(false).setAlpha(0);
 
@@ -3034,7 +3190,7 @@ export class GameScene extends Phaser.Scene {
           this.tutorialObstaclesImage.setVisible(false);
           // Start rage animation and begin fading it in
           this.tutorialRageSprite.setVisible(true).setAlpha(0);
-          if (!GAME_MODE.mobileMode) this.tutorialRageSprite.play('tutorial-rage');
+          this.tutorialRageSprite.play('tutorial-rage');
           this.tutorialPhase = 'rage_in';
           this.tutorialTimer = 0;
         }
@@ -3109,6 +3265,7 @@ export class GameScene extends Phaser.Scene {
    *  permanently one-shot assets: title animations, intro-tut cutscene, tutorial images,
    *  pre-start cutscene, and countdown visuals.
    *  Saves ~300 MB on desktop, ~200 MB on mobile. */
+
   private _freePreGameTextures(): void {
     if (this._cutsceneTexturesFreed) return;
     let freed = 0;
@@ -3117,28 +3274,25 @@ export class GameScene extends Phaser.Scene {
       if (this.textures.exists(key)) { this.textures.remove(key); freed++; }
     };
 
-    // --- Title animation spritesheets (~103 MB) ---
+    // --- Title animation spritesheets ---
     this.titleLoopSprite?.stop();
     this.titleLoopSprite?.setVisible(false);
     safeRemove('loop-sheet');
     safeRemove('play-sheet');
-    safeRemove('start-loop-00');
 
-    // --- Pre-start cutscene frames (46 frames, ~91 MB mobile / ~190 MB desktop) ---
-    this.preStartSprite?.stop();
+    // --- Pre-start cutscene (single spritesheet) ---
+    this._csPlaying = false;
+    this._csSprite = null;
+    if (this.preStartSprite) this.tweens.killTweensOf(this.preStartSprite);
     this.preStartSprite?.setVisible(false);
-    for (let i = 0; i < PRE_START_FRAME_COUNT; i++) {
-      safeRemove(`pre-start-${String(i).padStart(5, '0')}`);
-    }
+    safeRemove('pre-start-sheet');
 
-    // --- Intro-to-tutorial cutscene frames (27 frames, ~53 MB mobile / ~110 MB desktop) ---
-    this.introTutSprite?.stop();
+    // --- Intro-to-tutorial cutscene (single spritesheet) ---
+    if (this.introTutSprite) this.tweens.killTweensOf(this.introTutSprite);
     this.introTutSprite?.setVisible(false);
-    for (let i = 0; i < INTRO_TO_TUT_FRAME_COUNT; i++) {
-      safeRemove(`intro-tut-${String(i).padStart(5, '0')}`);
-    }
+    safeRemove('intro-tut-sheet');
 
-    // --- Tutorial images ---
+    // --- Tutorial spritesheets + statics ---
     this.tutorialControlsSprite?.stop();
     this.tutorialControlsSprite?.setVisible(false);
     this.tutorialRageSprite?.stop();
@@ -3148,16 +3302,8 @@ export class GameScene extends Phaser.Scene {
     safeRemove('tutorial-blank');
     safeRemove('tutorial-obstacles');
     safeRemove('tutorial-skip');
-    // Controls (desktop: 29 frames, mobile: 1)
-    const controlsCount = GAME_MODE.mobileMode ? 1 : TUNING.TUTORIAL_CONTROLS_FRAMES;
-    for (let i = 0; i < controlsCount; i++) {
-      safeRemove(`tutorial-controls-${String(i).padStart(2, '0')}`);
-    }
-    // Rage (desktop: 4 frames, mobile: 1)
-    const rageCount = GAME_MODE.mobileMode ? 1 : TUNING.TUTORIAL_RAGE_FRAMES;
-    for (let i = 0; i < rageCount; i++) {
-      safeRemove(`tutorial-rage-${i}`);
-    }
+    safeRemove('tut-controls-sheet');
+    safeRemove('tut-rage-sheet');
 
     this._cutsceneTexturesFreed = true;
     console.log(`[VRAM] Freed ${freed} pre-game textures — title anims, cutscenes, tutorial`);
@@ -3494,7 +3640,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private startGame(): void {
-    this._freePreGameTextures(); // One-shot: free title/cutscene/tutorial VRAM (~200-300 MB)
+    this.stopCountdownAudio();
+    // _freePreGameTextures() is called in the preStartSprite fade onComplete
+    // so the last cutscene frame can fade out smoothly before VRAM is freed
     this.state = GameState.PLAYING;
     this.setCrosshairMode(true);
     this.musicPlayer.setCompact(false);
@@ -3507,61 +3655,47 @@ export class GameScene extends Phaser.Scene {
     this.testPickups = 0;
     this.testRocketsFired = 0;
     this.testObstaclesDestroyed = 0;
-    this.spawnGraceTimer = 0;
+    // spawnGraceTimer is set by the cutscene callback — don't zero it here
     this.blackOverlay.setVisible(false);
     this.deathWhiteOverlay.setVisible(false);
 
-    // Start gameplay UI at alpha 0 — fades in when curtains start sliding
-    this.actionBtnTop.setVisible(true).setAlpha(0);
-    this.actionBtnBottom.setVisible(true).setAlpha(0);
-    this.sliderBar.setVisible(true).setAlpha(0);
-    this.sliderKnob.setVisible(true).setAlpha(0);
-    this.musicPlayer.setContainerOpacity(0);
     this.musicPlayer.setVisible(true);
 
-    // Slide widescreen curtains off-screen to reveal the full gameplay canvas.
-    // Delay 1100ms so the preStartSprite fade (1000ms) completes first —
-    // otherwise the 1920px-wide fading sprite creates a vignette-like seam
-    // as the curtains reveal the wider canvas behind it.
-    const uiFadeIn = () => {
-      const uiTargets = [this.actionBtnTop, this.actionBtnBottom, this.sliderBar, this.sliderKnob, this.hudLabel, this.hudHighScore];
-      this.tweens.add({ targets: uiTargets, alpha: 1, duration: 2000, ease: 'Power2' });
-      this.musicPlayer.fadeContainerOpacity(1, 2000);
-    };
-    if (this.curtainLeft && this.curtainRight) {
-      const cOff = GAME_MODE.contentOffsetX;
-      this.time.delayedCall(1100, () => {
-        uiFadeIn();
-        if (this.curtainLeft && this.curtainRight) {
-          this.tweens.add({
-            targets: this.curtainLeft,
-            x: -cOff / 2,
-            duration: 2000,
-            ease: 'Cubic.Out',
-          });
-          this.tweens.add({
-            targets: this.curtainRight,
-            x: GAME_MODE.canvasWidth + cOff / 2,
-            duration: 2000,
-            ease: 'Cubic.Out',
-            onComplete: () => {
-              // Curtains fully off-screen — fade in the accelerate button
-              if (GAME_MODE.mobileMode) {
-                this.inputSystem.fadeInPrimaryButton(TUNING.MOBILE_BTN_FADE_IN);
-              }
-            },
-          });
-        }
-      });
-    } else if (GAME_MODE.mobileMode) {
-      // No curtains (canvas = 1920) — fade in button after same delay
-      this.time.delayedCall(1100, () => { uiFadeIn(); });
-      this.time.delayedCall(1100 + 2000, () => {
-        this.inputSystem.fadeInPrimaryButton(TUNING.MOBILE_BTN_FADE_IN);
-      });
+    if (this._hasStartedOnce) {
+      // ── Replay after death: UI appears instantly, no curtain animation ──
+      this.actionBtnTop.setVisible(true).setAlpha(1);
+      this.actionBtnBottom.setVisible(true).setAlpha(1);
+      this.sliderBar.setVisible(true).setAlpha(1);
+      this.sliderKnob.setVisible(true).setAlpha(1);
+      this.hudLabel.setVisible(true).setAlpha(1);
+      this.hudHighScore.setVisible(true).setAlpha(1);
+      this.musicPlayer.setContainerOpacity(1);
+      if (GAME_MODE.mobileMode) {
+        this.inputSystem.fadeInPrimaryButton(0);
+      }
     } else {
-      // Desktop, no curtains — fade in at same 1100ms delay
+      // ── First start: full curtain slide + UI fade-in ──
+      this._hasStartedOnce = true;
+
+      // Start gameplay UI at alpha 0 — fades in when curtains start sliding
+      this.actionBtnTop.setVisible(true).setAlpha(0);
+      this.actionBtnBottom.setVisible(true).setAlpha(0);
+      this.sliderBar.setVisible(true).setAlpha(0);
+      this.sliderKnob.setVisible(true).setAlpha(0);
+      this.musicPlayer.setContainerOpacity(0);
+
+      // Fade in gameplay UI after pre-start cutscene completes
+      const uiFadeIn = () => {
+        const uiTargets = [this.actionBtnTop, this.actionBtnBottom, this.sliderBar, this.sliderKnob, this.hudLabel, this.hudHighScore];
+        this.tweens.add({ targets: uiTargets, alpha: 1, duration: 2000, ease: 'Power2' });
+        this.musicPlayer.fadeContainerOpacity(1, 2000);
+      };
       this.time.delayedCall(1100, () => { uiFadeIn(); });
+      if (GAME_MODE.mobileMode) {
+        this.time.delayedCall(1100 + 2000, () => {
+          this.inputSystem.fadeInPrimaryButton(TUNING.MOBILE_BTN_FADE_IN);
+        });
+      }
     }
     this.dyingPhase = 'done';
     this.roadSystem.setVisible(true);
@@ -4574,12 +4708,7 @@ export class GameScene extends Phaser.Scene {
               circleSlot.preview.setTexture(textureKey);
               circleSlot.preview.stop();
             }
-            // Tint puddle preview blue (white circle texture needs color)
-            if (warning.type === ObstacleType.SLOW) {
-              circleSlot.preview.setTint(TUNING.SLOW_COLOR);
-            } else {
-              circleSlot.preview.clearTint();
-            }
+            circleSlot.preview.clearTint();
           }
 
           const targetH = circleDiameter * scaleMultiplier;
@@ -4857,7 +4986,7 @@ export class GameScene extends Phaser.Scene {
 
           // Show death screen shell immediately (behind white overlay)
           this.deathScoreText.setText(`SCORE: ${this.pendingScore}`);
-          this.deathTimeText.setText(`TIME: ${Math.round(this.elapsed)}s`);
+          this.deathTimeText.setVisible(false);
           this.deathRankText.setText('');
           this.deathBestText.setVisible(false);
           this.deathLeaderboardText.setText('');
@@ -4930,8 +5059,8 @@ export class GameScene extends Phaser.Scene {
           this.deathWhiteOverlay.setVisible(false);
           this.dyingPhase = 'done';
 
-          // Hide profileHud on death/high-score screens
-          this.profileHud.setVisible(false);
+          // Hide profileHud on death leaderboard (keep visible for name entry)
+          if (this.autoSubmitted) this.profileHud.setVisible(false);
 
           // NOW activate the actual state
           if (!this.autoSubmitted) {
@@ -5004,6 +5133,7 @@ export class GameScene extends Phaser.Scene {
     // Stash score info for after the transition
     this.pendingScore = this.scoreSystem.getScore();
     this.pendingRank = this.leaderboardSystem.wouldMakeBoard(this.pendingScore);
+    this.pendingRank = this.pendingRank || 1; // DEBUG: force name entry for testing
 
     // Explosion on top of the player (above player's Y-based depth, below white overlay at 1200)
     this.deathExplosion.setPosition(this.playerSystem.getX(), this.playerSystem.getY());
@@ -5046,6 +5176,9 @@ export class GameScene extends Phaser.Scene {
     this.nameInputText.setText('_');
     this.nameEntryContainer.setVisible(true);
     this.nameEnterBtn.setVisible(true);
+    this.musicPlayer.setVisible(true);
+    this.profileHud.setVisible(true);
+    this.profileHud.showProfileMode('', '');
   }
 
   /** Activate name entry state and keyboard handler (call after visuals are revealed) */
@@ -5127,7 +5260,7 @@ export class GameScene extends Phaser.Scene {
     this.inputSystem.getRocketPressed();
 
     this.deathScoreText.setText(`SCORE: ${this.pendingScore}`);
-    this.deathTimeText.setText(`TIME: ${Math.round(this.elapsed)}s`);
+    this.deathTimeText.setVisible(false);
 
     // Build unified entry list from global data (preferred) or local fallback
     const globalData = this.globalLeaderboardData;
@@ -5189,18 +5322,18 @@ export class GameScene extends Phaser.Scene {
     // Top 10 leaderboard display — top 3 get podium styling
     if (this.rhythmMode) {
       const diff = this.rhythmDifficulty.toUpperCase();
-      this.deathLeaderboardText.setText(`── RHYTHM ${diff} TOP 10 ──`);
+      this.deathLeaderboardText.setText(`── RHYTHM ${diff} TOP THREE ──`);
     } else {
       this.deathLeaderboardText.setText(isGlobal
-        ? `── ${this.weekKey} GLOBAL TOP 10 ──`
-        : `── ${this.weekKey} TOP 10 ──`);
+        ? `── GLOBAL TOP THREE ──`
+        : `── TOP THREE ──`);
     }
 
     // Clear previous entry rows
     this.deathLbEntriesContainer.removeAll(true);
     this.highlightedRowTexts = [];
 
-    const headerH = 40;
+    const headerH = 80;
     const baseY = this.deathLeaderboardText.y + headerH;
 
     const hasAvatar = this.textures.exists(AVATAR_TEXTURE_KEY);
@@ -5252,13 +5385,6 @@ export class GameScene extends Phaser.Scene {
       this.deathLbEntriesContainer.add(nameT);
       rowTexts.push(nameT);
 
-      // Time (right-justified)
-      const timeT = this.add.text(DLB_T3_X + DLB_T3_TIME_X, rowCenterY, `${e.time}s`, {
-        fontSize: DLB_T3_FONT, color, fontFamily: 'Early GameBoy',
-      }).setOrigin(1, 0.5);
-      this.deathLbEntriesContainer.add(timeT);
-      rowTexts.push(timeT);
-
       // Score (right-justified)
       const scoreT = this.add.text(DLB_T3_X + DLB_T3_SCORE_X, rowCenterY, String(e.score), {
         fontSize: DLB_T3_FONT, color, fontFamily: 'Early GameBoy',
@@ -5279,54 +5405,6 @@ export class GameScene extends Phaser.Scene {
       curY += DLB_T3_ROW_H;
     }
 
-    // ── Rows 4-10 ──
-    curY += DLB_REST_Y;
-    for (let i = 3; i < entries.length; i++) {
-      const e = entries[i];
-      const rowCenterY = curY + DLB_REST_ROW_H / 2;
-      const color = (i === highlightIdx) ? '#ffffff' : '#aaaaaa';
-      const rowTexts: Phaser.GameObjects.Text[] = [];
-
-      // Rank (right-justified so "." aligns with top 3)
-      const rankT = this.add.text(DLB_T3_X + DLB_T3_RANK_X, rowCenterY, `${String(i + 1).padStart(2, ' ')}.`, {
-        fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
-      }).setOrigin(1, 0.5);
-      this.deathLbEntriesContainer.add(rankT);
-      rowTexts.push(rankT);
-
-      // Name (left-justified)
-      const nameT = this.add.text(DLB_T3_X + DLB_T3_NAME_X, rowCenterY, (e.name || 'ANON'), {
-        fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
-      }).setOrigin(0, 0.5);
-      this.deathLbEntriesContainer.add(nameT);
-      rowTexts.push(nameT);
-
-      // Time (right-justified)
-      const timeT = this.add.text(DLB_T3_X + DLB_T3_TIME_X, rowCenterY, `${e.time}s`, {
-        fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
-      }).setOrigin(1, 0.5);
-      this.deathLbEntriesContainer.add(timeT);
-      rowTexts.push(timeT);
-
-      // Score (right-justified)
-      const scoreT = this.add.text(DLB_T3_X + DLB_T3_SCORE_X, rowCenterY, String(e.score), {
-        fontSize: DLB_REST_FONT, color, fontFamily: 'Early GameBoy',
-      }).setOrigin(1, 0.5);
-      this.deathLbEntriesContainer.add(scoreT);
-      rowTexts.push(scoreT);
-
-      // ◄ marker (separate element)
-      if (i === highlightIdx) {
-        const markerT = this.add.text(DLB_T3_X + DLB_T3_MARKER_X, rowCenterY, '◄', {
-          fontSize: DLB_REST_FONT, color: '#ffffff', fontFamily: 'Early GameBoy',
-        }).setOrigin(0, 0.5);
-        this.deathLbEntriesContainer.add(markerT);
-        rowTexts.push(markerT);
-      }
-
-      if (i === highlightIdx) this.highlightedRowTexts = rowTexts;
-      curY += DLB_REST_ROW_H;
-    }
 
     this.highlightRank = highlightIdx >= 0 ? rank : 0;
 
@@ -5366,6 +5444,7 @@ export class GameScene extends Phaser.Scene {
     this.emptyNameYesBtn.setVisible(true);
     this.emptyNameNoBtn.setVisible(true);
     this.nameEnterBtn.setVisible(false);
+    this.nameInputText.setVisible(false);
   }
 
   private hideEmptyNamePrompt(): void {
@@ -5374,6 +5453,7 @@ export class GameScene extends Phaser.Scene {
     this.emptyNameYesBtn.setVisible(false);
     this.emptyNameNoBtn.setVisible(false);
     this.nameEnterBtn.setVisible(true);
+    this.nameInputText.setVisible(true);
   }
 
   private submitAsAnon(): void {
@@ -5417,41 +5497,63 @@ export class GameScene extends Phaser.Scene {
       const name = this.enteredName.trim() || 'ANON';
       const rank = this.leaderboardSystem.submit(name, this.pendingScore, this.elapsed);
 
-      // Hide name entry UI, transition to DEAD (death screen shell already visible from hold phase)
-      this.nameEntryContainer.setVisible(false);
-      this.nameEnterBtn.setVisible(false);
-      this.state = GameState.DEAD;
-      this.deadInputDelay = 0.5;
+      // Fade to black, then swap to death screen, then fade from black
+      this.deathWhiteOverlay.setFillStyle(0x000000);
+      this.deathWhiteOverlay.setAlpha(0).setVisible(true).setDepth(1400);
 
-      // Async submit + fetch — render ONLY in .finally() to avoid local→global flash
-      const gen3 = this.deathGen;
-      if (this.rhythmMode && this.rhythmTrackId) {
-        const trackId = this.rhythmTrackId;
-        const diff = this.rhythmDifficulty;
-        submitRhythmScore(trackId, diff, this.pendingScore, Math.round(this.elapsed), name).then(id => {
-          if (gen3 !== this.deathGen) return;
-          this.lastSubmittedRunId = id;
-          return fetchRhythmTop10(trackId, diff);
-        }).then(data => {
-          if (gen3 !== this.deathGen) return;
-          if (data) this.globalLeaderboardData = data;
-        }).catch(() => {}).finally(() => {
-          if (gen3 !== this.deathGen) return;
-          this.prepareDeathScreenVisuals(rank);
-        });
-      } else {
-        submitScore(this.pendingScore, this.elapsed, name).then(id => {
-          if (gen3 !== this.deathGen) return;
-          this.lastSubmittedRunId = id;
-          return fetchGlobalTop10(this.weekKey);
-        }).then(data => {
-          if (gen3 !== this.deathGen) return;
-          if (data) this.globalLeaderboardData = data;
-        }).catch(() => {}).finally(() => {
-          if (gen3 !== this.deathGen) return;
-          this.prepareDeathScreenVisuals(rank);
-        });
-      }
+      this.tweens.add({
+        targets: this.deathWhiteOverlay,
+        alpha: 1,
+        duration: 400,
+        ease: 'Linear',
+        onComplete: () => {
+          // Screen is black — swap UI
+          this.nameEntryContainer.setVisible(false);
+          this.nameEnterBtn.setVisible(false);
+          this.state = GameState.DEAD;
+          this.deadInputDelay = 0.5;
+
+          // Async submit + fetch — reveal ONLY after data arrives
+          const gen3 = this.deathGen;
+          const revealFromBlack = () => {
+            if (gen3 !== this.deathGen) return;
+            this.prepareDeathScreenVisuals(rank);
+            this.tweens.add({
+              targets: this.deathWhiteOverlay,
+              alpha: 0,
+              duration: 400,
+              ease: 'Linear',
+              onComplete: () => {
+                this.deathWhiteOverlay.setVisible(false);
+                this.deathWhiteOverlay.setFillStyle(0xffffff);
+                this.deathWhiteOverlay.setDepth(1200);
+              },
+            });
+          };
+
+          if (this.rhythmMode && this.rhythmTrackId) {
+            const trackId = this.rhythmTrackId;
+            const diff = this.rhythmDifficulty;
+            submitRhythmScore(trackId, diff, this.pendingScore, Math.round(this.elapsed), name).then(id => {
+              if (gen3 !== this.deathGen) return;
+              this.lastSubmittedRunId = id;
+              return fetchRhythmTop10(trackId, diff);
+            }).then(data => {
+              if (gen3 !== this.deathGen) return;
+              if (data) this.globalLeaderboardData = data;
+            }).catch(() => {}).finally(revealFromBlack);
+          } else {
+            submitScore(this.pendingScore, this.elapsed, name).then(id => {
+              if (gen3 !== this.deathGen) return;
+              this.lastSubmittedRunId = id;
+              return fetchGlobalTop10(this.weekKey);
+            }).then(data => {
+              if (gen3 !== this.deathGen) return;
+              if (data) this.globalLeaderboardData = data;
+            }).catch(() => {}).finally(revealFromBlack);
+          }
+        },
+      });
     }
   }
 
@@ -5476,6 +5578,81 @@ export class GameScene extends Phaser.Scene {
 
     if (this.inputSystem.getSpeedTap()) {
       this.startGame();
+    }
+  }
+
+  /* ============ BG Effects Debug Panel ============ */
+
+  private getBgEffectStates(): BgEffectState[] {
+    // Snapshot CRT defaults on first call
+    if (!this._crtDefaults) {
+      this._crtDefaults = {
+        brightness: CRT_TUNING.brightness,
+        bloomStrength: CRT_TUNING.bloomStrength,
+        gamma: CRT_TUNING.gamma,
+        saturation: CRT_TUNING.saturation,
+        scanlineIntensity: CRT_TUNING.scanlineIntensity,
+        maskStrength: CRT_TUNING.maskStrength,
+      };
+    }
+    const d = this._crtDefaults;
+    const crtPipelines = this.cameras.main.getPostPipeline('CRTPipeline');
+    const hasCRT = Array.isArray(crtPipelines) ? crtPipelines.length > 0 : !!crtPipelines;
+
+    return [
+      { name: 'Hue Rotation', active: this.skyGlowSystem.isHueActive(), value: this.skyGlowSystem.isHueActive() ? 'ON' : 'OFF' },
+      { name: 'CRT (whole)', active: hasCRT, value: hasCRT ? 'ON' : 'OFF' },
+      { name: 'CRT Brightness', active: CRT_TUNING.brightness !== 1.0, value: CRT_TUNING.brightness.toFixed(2) },
+      { name: 'CRT Bloom', active: CRT_TUNING.bloomStrength > 0, value: CRT_TUNING.bloomStrength.toFixed(2) },
+      { name: 'CRT Gamma', active: CRT_TUNING.gamma !== 1.0, value: CRT_TUNING.gamma.toFixed(2) },
+      { name: 'CRT Saturation', active: CRT_TUNING.saturation !== 1.0, value: CRT_TUNING.saturation.toFixed(2) },
+      { name: 'CRT Scanlines', active: CRT_TUNING.scanlineIntensity > 0, value: CRT_TUNING.scanlineIntensity.toFixed(2) },
+      { name: 'CRT Mask', active: CRT_TUNING.maskStrength > 0, value: CRT_TUNING.maskStrength.toFixed(2) },
+      { name: 'Reflections', active: this.reflectionSystem.isMaskEnabled(), value: this.reflectionSystem.isMaskEnabled() ? 'ON' : 'OFF' },
+    ];
+  }
+
+  private toggleBgEffect(idx: number): void {
+    const d = this._crtDefaults!;
+    switch (idx) {
+      case 0: // Hue Rotation
+        if (this.skyGlowSystem.isHueActive()) {
+          this.skyGlowSystem.clearHue();
+        } else {
+          this.skyGlowSystem.applyHueFromColor(0x00aaff); // test color
+        }
+        break;
+      case 1: { // CRT whole
+        const crt = this.cameras.main.getPostPipeline('CRTPipeline');
+        const has = Array.isArray(crt) ? crt.length > 0 : !!crt;
+        if (has) {
+          this.cameras.main.removePostPipeline('CRTPipeline');
+        } else {
+          this.cameras.main.setPostPipeline('CRTPipeline');
+        }
+        break;
+      }
+      case 2: // CRT Brightness
+        CRT_TUNING.brightness = CRT_TUNING.brightness !== 1.0 ? 1.0 : d.brightness;
+        break;
+      case 3: // CRT Bloom
+        CRT_TUNING.bloomStrength = CRT_TUNING.bloomStrength > 0 ? 0 : d.bloomStrength;
+        break;
+      case 4: // CRT Gamma
+        CRT_TUNING.gamma = CRT_TUNING.gamma !== 1.0 ? 1.0 : d.gamma;
+        break;
+      case 5: // CRT Saturation
+        CRT_TUNING.saturation = CRT_TUNING.saturation !== 1.0 ? 1.0 : d.saturation;
+        break;
+      case 6: // CRT Scanlines
+        CRT_TUNING.scanlineIntensity = CRT_TUNING.scanlineIntensity > 0 ? 0 : d.scanlineIntensity;
+        break;
+      case 7: // CRT Mask
+        CRT_TUNING.maskStrength = CRT_TUNING.maskStrength > 0 ? 0 : d.maskStrength;
+        break;
+      case 8: // Reflections
+        this.reflectionSystem.toggleMask();
+        break;
     }
   }
 }
