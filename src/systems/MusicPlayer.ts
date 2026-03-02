@@ -211,12 +211,16 @@ export class MusicPlayer {
     try {
       hm = `paused:${this.humePlayer.isPaused()} muted:${this.humePlayer.isMuted()} track:${this.humePlayer.getCurrentTrack()?.title ?? 'none'}`;
     } catch { /* ignore */ }
+    const cd = this.countdownMusic ? `playing:${(this.countdownMusic as any).isPlaying}` : 'null';
+    const preview = this.previewAudio ? `playing:${!this.previewAudio.paused} src:${this.previewAudio.src.slice(-30)}` : 'null';
     return [
-      `source: ${this.source}`,
+      `source: ${this.source} mobile: ${GAME_MODE.isMobileMode}`,
       `title: ${this.titleTrackPlaying} playlist: ${this.playlistStarted} titlePL: ${this.titlePlaylistLoaded} spInit: ${this.spotifyInitInProgress}`,
       `YT: ${yt}`,
       `SP: ${sp}`,
       `HUME: ${hm}`,
+      `countdown: ${cd}`,
+      `preview: ${preview}`,
       `track: ${this.currentTrackName}`,
     ].join('\n');
   }
@@ -1112,6 +1116,8 @@ export class MusicPlayer {
 
   private async startSpotifyPlaylist(): Promise<void> {
     if (!this.spotifyPlayer) return;
+    // Kill any currently-playing Spotify track (title track) before starting playlist
+    try { this.spotifyPlayer.pause(); } catch {}
     // Defensive: ensure YouTube is paused+muted before Spotify starts
     if (this.ytPlayer) {
       try { this.ytPlayer.pauseVideo(); this.ytPlayer.stopVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
