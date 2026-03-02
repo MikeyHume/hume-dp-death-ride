@@ -353,10 +353,11 @@ export class MusicPlayer {
   private startMutedYTVideo(): void {
     if (!this.ytPlayer || !this.ytReady) return;
     try {
+      this.ytPlayer.pauseVideo();
       this.ytPlayer.mute();
       this.ytPlayer.setVolume(0);
       this.ytPlayer.cueVideoById(TITLE_YT_VIDEO_ID);
-      this.ytPlayer.playVideo();  // starts muted — cue doesn't auto-play
+      // Do NOT call playVideo() — YT mute is unreliable, causes dual audio
       this.wmpPopup?.setVideoActive(true);
     } catch {}
   }
@@ -373,19 +374,20 @@ export class MusicPlayer {
     }
 
     // Pause + mute YouTube before loading companion video (prevents audio leak)
-    try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+    try { this.ytPlayer.pauseVideo(); this.ytPlayer.stopVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
 
     // Try catalog lookup (returns instantly if cache is warm)
     this.playbackCtrl.onSpotifyTrackChanged(
       spotifyTrackId, '', '', null,
     ).then((ytId) => {
       if (ytId && this.ytPlayer && this.ytReady) {
-        // Exact match — cue (don't auto-play) muted YouTube video as visual companion
+        // Exact match — cue muted YouTube video as visual companion (NO playVideo — causes dual audio)
         try {
+          this.ytPlayer.pauseVideo();
           this.ytPlayer.mute();
           this.ytPlayer.setVolume(0);
           this.ytPlayer.cueVideoById({ videoId: ytId });
-          this.ytPlayer.playVideo();  // starts muted — cue doesn't auto-play
+          // Do NOT call playVideo() here — YT mute is unreliable, audio leaks under Spotify
           this.wmpPopup?.hideAlbumFallback();
           this.wmpPopup?.setVideoActive(true);
         } catch {}
@@ -794,16 +796,12 @@ export class MusicPlayer {
           // Safety net: if YouTube starts playing while Spotify is active, ensure it's silent
           if (event.data === 1 && this.source === 'spotify') {
             try {
-              // If YouTube is unmuted, it's leaking audio — stop it completely
-              if (!this.ytPlayer.isMuted() || this.ytPlayer.getVolume() > 0) {
-                console.warn('[MusicPlayer] SAFETY NET: YouTube playing unmuted while Spotify active — killing');
-                this.ytPlayer.pauseVideo();
-              }
+              // ALWAYS stop YouTube when it plays during Spotify — isMuted() lies
+              console.warn('[MusicPlayer] SAFETY NET: YouTube playing while Spotify active — nuclear kill');
+              this.ytPlayer.pauseVideo();
+              this.ytPlayer.stopVideo();
               this.ytPlayer.mute();
               this.ytPlayer.setVolume(0);
-              setTimeout(() => {
-                try { this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
-              }, 50);
             } catch {}
           }
           // Update track info when a playlist video starts playing (state 1 = playing)
@@ -952,7 +950,7 @@ export class MusicPlayer {
         // Gameplay or title playlist — switch directly without countdown audio
         // STOP YouTube FIRST (pauseVideo + mute + volume 0) before starting Spotify
         if (this.ytPlayer) {
-          try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+          try { this.ytPlayer.pauseVideo(); this.ytPlayer.stopVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
         }
         this.source = 'spotify';
         this.startSpotifyPlaylist();
@@ -960,7 +958,7 @@ export class MusicPlayer {
         // Title track already playing on YouTube — switch audio to Spotify, keep YT as muted visual
         // STOP YouTube FIRST before starting Spotify
         if (this.ytPlayer) {
-          try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+          try { this.ytPlayer.pauseVideo(); this.ytPlayer.stopVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
         }
         this.source = 'spotify';
         this.spotifyPlayer!.playTrack(TITLE_SPOTIFY_TRACK_ID, true);
@@ -1007,7 +1005,7 @@ export class MusicPlayer {
         // Just set source and mute YouTube. GameScene will call startPlaylistNow() when countdown ends.
         this.source = 'spotify';
         if (this.ytPlayer) {
-          try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+          try { this.ytPlayer.pauseVideo(); this.ytPlayer.stopVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
         }
         return;
       }
@@ -1031,9 +1029,9 @@ export class MusicPlayer {
     if (!this.spotifyPlayer) return;
     this.source = 'spotify';
 
-    // Pause + mute YouTube — it will be used as visual companion (onTrackChanged triggers search)
+    // Nuclear kill YouTube — pauseVideo+mute is unreliable, audio leaks
     if (this.ytPlayer) {
-      try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+      try { this.ytPlayer.pauseVideo(); this.ytPlayer.stopVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
     }
 
     // iOS Safari suspends AudioContext when no WebAudio sources are active.
@@ -1116,7 +1114,7 @@ export class MusicPlayer {
     if (!this.spotifyPlayer) return;
     // Defensive: ensure YouTube is paused+muted before Spotify starts
     if (this.ytPlayer) {
-      try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+      try { this.ytPlayer.pauseVideo(); this.ytPlayer.stopVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
     }
     const ok = await this.spotifyPlayer.startPlaylist();
     if (!ok) {
@@ -1196,7 +1194,7 @@ export class MusicPlayer {
   startPlaylistNow(): void {
     // Mute+pause YouTube before starting any playlist (prevents dual audio on mobile)
     if (this.ytPlayer && this.ytReady) {
-      try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+      try { this.ytPlayer.pauseVideo(); this.ytPlayer.stopVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
     }
     if (this.source === 'spotify' && this.spotifyPlayer) {
       this.startSpotifyPlaylist();
@@ -1350,7 +1348,7 @@ export class MusicPlayer {
     }
     // Stop YouTube
     if (this.ytPlayer) {
-      try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); } catch {}
+      try { this.ytPlayer.pauseVideo(); this.ytPlayer.stopVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
     }
 
     this.source = 'hume';
@@ -1377,7 +1375,7 @@ export class MusicPlayer {
     if (this.spotifyPlayer?.isReady()) {
       // STOP YouTube FIRST before starting Spotify
       if (this.ytPlayer) {
-        try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
+        try { this.ytPlayer.pauseVideo(); this.ytPlayer.stopVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
       }
       this.source = 'spotify';
       this.startSpotifyPlaylist();
@@ -1420,7 +1418,7 @@ export class MusicPlayer {
     if (this.playlistStarted || (this.titlePlaylistLoaded && this.source === 'youtube')) {
       log.push(`PATH: playlist/titlePlaylist → stopping YT, switching to spotify`);
       if (this.ytPlayer) {
-        try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch (e) { log.push(`YT STOP ERROR: ${e}`); }
+        try { this.ytPlayer.pauseVideo(); this.ytPlayer.stopVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch (e) { log.push(`YT STOP ERROR: ${e}`); }
       }
       this.source = 'spotify';
       // DON'T call startSpotifyPlaylist — no real Spotify player
@@ -1428,7 +1426,7 @@ export class MusicPlayer {
     } else if (this.titleTrackPlaying && this.source === 'youtube') {
       log.push(`PATH: title track YT→Spotify handoff`);
       if (this.ytPlayer) {
-        try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch (e) { log.push(`YT STOP ERROR: ${e}`); }
+        try { this.ytPlayer.pauseVideo(); this.ytPlayer.stopVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch (e) { log.push(`YT STOP ERROR: ${e}`); }
       }
       this.source = 'spotify';
       // DON'T call spotifyPlayer.playTrack — no real Spotify player
