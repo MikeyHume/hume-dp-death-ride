@@ -35,10 +35,10 @@ function telemLog(
     session_id: TELEM_SESSION,
     event,
     source: mp.source,
-    yt: yt ? JSON.stringify(yt) : null,
-    spotify: sp ? JSON.stringify(sp) : null,
-    hume: hume ? JSON.stringify(hume) : null,
-    flags: JSON.stringify({ title: mp.titleTrackPlaying, playlist: mp.playlistStarted, titlePL: mp.titlePlaylistLoaded, spInit: mp.spotifyInitInProgress }),
+    yt: yt || null,
+    spotify: sp || null,
+    hume: hume || null,
+    flags: { title: mp.titleTrackPlaying, playlist: mp.playlistStarted, titlePL: mp.titlePlaylistLoaded, spInit: mp.spotifyInitInProgress },
     note: note || null,
   });
 }
