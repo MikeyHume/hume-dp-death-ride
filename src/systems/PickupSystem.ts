@@ -67,7 +67,7 @@ export class PickupSystem {
   }
 
   /** Scroll pickups left, check player collection, animate hover + glow */
-  update(dt: number, roadSpeed: number, playerX: number, playerY: number): void {
+  update(dt: number, roadSpeed: number, playerX: number, playerY: number, playerLanes?: number[]): void {
     this.justCollected = false;
     const time = this.scene.time.now / 1000;
 
@@ -102,12 +102,11 @@ export class PickupSystem {
         continue;
       }
 
-      // Lane-based collection: same lane + player passed pickup center X
-      if (playerX >= pickup.x) {
+      // Lane-based collection: pickup's lane in player's lane set + player passed pickup center X
+      if (playerX >= pickup.x && playerLanes) {
         const laneH = (TUNING.ROAD_BOTTOM_Y - TUNING.ROAD_TOP_Y) / TUNING.LANE_COUNT;
-        const playerLane = Math.min(Math.floor((playerY - TUNING.ROAD_TOP_Y) / laneH), TUNING.LANE_COUNT - 1);
         const pickupLane = Math.min(Math.floor((baseY - TUNING.ROAD_TOP_Y) / laneH), TUNING.LANE_COUNT - 1);
-        if (playerLane === pickupLane) {
+        if (playerLanes.includes(pickupLane)) {
           pickup.setActive(false).setVisible(false);
           glow.setVisible(false);
           if (this.ammo < TUNING.PICKUP_MAX_AMMO) this.ammo++;

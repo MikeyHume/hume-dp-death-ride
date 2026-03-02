@@ -575,6 +575,21 @@ function telemetryPlugin(): Plugin {
           return json(res, { ok: true, crashes: crashes.length, ndjsonBytes: ndjsonSize, crashFiles: crashes.slice(-10) });
         }
 
+        // ─── Tap Diagnostic Telemetry (title-screen bug investigation) ───
+        if (req.url === '/tap-tele' && req.method === 'POST') {
+          readBody(req).then((raw) => {
+            try {
+              const d = JSON.parse(raw);
+              const ts = new Date(d.ts).toLocaleTimeString();
+              console.log(`\x1b[33m[TAP] ${ts} state=${d.gameState} ytState=${d.ytState} muted=${d.ytMuted} titlePlaying=${d.titleTrackPlaying} pending=${d.pendingTitlePlay} src=${d.musicSource} swipeLock=${d.swipeLock} swipeDone=${d.swipeComplete} ptr=(${d.pointerX?.toFixed(0)},${d.pointerY?.toFixed(0)}) isUI=${d.isTitleUI} retry=${d.retryAction}\x1b[0m`);
+              fs.appendFileSync(NDJSON_PATH, JSON.stringify({ _type: 'tap-tele', _rx: Date.now(), ...d }) + '\n');
+            } catch {}
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end('{"ok":true}');
+          });
+          return;
+        }
+
         // ─── Perf Telemetry (silent FPS gathering) ────────────
         if (req.url === '/perf-tele' && req.method === 'POST') {
           readBody(req).then((raw) => {

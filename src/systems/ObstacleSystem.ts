@@ -311,8 +311,9 @@ export class ObstacleSystem {
       // Enemy cars are protected from barriers until they've passed through the center timing window
       if (car.getData('enemy') && car.x >= windowLeft) continue;
 
+      const carLane = car.getData('lane') as number;
       const carW = car.getData('w') as number;
-      const carH = car.getData('h') as number;
+      const carCollW = carW * TUNING.CAR_COLLISION_W;
 
       for (let s = 0; s < this.pool.length; s++) {
         const stat = this.pool[s];
@@ -321,16 +322,14 @@ export class ObstacleSystem {
         // Never collide when both objects are off-screen (invisible deaths feel broken)
         if (car.x > TUNING.GAME_WIDTH && stat.x > TUNING.GAME_WIDTH) continue;
 
+        // Lane check: car and barrier must be in the same lane
+        const statLane = stat.getData('lane') as number;
+        if (carLane !== statLane) continue;
+
         const statW = stat.getData('w') as number;
-        const statH = stat.getData('h') as number;
-
-        // Use car's collision rect for Y overlap (prevents cross-lane triggers)
-        const carCollW = carW * TUNING.CAR_COLLISION_W;
-        const carCollH = carH * TUNING.CAR_COLLISION_H;
         const overlapX = Math.abs((car.x + TUNING.CAR_COLLISION_OFFSET_X) - stat.x) < (carCollW + statW) / 2;
-        const overlapY = Math.abs((car.y + TUNING.CAR_COLLISION_OFFSET_Y) - stat.y) < (carCollH + statH) / 2;
 
-        if (overlapX && overlapY) {
+        if (overlapX) {
           const ex = (car.x + stat.x) / 2;
           const ey = (car.y + stat.y) / 2;
 
@@ -608,8 +607,8 @@ export class ObstacleSystem {
     }
   }
 
-  /** Check collisions against player. Circle-vs-AABB for crash/slow, circle-vs-ellipse for cars. */
-  checkCollision(playerX: number, playerY: number, playerHalfW: number, playerHalfH: number): CollisionResult {
+  /** Check collisions against player. Lane-based: same lane + X overlap = collision. */
+  checkCollision(playerX: number, playerY: number, playerHalfW: number, playerHalfH: number, playerLanes: number[]): CollisionResult {
     this.collisionResult.crashed = false;
     this.collisionResult.slowOverlapping = false;
     this.collisionResult.hitX = 0;
@@ -623,18 +622,18 @@ export class ObstacleSystem {
 
       const type = obs.getData('type') as ObstacleType;
       if (obs.getData('dying')) continue;
+
+      // Lane check: obstacle must be in one of the player's lanes
+      const obsLane = obs.getData('lane') as number;
+      if (!playerLanes.includes(obsLane)) continue;
+
       const obsW = obs.getData('w') as number;
-      const obsH = obs.getData('h') as number;
 
       if (type === ObstacleType.CAR) {
-        // Player rect vs car rect (AABB)
         const halfW = (obsW * TUNING.CAR_COLLISION_W) / 2;
-        const halfH = (obsH * TUNING.CAR_COLLISION_H) / 2;
-
         const overlapX = Math.abs(playerX - (obs.x + TUNING.CAR_COLLISION_OFFSET_X)) < (halfW + playerHalfW);
-        const overlapY = Math.abs(playerY - (obs.y + TUNING.CAR_COLLISION_OFFSET_Y)) < (halfH + playerHalfH);
 
-        if (overlapX && overlapY) {
+        if (overlapX) {
           this.collisionResult.crashed = true;
           this.collisionResult.hitX = obs.x;
           this.collisionResult.hitY = obs.y;
@@ -646,18 +645,14 @@ export class ObstacleSystem {
           return this.collisionResult;
         }
       } else if (type === ObstacleType.SLOW) {
-        // Player rect vs puddle rect (AABB)
         const overlapX = Math.abs(playerX - obs.x) < (obsW / 2 + playerHalfW);
-        const overlapY = Math.abs(playerY - obs.y) < (obsH / 2 + playerHalfH);
-        if (overlapX && overlapY) {
+        if (overlapX) {
           this.collisionResult.slowOverlapping = true;
         }
       } else {
-        // AABB-vs-AABB collision for crash obstacles
         const overlapX = Math.abs(playerX - obs.x) < (obsW / 2 + playerHalfW);
-        const overlapY = Math.abs(playerY - obs.y) < (obsH / 2 + playerHalfH);
 
-        if (overlapX && overlapY) {
+        if (overlapX) {
           this.collisionResult.crashed = true;
           this.collisionResult.hitX = obs.x;
           this.collisionResult.hitY = obs.y;
@@ -671,24 +666,24 @@ export class ObstacleSystem {
     return this.collisionResult;
   }
 
-  /** Check if a slash hitbox overlaps any CRASH obstacle. Despawns + explodes on hit.
-   *  Y overlap uses the player's collision circle so you can only slash obstacles in your lane.
+  /** Check if a slash hitbox overlaps any CRASH obstacle. Lane-based: same lane + X overlap.
    *  Returns the obstacle's X position on hit, or -1 if no hit. */
   private lastSlashWasGuardian = false;
-  checkSlashCollision(slashX: number, slashW: number, playerCollY: number, playerHalfH: number): number {
+  checkSlashCollision(slashX: number, slashW: number, playerCollY: number, playerHalfH: number, playerLanes: number[]): number {
     this.lastSlashWasGuardian = false;
     for (let i = 0; i < this.pool.length; i++) {
       const obs = this.pool[i];
       if (!obs.active) continue;
       if (obs.getData('type') !== ObstacleType.CRASH) continue;
 
+      // Lane check: obstacle must be in one of the player's lanes
+      const obsLane = obs.getData('lane') as number;
+      if (!playerLanes.includes(obsLane)) continue;
+
       const obsW = obs.getData('w') as number;
-      const obsH = obs.getData('h') as number;
-
       const overlapX = Math.abs(obs.x - slashX) < (obsW + slashW) / 2;
-      const overlapY = Math.abs(obs.y - playerCollY) < (obsH / 2 + playerHalfH);
 
-      if (overlapX && overlapY) {
+      if (overlapX) {
         const ex = obs.x;
         const ey = obs.y;
         this.lastSlashWasGuardian = !!obs.getData('guardian');
@@ -758,9 +753,9 @@ export class ObstacleSystem {
   }
 
   /** Rage mode collision: destroys any CRASH or CAR obstacle the player touches.
-   *  Returns an array of hits with position and type info. */
+   *  Lane-based: same lane + X overlap. Returns an array of hits. */
   private rageHits: RageHit[] = [];
-  checkRageCollision(playerX: number, playerY: number, playerHalfW: number, playerHalfH: number): RageHit[] {
+  checkRageCollision(playerX: number, playerY: number, playerHalfW: number, playerHalfH: number, playerLanes: number[]): RageHit[] {
     this.rageHits.length = 0;
     for (let i = 0; i < this.pool.length; i++) {
       const obs = this.pool[i];
@@ -770,24 +765,21 @@ export class ObstacleSystem {
       if (type === ObstacleType.SLOW) continue;
       if (obs.getData('dying')) continue;
 
+      // Lane check: obstacle must be in one of the player's lanes
+      const obsLane = obs.getData('lane') as number;
+      if (!playerLanes.includes(obsLane)) continue;
+
       const obsW = obs.getData('w') as number;
-      const obsH = obs.getData('h') as number;
-      let colliding = false;
+      let overlapX = false;
 
       if (type === ObstacleType.CAR) {
-        // Rage player rect vs car rect (AABB)
         const halfW = (obsW * TUNING.CAR_COLLISION_W) / 2;
-        const halfH = (obsH * TUNING.CAR_COLLISION_H) / 2;
-        const overlapX = Math.abs(playerX - (obs.x + TUNING.CAR_COLLISION_OFFSET_X)) < (halfW + playerHalfW);
-        const overlapY = Math.abs(playerY - (obs.y + TUNING.CAR_COLLISION_OFFSET_Y)) < (halfH + playerHalfH);
-        colliding = overlapX && overlapY;
+        overlapX = Math.abs(playerX - (obs.x + TUNING.CAR_COLLISION_OFFSET_X)) < (halfW + playerHalfW);
       } else {
-        const overlapX = Math.abs(playerX - obs.x) < (obsW / 2 + playerHalfW);
-        const overlapY = Math.abs(playerY - obs.y) < (obsH / 2 + playerHalfH);
-        colliding = overlapX && overlapY;
+        overlapX = Math.abs(playerX - obs.x) < (obsW / 2 + playerHalfW);
       }
 
-      if (colliding) {
+      if (overlapX) {
         const ex = obs.x;
         const ey = obs.y;
         if (type === ObstacleType.CAR) {
@@ -958,8 +950,23 @@ export class ObstacleSystem {
     return closest;
   }
 
+  /** Return lane indices the player's collision box overlaps (1-2 lanes).
+   *  Matches the lane highlight overlap logic in GameScene. */
+  private _playerLanes: number[] = [];
+  getPlayerLanes(playerCollY: number, playerHalfH: number): number[] {
+    this._playerLanes.length = 0;
+    const collTop = playerCollY - playerHalfH;
+    const collBottom = playerCollY + playerHalfH;
+    for (let i = 0; i < TUNING.LANE_COUNT; i++) {
+      const laneTop = TUNING.ROAD_TOP_Y + this.laneHeight * i;
+      const laneBottom = laneTop + this.laneHeight;
+      if (collTop < laneBottom && collBottom > laneTop) this._playerLanes.push(i);
+    }
+    return this._playerLanes;
+  }
+
   /** Lane-based projectile collision: hits the nearest obstacle in the given lane
-   *  whose center X the rocket has reached. Destroys the obstacle on hit. */
+   *  whose left edge the rocket has reached. Destroys the obstacle on hit. */
   checkLaneProjectileCollision(rocketX: number, laneIndex: number): { x: number; y: number; type: ObstacleType; isEnemy: boolean } | null {
     let bestObs: Phaser.GameObjects.Sprite | null = null;
     let bestDist = Infinity;
@@ -973,11 +980,13 @@ export class ObstacleSystem {
       const obsLane = obs.getData('lane') as number;
       if (obsLane !== laneIndex) continue;
 
-      // Rocket must have reached the obstacle's center X
-      if (rocketX < obs.x) continue;
+      // Rocket must have reached the obstacle's left edge
+      const obsW = obs.getData('w') as number;
+      const obsLeftEdge = obs.x - obsW / 2;
+      if (rocketX < obsLeftEdge) continue;
 
-      // Pick the closest one the rocket just passed (smallest overshoot)
-      const dist = rocketX - obs.x;
+      // Pick the closest one the rocket just reached (smallest overshoot from left edge)
+      const dist = rocketX - obsLeftEdge;
       if (dist < bestDist) {
         bestDist = dist;
         bestObs = obs;

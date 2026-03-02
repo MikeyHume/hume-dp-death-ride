@@ -192,10 +192,13 @@ export class BootScene extends Phaser.Scene {
     // UI assets
     this.load.image('spotify-text-logo', 'ui/spotify_text_logo_.png');
     this.load.image('sign-in', 'ui/sign_in.png');
+    this.load.image('sign-in-side', 'ui/sign_in_side.png');
     this.load.image('cursor', 'ui/cursor.png');
     this.load.image('crosshair', 'ui/crosshair.png');
-    this.load.image('rocket-icon', 'assets/pickups/rocket_icon.png');
-    this.load.image('rocket-icon-empty', 'assets/pickups/rocket_empty_icon.png');
+    this.load.image('rocket-icon', 'ui/rocket_icon.png');
+    this.load.image('rocket-icon-empty', 'ui/rocket_empty_icon.png');
+    this.load.image('tap-here', 'ui/tap_here.png');
+    this.load.image('press-go', 'ui/press_go.png');
     if (!loadPhone('pickup-shield')) {
       this.load.spritesheet('pickup-shield', `assets/pickups/shield_pickup${sfx}.png`, {
         frameWidth: fw(TUNING.SHIELD_FRAME_WIDTH),
@@ -209,8 +212,10 @@ export class BootScene extends Phaser.Scene {
     this.load.image('ui-unmuted', 'ui/unmuted.png');
     this.load.image('ui-muted', 'ui/muted.png');
     this.load.image('ui-insta', 'ui/insta.png');
+    this.load.image('ui-heart', 'ui/heart.png');
     this.load.image('default-avatar', 'assets/profiles/dp_anon_pic.jpg');
     this.load.image('add-pic-icon', 'ui/add_pic_icon.png');
+    this.load.image('edge-blend', 'ui/edge_blend.png');
 
     // Action button spritesheets (5 frames each, 320x320 per frame — downscaled from 640x640 to save VRAM)
     this.load.spritesheet('btn-slash', 'ui/slash_button.png', { frameWidth: 320, frameHeight: 320 });

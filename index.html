@@ -505,7 +505,7 @@
   <!-- DEBUG: visible error overlay for mobile testing -->
   <div id="err-overlay" style="display:none;position:fixed;top:0;left:0;right:0;z-index:999999;background:rgba(255,0,0,0.9);color:#fff;font:12px monospace;padding:8px;max-height:40vh;overflow:auto;word-break:break-all"></div>
   <!-- Version label — neon green, bold, bottom-left, above everything -->
-  <div id="version-label" style="position:fixed;bottom:8px;left:8px;z-index:999999;font:bold 18px monospace;color:#39ff14;text-shadow:0 0 6px #39ff14,0 0 2px #000;pointer-events:none"></div>
+  <div id="version-label" style="position:fixed;bottom:8px;left:8px;z-index:999999;font:bold 18px monospace;color:#ff0000;text-shadow:0 0 6px #ff0000,0 0 2px #000;pointer-events:none"></div>
   <script>
     (function() {
       // Version label is set later by the BIOS script (after verNum is defined)
@@ -618,7 +618,7 @@
       var hh = String(now.getHours()).padStart(2, '0');
       var mi = String(now.getMinutes()).padStart(2, '0');
       var ss = String(now.getSeconds()).padStart(2, '0');
-      var verNum = '0.01.47';
+      var verNum = '1.00.00';
       window.__dpMotoVersion = verNum;
       var vLabel = document.getElementById('version-label');
       if (vLabel) vLabel.textContent = 'v' + verNum;
@@ -1023,7 +1023,8 @@
       try {
         if (window.__ytPlayer && window.__ytPlayer.playVideo) {
           window.__ytPlayer.playVideo();
-          setTimeout(function() { try { window.__ytPlayer.pauseVideo(); } catch(e) {} }, 50);
+          // Removed pauseVideo() timeout — it raced with loadVideoById() from
+          // __onMobileSwipeComplete, pausing the title video right after it loaded
         }
       } catch(e) {}
     }
@@ -1474,6 +1475,8 @@
 
     // --- Custom cursor (reads from window.__cursorConfig) ---
     var cc = window.__cursorConfig;
+    var isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 1;
+    if (isTouchDevice) return;  // no custom cursor on mobile
     var bootCursor = document.createElement('div');
     bootCursor.style.cssText = 'position:fixed;pointer-events:none;z-index:1;display:none;' +
       'animation:bios-jitter var(--bios-jitter-speed) infinite alternate;';

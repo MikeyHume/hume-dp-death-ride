@@ -620,6 +620,10 @@ export class PlayerSystem {
     return this.playerSpeed;
   }
 
+  getTapPressure(): number {
+    return this.tapPressure;
+  }
+
   getSprite(): Phaser.GameObjects.Sprite {
     return this.sprite;
   }

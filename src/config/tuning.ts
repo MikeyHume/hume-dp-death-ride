@@ -83,11 +83,11 @@ export const TUNING = {
   PLAYER_BOTTOM_Y_INSET: 20, // extra px above ROAD_BOTTOM_Y to prevent clipping at bottom (accounts for scale-up)
 
   PLAYER_ARROW_SPEED: 600,   // px/sec vertical movement when using arrow keys
-  PLAYER_MOUSE_FOLLOW_RATE: 15, // exponential approach rate for mouse Y tracking (higher = snappier, 15 ≈ 95% in 0.2s)
+  PLAYER_MOUSE_FOLLOW_RATE: 4.5, // exponential approach rate for mouse Y tracking (higher = snappier, 4.5 ≈ 95% in 0.67s)
 
   // Start hold — player waits after countdown, then ramps to speed
   START_HOLD_WAIT: 0.5,        // seconds player must wait before spacebar works
-  START_HOLD_RAMP: 6.9,        // seconds for road speed + player Y to ramp up after release
+  START_HOLD_RAMP: 2.0,        // seconds for road speed + player Y to ramp up after release
   START_TEXT_ON_MS: 800,       // ms the "HOLD SPACEBAR TO GO" text stays visible per blink cycle
   START_TEXT_OFF_MS: 400,      // ms the text stays hidden per blink cycle
   START_TEXT_FADE_MS: 150,     // ms fade transition between on/off (0 = hard cut)
@@ -248,8 +248,9 @@ export const TUNING = {
   // FX — speed lines
   SPEED_LINE_COUNT: 20,            // pre-allocated horizontal speed lines
   SPEED_LINE_THRESHOLD: 0.8,       // speed lines appear when playerSpeed > roadSpeed * this
-  SPEED_LINE_ALPHA_MAX: 0.6,       // max alpha of speed lines at full intensity
+  SPEED_LINE_ALPHA_MAX: 1.0,       // max alpha of speed lines at full tap pressure
   SPEED_LINE_SCROLL: 4.0,          // speed lines travel left at this multiple of road speed
+  SPEED_LINE_HEIGHT: 4,           // thickness of each speed line in px
   SPEED_LINE_COLOR: 0xffffff,
 
   // FX — camera shake
@@ -283,28 +284,31 @@ export const TUNING = {
   EDGE_WARN_DISTANCE: 300,         // px from boundary to start warning
   EDGE_WARN_ALPHA_MAX: 0.4,        // max overlay alpha at boundary
 
+  // Edge blend vignette overlay
+  EDGE_BLEND_DEPTH: 998,           // above all game screens, below HUD (999) — always visible
+
   // Audio
   ENGINE_BASE_FREQ: 80,            // Hz at speed 0
   ENGINE_IDLE_FREQ: 45,            // Hz for idle putter when not accelerating
   ENGINE_MAX_FREQ: 300,            // Hz at max speed
   ENGINE_VOLUME: 10,
-  ENGINE_IDLE_VOLUME: 1,        // quiet putter volume when space not pressed
-  ENGINE_SAMPLE_VOLUME: 2.5,       // engine sample volume at full speed
-  ENGINE_SAMPLE_IDLE_VOLUME: 0.4,  // engine sample volume when idle
+  ENGINE_IDLE_VOLUME: 2,        // quiet putter volume when space not pressed
+  ENGINE_SAMPLE_VOLUME: 5,       // engine sample volume at full speed
+  ENGINE_SAMPLE_IDLE_VOLUME: 2,  // engine sample volume when idle
   ENGINE_IDLE_RATE: 0.7,           // playback rate when idle (lower pitch)
-  ENGINE_MAX_RATE: 1.8,            // playback rate at max speed (higher pitch/rev)
+  ENGINE_MAX_RATE: 5,            // playback rate at max speed (higher pitch/rev)
   ENGINE_RAGE_RATE_BOOST: 0.4,     // extra playback rate added during rage mode
   ENGINE_SMOOTHING: 0.08,          // per-frame smoothing factor for rate/volume transitions
   ENGINE_REV_RATE_BOOST: 0.6,      // extra playback rate on tap (instant rev burst)
-  ENGINE_REV_VOL_BOOST: 0.5,       // extra volume on tap (instant rev burst)
+  ENGINE_REV_VOL_BOOST: 4,       // extra volume on tap (instant rev burst)
   ENGINE_REV_DECAY: 4.0,           // how fast the rev burst decays per second
   SFX_CLICK_VOLUME: 0.5,            // UI click volume
   SFX_HOVER_VOLUME: 0.3,            // UI hover volume
-  SFX_EXPLODE_VOLUME: 0.25,         // explosion volume
-  SFX_ROCKET_FIRE_VOLUME: 0.5,      // rocket launch volume
-  SFX_AMMO_PICKUP_VOLUME: 1,     // ammo pickup volume
-  SFX_OBSTACLE_KILL_VOLUME: 2.5,   // katana slash kill volume
-  SFX_POTION_PICKUP_VOLUME: 1,   // shield/potion pickup volume
+  SFX_EXPLODE_VOLUME: 5,         // explosion volume
+  SFX_ROCKET_FIRE_VOLUME: 4,      // rocket launch volume
+  SFX_AMMO_PICKUP_VOLUME: .69,     // ammo pickup volume
+  SFX_OBSTACLE_KILL_VOLUME: 4,   // katana slash kill volume
+  SFX_POTION_PICKUP_VOLUME: .69,   // shield/potion pickup volume
   SFX_POTION_USED_VOLUME: 2.5,     // shield/potion consumed volume
   IMPACT_VOLUME: 0.3,
   IMPACT_DURATION: 0.15,           // seconds
@@ -316,7 +320,7 @@ export const TUNING = {
   KATANA_WIDTH: 200,                // slash hitbox width
   KATANA_HEIGHT: 140,              // slash hitbox height (generous vertical)
   KATANA_COLOR: 0xccccff,          // slash visual color (silver)
-  KATANA_SLASH_VOLUME: 0.15,       // whoosh sound volume
+  KATANA_SLASH_VOLUME: 0.5,       // whoosh sound volume
   KATANA_SPEED_WIDTH_SCALE: 3.5,   // at max speed, slash width multiplied by this (1.0 = no scaling)
   KATANA_SPEED_OFFSET_SCALE: 2.0,  // at max speed, slash offset multiplied by this (extends reach right)
   KATANA_KILL_POINTS_MIN: 10,      // points for farthest kill
@@ -357,10 +361,10 @@ export const TUNING = {
   CAR_EXPLOSION_SCALE: 1.69,          // car explosions are this many times bigger than normal
   CAR_DEATH_LINGER: 4 / 60,           // seconds car remains visible after dying (4 frames at 60fps)
   // Music volume multipliers (1.0 = default, >1 louder, <1 quieter)
-  MUSIC_VOL_MASTER: 1.0,             // master music volume multiplier (scales all music output)
-  MUSIC_VOL_TITLE: 0.1,             // title screen track volume multiplier
+  MUSIC_VOL_MASTER: .69,             // master music volume multiplier (scales all music output)
+  MUSIC_VOL_TITLE: 0.01,             // title screen track volume multiplier
   MUSIC_VOL_SPOTIFY: 0.1,           // Spotify playback volume multiplier
-  MUSIC_VOL_YOUTUBE: 1.0,           // YouTube playback volume multiplier
+  MUSIC_VOL_YOUTUBE: 0.1,           // YouTube playback volume multiplier
   MUSIC_VOL_HUME: 1.0,               // hume (self-hosted) playback volume multiplier
   MUSIC_VOL_COUNTDOWN: 1.0,          // countdown music volume before Spotify (was 0.69, capped at 1.0)
   SFX_BIOS_MASTER: 1,             // master multiplier for BIOS intro + end beep (scales both together)
@@ -385,20 +389,19 @@ export const TUNING = {
   MUSIC_UI_PHONE_BACKDROP_ALPHA: 0.6, // backdrop opacity behind phone popup
   MUSIC_UI_PHONE_ANIM_MS: 350,        // phone popup expand/collapse animation duration (ms)
 
-  // Action buttons (upper-right, spritesheet buttons — 320x320 native, downscaled from 640)
-  ACTION_BTN_SCALE_TOP: 0.5,         // rocket button scale (was 0.25 at 640px, now 0.5 at 320px = same 160px display)
-  ACTION_BTN_PAD_RIGHT_TOP: 180,      // rocket button px from right edge of screen
-  ACTION_BTN_PAD_TOP_TOP: 120,        // rocket button px from top edge of screen
-  ACTION_BTN_SCALE_BOT: 1.0,         // slash button scale (was 0.5 at 640px, now 1.0 at 320px = same 320px display)
-  ACTION_BTN_PAD_RIGHT_BOT: 340,      // slash button px from right edge of screen
-  ACTION_BTN_PAD_TOP_BOT: 350,       // slash button px from top edge of screen
-  ACTION_BTN_DEPTH: 300,             // render depth (above HUD, below modals)
+  // Action buttons (right edge, stacked — 320x320 native)
+  ACTION_BTN_SCALE_TOP: 0.69,          // rocket button scale
+  ACTION_BTN_SCALE_BOT: .9,          // slash button scale
+  ACTION_BTN_PAD_RIGHT: 100,           // both buttons px from right edge of screen
+  ACTION_BTN_Y_BOT: 800,              // slash button (bottom) Y position
+  ACTION_BTN_Y_TOP: 500,              // rocket button (top) Y position — stacked above slash
+  ACTION_BTN_DEPTH: 999,              // render depth (above edge blend 998)
 
   // Slider bar (vertical bar on road, left side)
   SLIDER_BAR_X: 200,                 // px from left edge (left-justified + padding)
   SLIDER_BAR_Y: 690,                 // vertical center of road ((480+1080)/2 = 780)
   SLIDER_BAR_SCALE: 1.25,             // uniform scale (1.0 = native 90x600, fits road exactly)
-  SLIDER_BAR_DEPTH: 5,               // render depth (above road, below player)
+  SLIDER_BAR_DEPTH: 999,             // render depth (above edge blend 998)
   SLIDER_KNOB_Y_MIN: 480,             // knob top position (when cursor at road top)
   SLIDER_KNOB_Y_MAX: 1060,             // knob bottom position (when cursor at road bottom)
 

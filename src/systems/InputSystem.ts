@@ -136,6 +136,10 @@ export class InputSystem {
       // Skip if this pointer is already tracked as external (black-bar touch)
       if (this._externalPointerIds.has(pointer.id)) return;
 
+      // Skip acceleration if pointer hit an interactive button (slash/rocket)
+      const hits = scene.input.hitTestPointer(pointer);
+      if (hits.some((obj: Phaser.GameObjects.GameObject) => obj.input?.enabled)) return;
+
       const wx = pointer.worldX;
       const wy = pointer.worldY;
 

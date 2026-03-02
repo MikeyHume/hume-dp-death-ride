@@ -21,6 +21,7 @@ export class FXSystem {
 
   // Track slow overlap to fire shake only on first contact
   private wasSlowOverlapping: boolean = false;
+  get isSlowOverlapping(): boolean { return this.wasSlowOverlapping; }
 
   // Debug: suppress camera shakes (G key clean-screen mode)
   private suppressShake: boolean = false;
@@ -31,12 +32,12 @@ export class FXSystem {
     // --- Speed lines ---
     for (let i = 0; i < TUNING.SPEED_LINE_COUNT; i++) {
       const y = Math.random() * TUNING.GAME_HEIGHT;
-      const w = 60 + Math.random() * 120;
+      const w = 100 + Math.random() * 200;
       const line = scene.add.rectangle(
         Math.random() * TUNING.GAME_WIDTH, y,
-        w, 2,
+        w, TUNING.SPEED_LINE_HEIGHT,
         TUNING.SPEED_LINE_COLOR
-      ).setAlpha(0).setDepth(50);
+      ).setAlpha(0).setDepth(50).setBlendMode(Phaser.BlendModes.ADD);
       this.speedLines.push(line);
     }
 
@@ -62,12 +63,12 @@ export class FXSystem {
 
   }
 
-  update(dt: number, playerSpeed: number, roadSpeed: number, playerX: number): void {
-    this.updateSpeedLines(dt, playerSpeed, roadSpeed);
+  update(dt: number, playerSpeed: number, roadSpeed: number, playerX: number, tapPressure: number = 0): void {
+    this.updateSpeedLines(dt, roadSpeed, tapPressure);
     this.updateEdgeWarnings(playerX);
   }
 
-  private updateSpeedLines(dt: number, playerSpeed: number, roadSpeed: number): void {
+  private updateSpeedLines(dt: number, roadSpeed: number, tapPressure: number): void {
     const tier = GAME_MODE.renderTier;
 
     // Phone-low / gen-mobile: skip speed lines entirely
@@ -78,10 +79,8 @@ export class FXSystem {
       return;
     }
 
-    const threshold = roadSpeed * TUNING.SPEED_LINE_THRESHOLD;
-    const intensity = playerSpeed > threshold
-      ? Math.min((playerSpeed - threshold) / (roadSpeed * (TUNING.MAX_SPEED_MULTIPLIER - TUNING.SPEED_LINE_THRESHOLD)), 1)
-      : 0;
+    // Intensity driven directly by tap pressure (0–1)
+    const intensity = tapPressure;
 
     for (let i = 0; i < this.speedLines.length; i++) {
       const line = this.speedLines[i];
@@ -90,7 +89,7 @@ export class FXSystem {
         continue;
       }
       if (intensity > 0) {
-        line.setAlpha(intensity * TUNING.SPEED_LINE_ALPHA_MAX * (0.3 + Math.random() * 0.7));
+        line.setAlpha(intensity * TUNING.SPEED_LINE_ALPHA_MAX * (0.5 + Math.random() * 0.5));
         // Scroll lines left relative to road speed
         line.x -= roadSpeed * TUNING.SPEED_LINE_SCROLL * dt;
         if (line.x < -200) {

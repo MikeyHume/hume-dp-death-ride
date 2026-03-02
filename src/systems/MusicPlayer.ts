@@ -241,11 +241,11 @@ export class MusicPlayer {
    * On iOS, YouTube iframe .playVideo() only works inside a tap/touchend handler.
    * Call this from GameScene's tap handler if YT title track hasn't started yet.
    */
-  retryTitlePlayback(): void {
+  retryTitlePlayback(): string {
     // Skip if Spotify is handling playback, or YT player not available
     if (this.source === 'spotify' || !this.ytPlayer || !this.ytReady) {
       console.log('[MusicPlayer] retryTitlePlayback SKIPPED — source:', this.source, 'ytPlayer:', !!this.ytPlayer, 'ytReady:', this.ytReady);
-      return;
+      return `skip:src=${this.source},yt=${!!this.ytPlayer},ready=${this.ytReady}`;
     }
     // If title track was marked playing but YT is paused/unstarted/muted, fix it
     if (this.titleTrackPlaying) {
@@ -257,19 +257,43 @@ export class MusicPlayer {
           this.ytPlayer.unMute();
           this.ytPlayer.playVideo();
           this.applyUserVolume();
+          return `playVideo:state=${state}`;
         } else if (state === 1 && this.ytPlayer.isMuted()) {
           // Playing but stuck muted — unmute
           console.log('[MusicPlayer] retryTitlePlayback — YT playing but muted, unmuting');
           this.ytPlayer.unMute();
           this.applyUserVolume();
+          return `unmute:state=1`;
         }
-      } catch {}
+        return `no-op:state=${state},muted=${this.ytPlayer.isMuted()}`;
+      } catch { return 'error'; }
     }
     // If title play is still pending (YT API was loading), try now
     if (this.pendingTitlePlay) {
       this.pendingTitlePlay = false;
       this.playTitleVideo();
+      return 'loadVideoById:pending';
     }
+    return `no-op:titlePlaying=${this.titleTrackPlaying}`;
+  }
+
+  /** Diagnostic state snapshot for tap telemetry. */
+  getDiagState(): { titleTrackPlaying: boolean; pendingTitlePlay: boolean; source: string; ytState: number; ytMuted: boolean } {
+    let ytState = -99;
+    let ytMuted = false;
+    try {
+      if (this.ytPlayer && this.ytReady) {
+        ytState = this.ytPlayer.getPlayerState();
+        ytMuted = this.ytPlayer.isMuted();
+      }
+    } catch {}
+    return {
+      titleTrackPlaying: this.titleTrackPlaying,
+      pendingTitlePlay: this.pendingTitlePlay,
+      source: this.source,
+      ytState,
+      ytMuted,
+    };
   }
 
   /** Start the YouTube title video muted (visual-only companion for Spotify playback). */
@@ -555,7 +579,7 @@ export class MusicPlayer {
       }
     });
 
-    btnContainer.append(this.heartBtn, prevBtn, nextBtn, this.muteBtn, settingsBtn);
+    btnContainer.append(this.heartBtn, prevBtn, nextBtn, this.muteBtn);
 
     rightColumn.append(this.titleClip, btnContainer);
     this.container.append(thumbLink, rightColumn);
@@ -565,8 +589,8 @@ export class MusicPlayer {
     const nextSprite = this.scene.add.image(0, 0, 'ui-skip');
     this.muteBtnSprite = this.scene.add.image(0, 0, 'ui-unmuted');
     const settingsSprite = this.scene.add.image(0, 0, 'ui-settings');
-    this.btnSprites = [prevSprite, nextSprite, this.muteBtnSprite, settingsSprite];
-    this.btnElements = [prevBtn, nextBtn, this.muteBtn, settingsBtn];
+    this.btnSprites = [prevSprite, nextSprite, this.muteBtnSprite];
+    this.btnElements = [prevBtn, nextBtn, this.muteBtn];
     for (let i = 0; i < this.btnSprites.length; i++) {
       this.btnSprites[i].setDepth(1000).setScrollFactor(0).setVisible(false).setAlpha(0);
     }
@@ -1840,20 +1864,6 @@ export class MusicPlayer {
       : MUSIC_UI_SCALE;
     this._gameplayScale = scale;
     this._gameplayPadRight = padRight;
-
-    // Revert thumbnail to original size for gameplay; avatar matching re-applies on title/tutorial
-    if (playing) {
-      this.thumbnailImg.style.height = `${this._origThumbH}px`;
-      this.thumbnailImg.style.width = `${this._origThumbH}px`;
-      this._avatarMatchH = 0;  // force recalc when returning to title
-    }
-
-    // Don't override position when phone player is centered-expanded
-    if (GAME_MODE.isMobileMode && this.mobileExpanded) return;
-
-    const rightPct = (padRight / GAME_MODE.canvasWidth) * 100;
-    this.container.style.right = `${rightPct}%`;
-    this.container.style.transform = `scale(${scale})`;
   }
 
   setCompact(value: boolean): void {
@@ -1975,8 +1985,8 @@ export class MusicPlayer {
       // Apply final corner state instantly — use gameplay position if playing
       this.container.style.transition = 'none';
       const topPct = (TUNING.MUSIC_UI_PAD_TOP / TUNING.GAME_HEIGHT) * 100;
-      const padRight = this._inGameplay ? this._gameplayPadRight : TUNING.MUSIC_UI_PAD_RIGHT;
-      const scale = this._inGameplay ? this._gameplayScale : MUSIC_UI_SCALE;
+      const padRight = TUNING.MUSIC_UI_PAD_RIGHT;
+      const scale = MUSIC_UI_SCALE;
       const rightPct = (padRight / GAME_MODE.canvasWidth) * 100;
       this.container.style.left = 'auto';
       this.container.style.top = `${topPct}%`;
@@ -2010,7 +2020,7 @@ export class MusicPlayer {
       this.revealTimer = null;
     }
 
-    // Show container in collapsed state (thumbnail only, instant)
+    // Show container in collapsed state (thumbnail only, instant — no position change)
     this.container.style.display = 'flex';
     this.collapseUI(false);
 
@@ -2114,8 +2124,8 @@ export class MusicPlayer {
     const oh = overlayRect.height || 1;
 
     // --- Match thumbnail+bg height to avatar circle+stroke on title/tutorial ---
-    if (!this._inGameplay && containerVisible) {
-      const scale = this._gameplayScale || MUSIC_UI_SCALE;
+    if (containerVisible) {
+      const scale = MUSIC_UI_SCALE;
       const targetBgCSS = AVATAR_GAME_H / TUNING.GAME_HEIGHT * oh;
       const containerLocalH = targetBgCSS / scale;
       const targetThumbH = containerLocalH - 2 * this._bgPad;

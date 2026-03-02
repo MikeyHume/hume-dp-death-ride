@@ -33,6 +33,8 @@ const SHOCKWAVE_CYCLE_MS = 60;          // ms per color cycle step
 const SIGN_IN_SCALE = 0.4;               // sign-in image scale
 const SIGN_IN_OFFSET_X = 96;             // sign-in X offset from avatar center
 const SIGN_IN_OFFSET_Y = 50;             // sign-in Y offset below avatar bottom
+const SIGN_IN_SIDE_SCALE = 0.4;          // side sign-in image scale (death screen)
+const SIGN_IN_SIDE_GAP_X = 16;           // gap between avatar right edge and side sign-in
 const RANK_FONT_SIZE = 30;               // rank text font size in px
 
 // Shield icon tuning (under rage bar, right-justified)
@@ -74,7 +76,9 @@ export class ProfileHud {
 
   // Sign-in indicator (below avatar, pulses on title/tutorial)
   private signInImage!: Phaser.GameObjects.Image;
+  private signInSideImage!: Phaser.GameObjects.Image;
   private signInTween: Phaser.Tweens.Tween | null = null;
+  private signInSideTween: Phaser.Tweens.Tween | null = null;
 
   // Slam animation state
   private slamPhase: 'none' | 'rise' | 'slam' = 'none';
@@ -193,8 +197,8 @@ export class ProfileHud {
     for (let i = 0; i < TUNING.PICKUP_MAX_AMMO; i++) {
       const bg = scene.add.image(0, 0, 'rocket-icon-empty')
         .setScale(iconScale)
-        .setTint(0x666666)
-        .setAlpha(0.4);
+        .setTint(0x000000)
+        .setAlpha(0.69);
       // Position based on the scaled icon width
       const iconW = bg.displayWidth;
       const px = BAR_X + i * (iconW + SHIELD_PILL_GAP) + iconW / 2;
@@ -225,8 +229,8 @@ export class ProfileHud {
 
       const bg = scene.add.image(px, py, 'shield-icon-empty')
         .setScale(shieldIconScale)
-        .setTint(0x666666)
-        .setAlpha(0.4);
+        .setTint(0x000000)
+        .setAlpha(0.69);
       this.container.add(bg);
       this.shieldBgIcons.push(bg);
 
@@ -245,6 +249,13 @@ export class ProfileHud {
       .setScale(SIGN_IN_SCALE)
       .setVisible(false);
     this.container.add(this.signInImage);
+
+    // Side sign-in indicator (right of avatar, death screen only)
+    this.signInSideImage = scene.add.image(
+      AVATAR_X + AVATAR_RADIUS + SIGN_IN_SIDE_GAP_X, AVATAR_Y,
+      'sign-in-side'
+    ).setOrigin(0, 0.5).setTintFill(0xffffff).setScale(SIGN_IN_SIDE_SCALE).setVisible(false);
+    this.container.add(this.signInSideImage);
 
     // Profile mode: name display (same position/font as playing name)
     this.nameDisplay = scene.add.text(BAR_X, SCORE_Y, '', {
@@ -511,7 +522,7 @@ export class ProfileHud {
     this.shockwaveText.setVisible(false);
   }
 
-  showProfileMode(name: string, rankText: string): void {
+  showProfileMode(name: string, rankText: string, deathScreen = false): void {
     // Hide playing elements
     this.scoreText.setVisible(false);
     this.rageBg.setVisible(false);
@@ -523,17 +534,22 @@ export class ProfileHud {
     for (let i = 0; i < this.shieldActiveIcons.length; i++) this.shieldActiveIcons[i].setVisible(false);
     this.playingNameText.setVisible(false);
 
-    // Show name (same font/scale as playing name)
-    this.nameDisplay.setText(name || 'ANON');
-    this.nameDisplay.setScale(this.scoreScale);
-    this.nameDisplay.setVisible(true);
-
-    // Show rank
-    this.rankDisplay.setText(rankText);
-    this.rankDisplay.setVisible(rankText.length > 0);
-
-    // Show sign-in pulse if not connected to Spotify
-    this.startSignInPulse();
+    if (deathScreen && !isConnected()) {
+      // Death screen anon: hide name, show pulsing side sign-in
+      this.nameDisplay.setVisible(false);
+      this.rankDisplay.setVisible(false);
+      this.stopSignInPulse();
+      this.startSignInSidePulse();
+    } else {
+      // Normal: show name + rank, bottom sign-in on title/tutorial
+      this.nameDisplay.setText(name || 'ANON');
+      this.nameDisplay.setScale(this.scoreScale);
+      this.nameDisplay.setVisible(true);
+      this.rankDisplay.setText(rankText);
+      this.rankDisplay.setVisible(rankText.length > 0);
+      this.stopSignInSidePulse();
+      this.startSignInPulse();
+    }
   }
 
   showPlayingMode(name?: string): void {
@@ -552,6 +568,7 @@ export class ProfileHud {
     this.nameDisplay.setVisible(false);
     this.rankDisplay.setVisible(false);
     this.stopSignInPulse();
+    this.stopSignInSidePulse();
   }
 
   /** Start the sign-in pulse animation (only if not connected to Spotify). */
@@ -582,6 +599,32 @@ export class ProfileHud {
       this.signInTween = null;
     }
     this.signInImage.setVisible(false);
+  }
+
+  /** Start the side sign-in pulse (death screen, anon only). */
+  private startSignInSidePulse(): void {
+    this.signInSideImage.setAlpha(1).setVisible(true);
+    if (this.signInSideTween) {
+      this.signInSideTween.destroy();
+      this.signInSideTween = null;
+    }
+    const scene = this.container.scene;
+    this.signInSideTween = scene.tweens.add({
+      targets: this.signInSideImage,
+      alpha: { from: 1, to: 0 },
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+    });
+  }
+
+  /** Stop the side sign-in pulse and hide it. */
+  private stopSignInSidePulse(): void {
+    if (this.signInSideTween) {
+      this.signInSideTween.destroy();
+      this.signInSideTween = null;
+    }
+    this.signInSideImage.setVisible(false);
   }
 
   destroy(): void {

@@ -88,6 +88,28 @@ const DEBUG_HOTKEYS = {
   clickInspect:   { key: 'B',       active: true },  // click any element to identify it
 };
 
+// ── Gameplay HUD: Weekly High Score ──
+const HUD_HS_LABEL_X = GAME_MODE.canvasWidth - 669;  // "WEEKLY HIGH SCORE" X
+const HUD_HS_LABEL_Y = 40;                          // "WEEKLY HIGH SCORE" Y
+const HUD_HS_LABEL_SIZE = 48;                        // label font size (px)
+const HUD_HS_SCORE_X = GAME_MODE.canvasWidth - 669;   // score value X
+const HUD_HS_SCORE_Y = 90;                           // score value Y
+const HUD_HS_SCORE_SIZE = 50;                        // score font size (px)
+
+// ── Mobile "Tap Here" image (next to hold text) ──
+const TAP_HERE_GAP_X = -160;    // gap between hold text right edge and tap_here image
+const TAP_HERE_OFFSET_Y = 200;  // vertical offset from hold text center
+const TAP_HERE_SCALE = 1;   // scale of tap_here image
+
+// ── Mobile "Press Go" image (next to slider) ──
+const PRESS_GO_PAD_X = 80;    // padding between slider right edge and press_go image
+const PRESS_GO_OFFSET_Y = 0;  // vertical offset from slider center
+const PRESS_GO_SCALE = 0.75;   // scale of press_go image
+
+// ── Puddle flash (player visual feedback) ──
+const PUDDLE_FLASH_COLORS = ['#0066FF', '#0088FF', '#0044CC'];  // blue palette
+const PUDDLE_FLASH_DURATION = 0.6;  // seconds
+
 // ── Death screen leaderboard: Top 3 only ──
 const DLB_T3_SCALE = 2.282;        // scale multiplier for top 3 font size (2.535 × 0.9)
 const DLB_T3_X = 270;              // left edge X of the entire top-3 group (centered: ~130px gaps each side)
@@ -195,6 +217,8 @@ export class GameScene extends Phaser.Scene {
   // Lane highlights (collision warning)
   private laneHighlights: Phaser.GameObjects.Rectangle[] = [];
   private laneHighlightColor: number = 0xff0000;
+  private laneEntryTime: number[] = [-999, -999, -999, -999];
+  private laneWasVisible: boolean[] = [false, false, false, false];
 
   // Lane warning indicators (pooled, right-edge preview circles)
   private warningPool: { circle: Phaser.GameObjects.Arc; preview: Phaser.GameObjects.Sprite; currentKey: string }[] = [];
@@ -215,6 +239,8 @@ export class GameScene extends Phaser.Scene {
   private startHoldActive: boolean = false; // currently holding at start
   private startHoldRampT: number = 0;      // 0→1 ramp progress after release
   private startHoldText!: Phaser.GameObjects.Text;
+  private tapHereImg!: Phaser.GameObjects.Image;
+  private pressGoImg!: Phaser.GameObjects.Image;
   private startHoldBlinkTween: Phaser.Tweens.Tween | null = null;
 
   // Title loop animation — manual performance.now()-based frame stepping
@@ -405,6 +431,9 @@ export class GameScene extends Phaser.Scene {
   private pendingRank: number = 0;
   private nameKeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private nameHiddenInput: HTMLInputElement | null = null;
+  private _nameEntryOrigY = 0;
+  private _nameEntryOrigBtnY = 0;
+  private _nameEntryKbHandler: (() => void) | null = null;
   private nameConfirmed: boolean = false;
   private autoSubmitted: boolean = false;
   private globalLeaderboardData: GlobalLeaderboardEntry[] | null = null;
@@ -502,7 +531,7 @@ export class GameScene extends Phaser.Scene {
         }
       } else if (this.state === GameState.TITLE) {
         if (isAdvanceKey) {
-          this.anyInputPressed = true;
+          this.handleScreenTap();
         }
       } else if (this.state === GameState.STARTING) {
         this.anyInputPressed = true;
@@ -596,6 +625,22 @@ export class GameScene extends Phaser.Scene {
     this.audioSystem = new AudioSystem(this);
     this.musicPlayer = new MusicPlayer(this);
 
+    // Edge blend vignette — blends 16:9 game into black pillarbox bars
+    this.add.image(GAME_MODE.canvasWidth / 2, TUNING.GAME_HEIGHT / 2, 'edge-blend')
+      .setDisplaySize(TUNING.GAME_WIDTH, TUNING.GAME_HEIGHT)
+      .setDepth(TUNING.EDGE_BLEND_DEPTH)
+      .setScrollFactor(0)
+      .setBlendMode(Phaser.BlendModes.MULTIPLY);
+
+    // Black bars flanking edge blend — cover cutscene bleed outside 16:9 area
+    const pillarW = (GAME_MODE.canvasWidth - TUNING.GAME_WIDTH) / 2;
+    if (pillarW > 0) {
+      this.add.rectangle(pillarW / 2, TUNING.GAME_HEIGHT / 2, pillarW, TUNING.GAME_HEIGHT, 0x000000)
+        .setDepth(TUNING.EDGE_BLEND_DEPTH).setScrollFactor(0);
+      this.add.rectangle(GAME_MODE.canvasWidth - pillarW / 2, TUNING.GAME_HEIGHT / 2, pillarW, TUNING.GAME_HEIGHT, 0x000000)
+        .setDepth(TUNING.EDGE_BLEND_DEPTH).setScrollFactor(0);
+    }
+
     // Wire car-vs-crash explosion sound
     this.obstacleSystem.onExplosion = () => this.audioSystem.playExplosion();
 
@@ -616,30 +661,30 @@ export class GameScene extends Phaser.Scene {
     const initialPoolSize = TUNING.LANE_COUNT * 3; // pre-warm enough for multiple per lane
     for (let i = 0; i < initialPoolSize; i++) {
       const circle = this.add.circle(0, 0, warningRadius, TUNING.WARNING_FILL_COLOR, TUNING.WARNING_FILL_ALPHA)
-        .setDepth(95).setVisible(false);
+        .setDepth(1050).setVisible(false);
       const preview = this.add.sprite(0, 0, 'obstacle-crash')
-        .setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
+        .setDepth(1051).setVisible(false).setOrigin(0.5, 0.5);
       this.warningPool.push({ circle, preview, currentKey: '' });
     }
 
     // Lane warning pills (combo: crash + pickup/shield, pooled)
     const initialPillPoolSize = TUNING.LANE_COUNT;
     for (let i = 0; i < initialPillPoolSize; i++) {
-      const gfx = this.add.graphics().setDepth(95).setVisible(false);
-      const p1 = this.add.sprite(0, 0, 'obstacle-crash').setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
-      const p2 = this.add.sprite(0, 0, 'obstacle-crash').setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
+      const gfx = this.add.graphics().setDepth(1050).setVisible(false);
+      const p1 = this.add.sprite(0, 0, 'obstacle-crash').setDepth(1051).setVisible(false).setOrigin(0.5, 0.5);
+      const p2 = this.add.sprite(0, 0, 'obstacle-crash').setDepth(1051).setVisible(false).setOrigin(0.5, 0.5);
       this.warningPillPool.push({ gfx, preview1: p1, preview2: p2, currentKey1: '', currentKey2: '' });
     }
 
     // --- HUD (visible during PLAYING) ---
-    this.hudLabel = this.add.text(GAME_MODE.canvasWidth / 2, 20, 'WEEKLY HIGH SCORE', {
-      fontSize: '24px',
+    this.hudLabel = this.add.text(HUD_HS_LABEL_X, HUD_HS_LABEL_Y, 'WEEKLY HIGH SCORE', {
+      fontSize: `${HUD_HS_LABEL_SIZE}px`,
       color: '#ffffff',
       fontFamily: 'Alagard',
     }).setOrigin(0.5, 0).setDepth(100).setScrollFactor(0).setVisible(false);
 
-    this.hudHighScore = this.add.text(GAME_MODE.canvasWidth / 2, 50, '', {
-      fontSize: '32px',
+    this.hudHighScore = this.add.text(HUD_HS_SCORE_X, HUD_HS_SCORE_Y, '', {
+      fontSize: `${HUD_HS_SCORE_SIZE}px`,
       color: '#ffffff',
       fontFamily: 'Early GameBoy',
     }).setOrigin(0.5, 0).setDepth(100).setScrollFactor(0).setVisible(false);
@@ -673,8 +718,8 @@ export class GameScene extends Phaser.Scene {
 
       // Top button — rocket (gold/green)
       const scTop = TUNING.ACTION_BTN_SCALE_TOP;
-      const topX = cw - TUNING.ACTION_BTN_PAD_RIGHT_TOP;
-      const topY = TUNING.ACTION_BTN_PAD_TOP_TOP;
+      const topX = cw - TUNING.ACTION_BTN_PAD_RIGHT;
+      const topY = TUNING.ACTION_BTN_Y_TOP;
 
       this.actionBtnTop = this.add.sprite(topX, topY, 'btn-rocket', 0)
         .setScale(scTop).setDepth(dep).setScrollFactor(0).setVisible(false)
@@ -691,8 +736,8 @@ export class GameScene extends Phaser.Scene {
 
       // Bottom button — slash (red/blue)
       const scBot = TUNING.ACTION_BTN_SCALE_BOT;
-      const botX = cw - TUNING.ACTION_BTN_PAD_RIGHT_BOT;
-      const botY = TUNING.ACTION_BTN_PAD_TOP_BOT;
+      const botX = cw - TUNING.ACTION_BTN_PAD_RIGHT;
+      const botY = TUNING.ACTION_BTN_Y_BOT;
 
       this.actionBtnBottom = this.add.sprite(botX, botY, 'btn-slash', 0)
         .setScale(scBot).setDepth(dep).setScrollFactor(0).setVisible(false)
@@ -720,6 +765,11 @@ export class GameScene extends Phaser.Scene {
       .setDepth(TUNING.SLIDER_BAR_DEPTH + 1)
       .setScrollFactor(0)
       .setVisible(false);
+
+    // --- "Press Go" image (mobile only, next to slider) ---
+    this.pressGoImg = this.add.image(0, 0, 'press-go')
+      .setOrigin(0, 0.5).setTintFill(0xffffff).setScale(PRESS_GO_SCALE)
+      .setDepth(TUNING.SLIDER_BAR_DEPTH + 2).setScrollFactor(0).setVisible(false);
 
     // --- Profile Popup (opens on avatar click) ---
     this.profilePopup = new ProfilePopup(this);
@@ -980,7 +1030,7 @@ export class GameScene extends Phaser.Scene {
       }
     ).setOrigin(0.5);
     this.deathLeaderboardText = this.add.text(
-      TUNING.GAME_WIDTH / 2, 440,
+      TUNING.GAME_WIDTH / 2, 400,
       '', {
         fontSize: '37px',
         color: '#aaaaaa',
@@ -1195,11 +1245,11 @@ export class GameScene extends Phaser.Scene {
 
     // Tutorial skip button (bottom-right, above tutorial content, below black overlay)
     this.tutorialSkipBtn = this.add.image(0, 0, 'tutorial-skip')
-      .setOrigin(0.5, 0.5).setScale(SKIP_BTN_SCALE).setAlpha(SKIP_BTN_PULSE_MAX).setDepth(248).setVisible(false).setInteractive({ useHandCursor: true }).setTintFill(0xffffff);
+      .setOrigin(0.5, 0.5).setScale(SKIP_BTN_SCALE).setAlpha(SKIP_BTN_PULSE_MAX).setDepth(999).setVisible(false).setInteractive({ useHandCursor: true }).setTintFill(0xffffff).setScrollFactor(0);
     this.tutorialSkipBtn.name = 'tutorial-skip';
     // Position from right/bottom edges (margin is distance from edge to button center)
     this.tutorialSkipBtn.setPosition(
-      TUNING.GAME_WIDTH - SKIP_BTN_MARGIN_RIGHT,
+      GAME_MODE.canvasWidth - SKIP_BTN_MARGIN_RIGHT,
       TUNING.GAME_HEIGHT - SKIP_BTN_MARGIN_BOTTOM,
     );
 
@@ -1294,6 +1344,11 @@ export class GameScene extends Phaser.Scene {
       fontSize: '36px',
       color: '#ffffff',
     }).setOrigin(0.5).setDepth(1000).setScrollFactor(0).setVisible(false);
+
+    // "Tap here" image — mobile only, shown next to hold text
+    this.tapHereImg = this.add.image(0, 0, 'tap-here')
+      .setOrigin(0, 0.5).setScale(TAP_HERE_SCALE)
+      .setDepth(1000).setScrollFactor(0).setVisible(false);
 
     // --- CRT post-processing (gated by device profile, ?crt=0/1 overrides) ---
     const crtParam = new URLSearchParams(location.search).get('crt');
@@ -1562,6 +1617,8 @@ export class GameScene extends Phaser.Scene {
       this.musicPlayer.setVisible(v);
       this.spectatorLabel.setVisible(v && this.spectatorMode);
       this.startHoldText.setVisible(v && this.startHoldActive);
+      this.tapHereImg.setVisible(v && this.startHoldActive && GAME_MODE.mobileMode);
+      this.pressGoImg.setVisible(v && this.startHoldActive && GAME_MODE.mobileMode);
       // World objects
       this.obstacleSystem.setVisible(v);
       this.pickupSystem.setVisible(v);
@@ -2274,6 +2331,8 @@ export class GameScene extends Phaser.Scene {
       this.slashActiveTimer = 0;
       this.startHoldActive = false;
       this.startHoldText.setVisible(false);
+      this.tapHereImg.setVisible(false);
+      this.pressGoImg.setVisible(false);
       this.rageTimer = 0;
       this.audioSystem.setDistortion(0);
       CRT_TUNING.rageDistortion = 0;
@@ -2648,32 +2707,8 @@ export class GameScene extends Phaser.Scene {
     if (GAME_MODE.isPhoneMode && (window as any).__mobileSwipeComplete) {
       this.tryAutoplayMusic();
     }
-
-    if (this.anyInputPressed) {
-      this.anyInputPressed = false;
-      // Drain queued inputs so they don't carry into gameplay
-      this.inputSystem.getSpeedTap();
-      this.inputSystem.getAttackPressed();
-      this.inputSystem.getRocketPressed();
-      // Start audio on first user gesture
-      this.audioSystem.start();
-
-      const pointer = this.input.activePointer;
-      if (!this.isTitleUIZone(pointer.x, pointer.y)) {
-        this.rhythmMode = false;
-        this.courseRunner = null;
-        this.enterTutorial();
-      }
-    }
-  }
-
-  /** Check if a point is over a title-screen UI element (music player, profile HUD). */
-  private isTitleUIZone(px: number, py: number): boolean {
-    // Profile HUD — upper left (origin 40,40, avatar 128px + score/bar ~600px wide, ~180px tall)
-    if (px < 680 && py < 220) return true;
-    // Music player — upper right (pad 40 from right, pad 40 from top, width 740)
-    if (px > TUNING.GAME_WIDTH - TUNING.MUSIC_UI_PAD_RIGHT - TUNING.MUSIC_UI_WIDTH - 40 && py < 200) return true;
-    return false;
+    // Title advancement is now handled directly by handleScreenTap() / keyboard handler
+    // (bypasses isTitleUIZone which blocked phone taps in the upper screen area)
   }
 
 
@@ -2938,6 +2973,8 @@ export class GameScene extends Phaser.Scene {
     this.slashInvincibilityTimer = 0;
     this.startHoldActive = false;
     this.startHoldText.setVisible(false);
+    this.tapHereImg.setVisible(false);
+    this.pressGoImg.setVisible(false);
     this.obstacleSystem.reset(this.weekSeed);
     this.fxSystem.reset();
     this.audioSystem.silenceEngine();
@@ -3028,9 +3065,17 @@ export class GameScene extends Phaser.Scene {
       this.primeCountdownAudio(); // Bless HTML5 Audio in gesture context for iOS
       this.tutorialAdvance = true;
     } else if (this.state === GameState.TITLE) {
-      this.anyInputPressed = true;
-      // Retry YouTube title playback in gesture context — iOS requires playVideo() inside a tap
-      this.musicPlayer.retryTitlePlayback();
+      // Advance directly — don't rely on anyInputPressed + updateTitle() pipeline
+      // which was blocked by isTitleUIZone() on phone (natural tap zone overlaps HUD area)
+      this.audioSystem.start();
+      this.inputSystem.getSpeedTap();
+      this.inputSystem.getAttackPressed();
+      this.inputSystem.getRocketPressed();
+      this.rhythmMode = false;
+      this.courseRunner = null;
+      this.enterTutorial();
+      // Note: retryTitlePlayback() removed — TUTORIAL handler at line 3027 retries
+      // in gesture context if YT hasn't started yet
     } else if (this.state === GameState.STARTING) {
       this.anyInputPressed = true;
     }
@@ -3089,7 +3134,12 @@ export class GameScene extends Phaser.Scene {
         },
       });
       // Cutscene fades out to reveal controls directly — skip black_reveal
-      this.tutorialPhase = 'controls_wait';
+      if (GAME_MODE.mobileMode) {
+        this.tutorialControlsSprite.setVisible(false);
+        this.tutorialPhase = 'obstacles_in';
+      } else {
+        this.tutorialPhase = 'controls_wait';
+      }
       this.tutorialTimer = 0;
       this.tutorialAdvance = false;
       this.tutorialSkipBtn.setVisible(true).setAlpha(SKIP_BTN_PULSE_MAX).setScale(SKIP_BTN_SCALE).setTintFill(0xffffff).setInteractive({ useHandCursor: true });
@@ -3628,10 +3678,10 @@ export class GameScene extends Phaser.Scene {
         this.startHoldText.x = GAME_MODE.canvasWidth / 2 + val;
         break;
       case 'SPRITE_OFFSET_HUD_LABEL':
-        this.hudLabel.x = GAME_MODE.canvasWidth / 2 + val;
+        this.hudLabel.x = HUD_HS_LABEL_X + val;
         break;
       case 'SPRITE_OFFSET_HUD_SCORE':
-        this.hudHighScore.x = GAME_MODE.canvasWidth / 2 + val;
+        this.hudHighScore.x = HUD_HS_SCORE_X + val;
         break;
       case 'SPRITE_OFFSET_PROFILE_HUD':
         this.profileHud.setPosition(40 + val, 40);
@@ -3757,10 +3807,12 @@ export class GameScene extends Phaser.Scene {
     const entries = this.leaderboardSystem.getEntries();
     const weeklyHigh = entries.length > 0 ? entries[0].score : 0;
     this.hudHighScore.setText(String(weeklyHigh).padStart(7, '0'));
-    this.hudLabel.setVisible(true).setAlpha(0);
-    this.hudLabel.x = GAME_MODE.canvasWidth / 2 + TUNING.SPRITE_OFFSET_HUD_LABEL;
-    this.hudHighScore.setVisible(true).setAlpha(0);
-    this.hudHighScore.x = GAME_MODE.canvasWidth / 2 + TUNING.SPRITE_OFFSET_HUD_SCORE;
+    this.hudLabel.setVisible(true).setAlpha(this._hasStartedOnce ? 1 : 0);
+    this.hudLabel.x = HUD_HS_LABEL_X + TUNING.SPRITE_OFFSET_HUD_LABEL;
+    this.hudLabel.y = HUD_HS_LABEL_Y;
+    this.hudHighScore.setVisible(true).setAlpha(this._hasStartedOnce ? 1 : 0);
+    this.hudHighScore.x = HUD_HS_SCORE_X + TUNING.SPRITE_OFFSET_HUD_SCORE;
+    this.hudHighScore.y = HUD_HS_SCORE_Y;
     this.profileHud.setVisible(true);
     this.profileHud.setPosition(40 + TUNING.SPRITE_OFFSET_PROFILE_HUD, 40);
     this.profileHud.showPlayingMode(this.profilePopup.getName());
@@ -3791,6 +3843,8 @@ export class GameScene extends Phaser.Scene {
     this.rocketCooldownTimer = 0;
     this.startHoldActive = false;
     this.startHoldText.setVisible(false);
+    this.tapHereImg.setVisible(false);
+    this.pressGoImg.setVisible(false);
     this.pickupSystem.reset();
     this.pickupSystem.setHUDVisible(true);
     this.rocketSystem.reset();
@@ -3805,11 +3859,29 @@ export class GameScene extends Phaser.Scene {
       this.startHoldRampT = 0;
       this.startHoldText.setAlpha(1);
       this.startHoldText.x = GAME_MODE.canvasWidth / 2 + TUNING.SPRITE_OFFSET_HOLD_TEXT;
-      this.startHoldText.setVisible(true);
+      if (!GAME_MODE.mobileMode) {
+        this.startHoldText.setVisible(true);
+      }
+      // Position tap-here + press-go images (mobile only, replace hold text)
+      if (GAME_MODE.mobileMode) {
+        this.tapHereImg.setPosition(
+          this.startHoldText.x + this.startHoldText.width / 2 + TAP_HERE_GAP_X,
+          this.startHoldText.y + TAP_HERE_OFFSET_Y
+        );
+        this.tapHereImg.setAlpha(1);
+        this.tapHereImg.setVisible(true);
+        // Position press-go to the right of slider knob
+        const knobRight = this.sliderKnob.x + (this.sliderKnob.displayWidth / 2);
+        this.pressGoImg.setPosition(knobRight + PRESS_GO_PAD_X, this.sliderKnob.y + PRESS_GO_OFFSET_Y);
+        this.pressGoImg.setAlpha(1);
+        this.pressGoImg.setVisible(true);
+      }
       // Blink: on → fade out → off → fade in → repeat
+      const blinkTargets: Phaser.GameObjects.GameObject[] = GAME_MODE.mobileMode ? [] : [this.startHoldText];
+      if (GAME_MODE.mobileMode) { blinkTargets.push(this.tapHereImg); blinkTargets.push(this.pressGoImg); }
       if (this.startHoldBlinkTween) this.startHoldBlinkTween.destroy();
       this.startHoldBlinkTween = this.tweens.add({
-        targets: this.startHoldText,
+        targets: blinkTargets,
         alpha: 0,
         duration: TUNING.START_TEXT_FADE_MS,
         delay: TUNING.START_TEXT_ON_MS,
@@ -3823,6 +3895,8 @@ export class GameScene extends Phaser.Scene {
       this.startHoldActive = false;
       this.startHoldRampT = 1;
       this.startHoldText.setVisible(false);
+      this.tapHereImg.setVisible(false);
+      this.pressGoImg.setVisible(false);
       this.playerSystem.setCursorBlend(1);
       this.playerSystem.playStartAnim();
     }
@@ -3953,12 +4027,16 @@ export class GameScene extends Phaser.Scene {
         // Stop blink and fade out the text
         if (this.startHoldBlinkTween) { this.startHoldBlinkTween.destroy(); this.startHoldBlinkTween = null; }
         this.startHoldText.setAlpha(1);
+        this.tapHereImg.setAlpha(1);
+        this.pressGoImg.setAlpha(1);
+        const fadeTargets: Phaser.GameObjects.GameObject[] = [this.startHoldText];
+        if (GAME_MODE.mobileMode) { fadeTargets.push(this.tapHereImg); fadeTargets.push(this.pressGoImg); }
         this.tweens.add({
-          targets: this.startHoldText,
+          targets: fadeTargets,
           alpha: 0,
           duration: 500,
           ease: 'Power2',
-          onComplete: () => { this.startHoldText.setVisible(false); },
+          onComplete: () => { this.startHoldText.setVisible(false); this.tapHereImg.setVisible(false); this.pressGoImg.setVisible(false); },
         });
       } else {
         // Consume the tap so it doesn't queue
@@ -4058,6 +4136,11 @@ export class GameScene extends Phaser.Scene {
 
     this.updateLaneWarnings(roadSpeed);
 
+    // Compute player's active lanes once per frame (used by all collision checks)
+    const _plCollY = Math.max(this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y, TUNING.ROAD_TOP_Y);
+    const _plHalfH = TUNING.PLAYER_COLLISION_H / 2;
+    const playerLanes = this.obstacleSystem.getPlayerLanes(_plCollY, _plHalfH);
+
     // Katana slash (checked BEFORE player collision so destroyed obstacles can't kill)
     this.slashCooldownTimer = Math.max(0, this.slashCooldownTimer - hDt);
     this.slashInvincibilityTimer = Math.max(0, this.slashInvincibilityTimer - hDt);
@@ -4078,7 +4161,8 @@ export class GameScene extends Phaser.Scene {
         slashCenterX,
         slashWidth,
         slashCollY,
-        TUNING.PLAYER_COLLISION_H / 2
+        TUNING.PLAYER_COLLISION_H / 2,
+        playerLanes
       );
       if (hitX >= 0) {
         this.testObstaclesDestroyed++;
@@ -4189,7 +4273,7 @@ export class GameScene extends Phaser.Scene {
     const playerCollY = Math.max(this.playerSystem.getY() + TUNING.PLAYER_COLLISION_OFFSET_Y, TUNING.ROAD_TOP_Y);
 
     // Update pickups (scrolling + collection)
-    this.pickupSystem.update(hDt, roadSpeed, playerCollX, playerCollY);
+    this.pickupSystem.update(hDt, roadSpeed, playerCollX, playerCollY, playerLanes);
     if (this.pickupSystem.wasCollected()) {
       this.testPickups++;
       this.playerSystem.playCollectRocket();
@@ -4214,7 +4298,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Update shield pickups (scrolling + collection)
-    this.shieldSystem.update(hDt, roadSpeed, playerCollX, playerCollY);
+    this.shieldSystem.update(hDt, roadSpeed, playerCollX, playerCollY, playerLanes);
     if (this.shieldSystem.wasCollected()) {
       this.testPickups++;
       this.playerSystem.playCollectShield();
@@ -4229,7 +4313,7 @@ export class GameScene extends Phaser.Scene {
     if (this.rageTimer > 0 || this.spectatorMode) {
       // Rage mode / spectator: destroy obstacles on contact
       const hits = this.obstacleSystem.checkRageCollision(
-        playerCollX, playerCollY, pHalfW, pHalfH
+        playerCollX, playerCollY, pHalfW, pHalfH, playerLanes
       );
       if (hits.length > 0) {
         this.testObstaclesDestroyed += hits.length;
@@ -4243,16 +4327,17 @@ export class GameScene extends Phaser.Scene {
         }
       }
       // Still check slow zones
-      const result = this.obstacleSystem.checkCollision(playerCollX, playerCollY, pHalfW, pHalfH);
+      const result = this.obstacleSystem.checkCollision(playerCollX, playerCollY, pHalfW, pHalfH, playerLanes);
       if (result.slowOverlapping) {
         this.playerSystem.applyLeftwardPush(TUNING.SLOW_PUSH_RATE * hDt);
+        this.playerSystem.flashScore(PUDDLE_FLASH_COLORS, PUDDLE_FLASH_DURATION);
       }
       this.fxSystem.onSlowOverlap(result.slowOverlapping);
     } else if (this.playerSystem.isCollecting()) {
       // COL animation playing = invincibility frames, skip collision entirely
       this.fxSystem.onSlowOverlap(false);
     } else {
-      const result = this.obstacleSystem.checkCollision(playerCollX, playerCollY, pHalfW, pHalfH);
+      const result = this.obstacleSystem.checkCollision(playerCollX, playerCollY, pHalfW, pHalfH, playerLanes);
       if (result.crashed && this.slashInvincibilityTimer <= 0) {
         if (this.shieldSystem.getShields() > 0) {
           // Shield absorbs the hit — explode obstacle, lose one shield
@@ -4291,6 +4376,7 @@ export class GameScene extends Phaser.Scene {
       }
       if (result.slowOverlapping) {
         this.playerSystem.applyLeftwardPush(TUNING.SLOW_PUSH_RATE * hDt);
+        this.playerSystem.flashScore(PUDDLE_FLASH_COLORS, PUDDLE_FLASH_DURATION);
       }
       this.fxSystem.onSlowOverlap(result.slowOverlapping);
     }
@@ -4332,7 +4418,7 @@ export class GameScene extends Phaser.Scene {
     this.applyRageZoom();
 
     // FX: speed lines + edge warnings
-    this.fxSystem.update(hDt, this.playerSystem.getPlayerSpeed(), roadSpeed, this.playerSystem.getX());
+    this.fxSystem.update(hDt, this.playerSystem.getPlayerSpeed(), roadSpeed, this.playerSystem.getX(), this.playerSystem.getTapPressure());
 
     // Rainbow-cycle active score popups
     this.updateScorePopupRainbow();
@@ -4356,15 +4442,19 @@ export class GameScene extends Phaser.Scene {
     const collTop = collY - TUNING.PLAYER_COLLISION_H / 2;
     const collBottom = collY + TUNING.PLAYER_COLLISION_H / 2;
     const laneH = (TUNING.ROAD_BOTTOM_Y - TUNING.ROAD_TOP_Y) / TUNING.LANE_COUNT;
-    // Pulse alpha: 24-frame cycle (12 out + 12 in at 60fps), cubic easing lingers near 0
-    const raw = 0.5 + 0.5 * Math.sin(this.elapsed * TUNING.LANE_PULSE_SPEED);
-    const laneAlpha = Math.pow(raw, 3);
+    // Per-lane pulse: cosine starts at 1.0 (full bright) on entry, then oscillates
     for (let i = 0; i < TUNING.LANE_COUNT; i++) {
       const laneTop = TUNING.ROAD_TOP_Y + laneH * i;
       const laneBottom = laneTop + laneH;
       const visible = collTop < laneBottom && collBottom > laneTop;
+      if (visible && !this.laneWasVisible[i]) this.laneEntryTime[i] = this.elapsed;
+      this.laneWasVisible[i] = visible;
       this.laneHighlights[i].setVisible(visible);
-      if (visible) this.laneHighlights[i].setAlpha(laneAlpha);
+      if (visible) {
+        const t = this.elapsed - this.laneEntryTime[i];
+        const raw = 0.5 + 0.5 * Math.cos(t * TUNING.LANE_PULSE_SPEED);
+        this.laneHighlights[i].setAlpha(Math.pow(raw, 3));
+      }
     }
 
     // Profile HUD
@@ -4583,9 +4673,9 @@ export class GameScene extends Phaser.Scene {
 
           // Grow pill pool if needed
           if (pillIdx >= this.warningPillPool.length) {
-            const gfx = this.add.graphics().setDepth(95).setVisible(false);
-            const p1 = this.add.sprite(0, 0, 'obstacle-crash').setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
-            const p2 = this.add.sprite(0, 0, 'obstacle-crash').setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
+            const gfx = this.add.graphics().setDepth(1050).setVisible(false);
+            const p1 = this.add.sprite(0, 0, 'obstacle-crash').setDepth(1051).setVisible(false).setOrigin(0.5, 0.5);
+            const p2 = this.add.sprite(0, 0, 'obstacle-crash').setDepth(1051).setVisible(false).setOrigin(0.5, 0.5);
             this.warningPillPool.push({ gfx, preview1: p1, preview2: p2, currentKey1: '', currentKey2: '' });
           }
 
@@ -4640,9 +4730,9 @@ export class GameScene extends Phaser.Scene {
           // Grow pool if needed
           if (poolIdx >= this.warningPool.length) {
             const circle = this.add.circle(0, 0, warningRadius, TUNING.WARNING_FILL_COLOR, TUNING.WARNING_FILL_ALPHA)
-              .setDepth(95).setVisible(false);
+              .setDepth(1050).setVisible(false);
             const preview = this.add.sprite(0, 0, 'obstacle-crash')
-              .setDepth(96).setVisible(false).setOrigin(0.5, 0.5);
+              .setDepth(1051).setVisible(false).setOrigin(0.5, 0.5);
             this.warningPool.push({ circle, preview, currentKey: '' });
           }
 
@@ -4769,12 +4859,12 @@ export class GameScene extends Phaser.Scene {
     // To keep HUD at its base-zoom screen position during rage:
     //   worldPos' = targetWorldPos / rageMultiplier, scale' = 1 / rageMultiplier
     const invR = 1 / rageMultiplier;
-    // hudLabel target position: (canvasWidth/2, 20)
+    // hudLabel target position: (HUD_HS_LABEL_X, HUD_HS_LABEL_Y)
     this.hudLabel.setScale(invR);
-    this.hudLabel.setPosition(GAME_MODE.canvasWidth / 2 * invR, 20 * invR);
-    // hudHighScore target position: (canvasWidth/2, 50)
+    this.hudLabel.setPosition(HUD_HS_LABEL_X * invR, HUD_HS_LABEL_Y * invR);
+    // hudHighScore target position: (HUD_HS_SCORE_X, HUD_HS_SCORE_Y)
     this.hudHighScore.setScale(invR);
-    this.hudHighScore.setPosition(GAME_MODE.canvasWidth / 2 * invR, 50 * invR);
+    this.hudHighScore.setPosition(HUD_HS_SCORE_X * invR, HUD_HS_SCORE_Y * invR);
   }
 
   /** Apply camera zoom + scroll to create rage focal-length effect.
@@ -4958,6 +5048,8 @@ export class GameScene extends Phaser.Scene {
           this.slashActiveTimer = 0;
           this.startHoldActive = false;
           this.startHoldText.setVisible(false);
+          this.tapHereImg.setVisible(false);
+          this.pressGoImg.setVisible(false);
           this.rageTimer = 0;
           this.audioSystem.setDistortion(0);
           CRT_TUNING.rageDistortion = 0;
@@ -5031,8 +5123,8 @@ export class GameScene extends Phaser.Scene {
               if (gen !== this.deathGen) return;
               this.prepareDeathScreenVisuals(rank);
             });
-          } else if (this.pendingRank > 0 && this.pendingRank <= 10) {
-            // Anon user scored top 10 — prompt for name before recording
+          } else if (this.pendingRank > 0 && this.pendingRank <= 3) {
+            // Anon user scored top 3 — prompt for name before recording
             this.autoSubmitted = false;
             this.prepareNameEntryVisuals();
           } else {
@@ -5133,7 +5225,6 @@ export class GameScene extends Phaser.Scene {
     // Stash score info for after the transition
     this.pendingScore = this.scoreSystem.getScore();
     this.pendingRank = this.leaderboardSystem.wouldMakeBoard(this.pendingScore);
-    this.pendingRank = this.pendingRank || 1; // DEBUG: force name entry for testing
 
     // Explosion on top of the player (above player's Y-based depth, below white overlay at 1200)
     this.deathExplosion.setPosition(this.playerSystem.getX(), this.playerSystem.getY());
@@ -5178,7 +5269,7 @@ export class GameScene extends Phaser.Scene {
     this.nameEnterBtn.setVisible(true);
     this.musicPlayer.setVisible(true);
     this.profileHud.setVisible(true);
-    this.profileHud.showProfileMode('', '');
+    this.profileHud.showProfileMode(this.profilePopup.getName(), this.getProfileRankText(), true);
   }
 
   /** Activate name entry state and keyboard handler (call after visuals are revealed) */
@@ -5205,6 +5296,41 @@ export class GameScene extends Phaser.Scene {
 
     // Focus the input to pop the mobile keyboard
     setTimeout(() => inp.focus(), 100);
+
+    // Keyboard avoidance — shift container up when mobile keyboard opens
+    this._nameEntryOrigY = this.nameEntryContainer.y;
+    this._nameEntryOrigBtnY = this.nameEnterBtn.y;
+    if (window.visualViewport) {
+      this._nameEntryKbHandler = () => {
+        const vv = window.visualViewport;
+        if (!vv) return;
+        const kbHeight = window.innerHeight - vv.height;
+        if (kbHeight < 50) {
+          // Keyboard closed — restore positions
+          this.nameEntryContainer.y = this._nameEntryOrigY;
+          this.nameEnterBtn.y = this._nameEntryOrigBtnY;
+          return;
+        }
+        const rect = this.game.canvas.getBoundingClientRect();
+        // Name input field is at Y=710 inside the container
+        const inputBottomGame = this.nameEntryContainer.y + 710 + 54; // +54 ≈ half font height
+        const inputBottomDom = rect.top + (inputBottomGame / TUNING.GAME_HEIGHT) * rect.height;
+        const margin = 60;
+        const visibleBottom = vv.height - margin;
+        if (inputBottomDom > visibleBottom) {
+          const overlapDom = inputBottomDom - visibleBottom;
+          const gamePerDom = TUNING.GAME_HEIGHT / rect.height;
+          const shift = overlapDom * gamePerDom;
+          this.nameEntryContainer.y = this._nameEntryOrigY - shift;
+          this.nameEnterBtn.y = this._nameEntryOrigBtnY - shift;
+        } else {
+          this.nameEntryContainer.y = this._nameEntryOrigY;
+          this.nameEnterBtn.y = this._nameEntryOrigBtnY;
+        }
+      };
+      window.visualViewport.addEventListener('resize', this._nameEntryKbHandler);
+    }
+
 
     this.nameKeyHandler = (event: KeyboardEvent) => {
       if (this.state !== GameState.NAME_ENTRY) return;
@@ -5242,6 +5368,13 @@ export class GameScene extends Phaser.Scene {
       this.nameHiddenInput.remove();
       this.nameHiddenInput = null;
     }
+    // Clean up keyboard avoidance
+    if (this._nameEntryKbHandler && window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', this._nameEntryKbHandler);
+      this._nameEntryKbHandler = null;
+    }
+    this.nameEntryContainer.y = this._nameEntryOrigY;
+    this.nameEnterBtn.y = this._nameEntryOrigBtnY;
   }
 
   /** Get the rank text for the current profile name (e.g. "RANKED #3" or "") */
@@ -5333,7 +5466,7 @@ export class GameScene extends Phaser.Scene {
     this.deathLbEntriesContainer.removeAll(true);
     this.highlightedRowTexts = [];
 
-    const headerH = 80;
+    const headerH = 40;
     const baseY = this.deathLeaderboardText.y + headerH;
 
     const hasAvatar = this.textures.exists(AVATAR_TEXTURE_KEY);
