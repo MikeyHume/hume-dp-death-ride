@@ -8,42 +8,28 @@ import { fetchAllTracks, type CatalogTrack } from './MusicCatalogService';
 import { HumePlayerSystem } from './HumePlayerSystem';
 import { GAME_MODE, DEVICE_PROFILE } from '../config/gameMode';
 import { TEST_MODE } from '../util/testMode';
-import { supabase } from '../supabaseClient';
-
-// ── Music Telemetry (diagnostic — remove after dual-audio bug fixed) ──
-const TELEM_SESSION = Math.random().toString(36).slice(2, 10);
-const TELEM_BUFFER: Record<string, unknown>[] = [];
-let TELEM_TIMER = 0;
-
-function telemFlush(): void {
-  if (TELEM_BUFFER.length === 0) return;
-  const rows = TELEM_BUFFER.splice(0);
-  supabase.from('music_telemetry').insert(rows).then(({ error }) => {
-    if (error) console.warn('[Telem] flush error:', error.message);
-  });
-}
-
-function telemLog(
-  event: string,
-  mp: { source: string; titleTrackPlaying: boolean; playlistStarted: boolean; titlePlaylistLoaded: boolean; spotifyInitInProgress: boolean },
-  yt: { state: number | string; muted: boolean; volume: number } | null,
-  sp: { ready: boolean; playing: boolean; muted: boolean; volume: number } | null,
-  hume: { paused: boolean; muted: boolean; track: string | null } | null,
-  note?: string,
-): void {
-  TELEM_BUFFER.push({
-    session_id: TELEM_SESSION,
-    event,
-    source: mp.source,
-    yt: yt || null,
-    spotify: sp || null,
-    hume: hume || null,
-    flags: { title: mp.titleTrackPlaying, playlist: mp.playlistStarted, titlePL: mp.titlePlaylistLoaded, spInit: mp.spotifyInitInProgress },
-    note: note || null,
-  });
-}
-
-window.addEventListener('beforeunload', telemFlush);
+// ── Music Debug Button (click to copy all source states to clipboard) ──
+// Remove after dual-audio bug is fixed.
+let _debugMusicPlayer: MusicPlayer | null = null;
+const _debugBtn = document.createElement('div');
+_debugBtn.textContent = 'COPY MUSIC STATE';
+_debugBtn.style.cssText = 'position:fixed;top:4px;right:4px;z-index:999999;background:#000;color:#0f0;font:bold 16px monospace;padding:10px 16px;cursor:pointer;border:2px solid #0f0;border-radius:4px;user-select:none;';
+document.body.appendChild(_debugBtn);
+_debugBtn.addEventListener('click', () => {
+  if (!_debugMusicPlayer) { _debugBtn.textContent = 'NO PLAYER'; return; }
+  const snap = _debugMusicPlayer._debugSnapshot();
+  // Fallback for non-secure contexts (http://localhost)
+  const ta = document.createElement('textarea');
+  ta.value = snap;
+  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+  _debugBtn.style.borderColor = '#ff0';
+  _debugBtn.textContent = 'COPIED!';
+  setTimeout(() => { _debugBtn.style.borderColor = '#0f0'; _debugBtn.textContent = 'COPY MUSIC STATE'; }, 1000);
+});
 // Fixed UI scale: all phones use 12 Mini's baseline (HUD_HS_FLOOR = 0.96).
 // With fixed 16:9 canvas, Phaser Scale.FIT handles physical screen scaling —
 // no per-device heightScale needed. Every phone renders UI identically.
@@ -203,38 +189,36 @@ export class MusicPlayer {
     // Handle Spotify login/disconnect
     scene.events.on('spotify-auth-changed', () => this.onSpotifyAuthChanged());
 
-    // Telemetry heartbeat — capture full state every 5s
-    setInterval(() => {
-      this._telem('heartbeat');
-      telemFlush();
-    }, 5000);
+    // Wire up debug snapshot button
+    _debugMusicPlayer = this;
   }
 
-  /** Diagnostic telemetry snapshot (remove after dual-audio bug fixed). */
-  private _telem(event: string, note?: string): void {
-    let yt: { state: number | string; muted: boolean; volume: number } | null = null;
+  /** Snapshot all music source states — returns clipboard-ready string. Remove after dual-audio bug fixed. */
+  _debugSnapshot(): string {
+    let yt = 'no player';
     if (this.ytPlayer) {
       try {
-        yt = { state: this.ytPlayer.getPlayerState?.() ?? -1, muted: !!this.ytPlayer.isMuted?.(), volume: this.ytPlayer.getVolume?.() ?? -1 };
-      } catch { yt = { state: 'err', muted: false, volume: -1 }; }
+        yt = `state:${this.ytPlayer.getPlayerState?.()} muted:${this.ytPlayer.isMuted?.()} vol:${this.ytPlayer.getVolume?.()}`;
+      } catch (e) { yt = `err:${e}`; }
     }
-    let sp: { ready: boolean; playing: boolean; muted: boolean; volume: number } | null = null;
+    let sp = 'no player';
     if (this.spotifyPlayer) {
       try {
-        sp = { ready: this.spotifyPlayer.isReady(), playing: this.spotifyPlayer.isPlaying(), muted: this.spotifyPlayer.isMuted(), volume: this.spotifyPlayer.getVolumeLevel() };
-      } catch { sp = { ready: false, playing: false, muted: false, volume: -1 }; }
+        sp = `ready:${this.spotifyPlayer.isReady()} playing:${this.spotifyPlayer.isPlaying()} muted:${this.spotifyPlayer.isMuted()} vol:${this.spotifyPlayer.getVolumeLevel()}`;
+      } catch (e) { sp = `err:${e}`; }
     }
-    let hm: { paused: boolean; muted: boolean; track: string | null } | null = null;
+    let hm = 'no player';
     try {
-      hm = { paused: this.humePlayer.isPaused(), muted: this.humePlayer.isMuted(), track: this.humePlayer.getCurrentTrack()?.title ?? null };
+      hm = `paused:${this.humePlayer.isPaused()} muted:${this.humePlayer.isMuted()} track:${this.humePlayer.getCurrentTrack()?.title ?? 'none'}`;
     } catch { /* ignore */ }
-    telemLog(event, {
-      source: this.source,
-      titleTrackPlaying: this.titleTrackPlaying,
-      playlistStarted: this.playlistStarted,
-      titlePlaylistLoaded: this.titlePlaylistLoaded,
-      spotifyInitInProgress: this.spotifyInitInProgress,
-    }, yt, sp, hm, note);
+    return [
+      `source: ${this.source}`,
+      `title: ${this.titleTrackPlaying} playlist: ${this.playlistStarted} titlePL: ${this.titlePlaylistLoaded} spInit: ${this.spotifyInitInProgress}`,
+      `YT: ${yt}`,
+      `SP: ${sp}`,
+      `HUME: ${hm}`,
+      `track: ${this.currentTrackName}`,
+    ].join('\n');
   }
 
   /** Reset playlist state so title music and countdown audio work on replay. */
@@ -258,7 +242,6 @@ export class MusicPlayer {
       return;
     }
     console.log('[MusicPlayer] startTitleMusic — source:', this.source, 'ytReady:', this.ytReady, 'spotifyReady:', !!this.spotifyPlayer?.isReady());
-    this._telem('title_start');
 
     this.trackTitle.textContent = `${TUNING.INTRO_TRACK_TITLE} - ${TUNING.INTRO_TRACK_ARTIST}`;
     this.currentTrackName = TUNING.INTRO_TRACK_TITLE;
@@ -300,7 +283,6 @@ export class MusicPlayer {
     if (!this.ytPlayer || this.titleTrackPlaying) return;
     this.titleTrackPlaying = true;
     console.log('[MusicPlayer] playTitleVideo — loadVideoById, source:', this.source);
-    this._telem('title_yt_play');
     // Don't mute first — just load and play with audio from the start.
     // The old mute→unmute-after-500ms pattern was failing to unmute on iOS.
     this.ytPlayer.loadVideoById(TITLE_YT_VIDEO_ID);
@@ -796,7 +778,6 @@ export class MusicPlayer {
           }
         },
         onStateChange: (event: any) => {
-          if (event.data === 1) this._telem('yt_playing', `src=${this.source}`);
           // Loop title video when it ends
           if (event.data === 0 && this.titleTrackPlaying && !this.playlistStarted) {
             this.ytPlayer.mute();
@@ -816,7 +797,6 @@ export class MusicPlayer {
               // If YouTube is unmuted, it's leaking audio — stop it completely
               if (!this.ytPlayer.isMuted() || this.ytPlayer.getVolume() > 0) {
                 console.warn('[MusicPlayer] SAFETY NET: YouTube playing unmuted while Spotify active — killing');
-                this._telem('yt_safety_kill');
                 this.ytPlayer.pauseVideo();
               }
               this.ytPlayer.mute();
@@ -921,7 +901,6 @@ export class MusicPlayer {
 
       // Wire track change updates
       sp.onTrackChanged((track) => {
-        this._telem('spotify_track_change', `${track.name} (src=${this.source})`);
         if (this.source !== 'spotify') return;
         // Ignore stale track events during title screen — Spotify SDK may resume the
         // last session's track before we tell it to play the title track
@@ -959,7 +938,6 @@ export class MusicPlayer {
         }
       });
 
-      this._telem('spotify_init', `track:${this.currentTrackName}`);
 
       // If playlist was waiting for Spotify to init, start it now
       if (this.pendingSpotifyPlay) {
@@ -1051,7 +1029,6 @@ export class MusicPlayer {
 
   private switchSourceToSpotify(): void {
     if (!this.spotifyPlayer) return;
-    this._telem('switch_to_spotify');
     this.source = 'spotify';
 
     // Pause + mute YouTube — it will be used as visual companion (onTrackChanged triggers search)
@@ -1137,7 +1114,6 @@ export class MusicPlayer {
 
   private async startSpotifyPlaylist(): Promise<void> {
     if (!this.spotifyPlayer) return;
-    this._telem('spotify_playlist_start');
     // Defensive: ensure YouTube is paused+muted before Spotify starts
     if (this.ytPlayer) {
       try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
@@ -1218,7 +1194,6 @@ export class MusicPlayer {
   /** Start the playlist music immediately (no countdown audio).
    *  Called by GameScene on mobile when the HTML5 Audio countdown ends. */
   startPlaylistNow(): void {
-    this._telem('playlist_now');
     // Mute+pause YouTube before starting any playlist (prevents dual audio on mobile)
     if (this.ytPlayer && this.ytReady) {
       try { this.ytPlayer.pauseVideo(); this.ytPlayer.mute(); this.ytPlayer.setVolume(0); } catch {}
@@ -1369,7 +1344,6 @@ export class MusicPlayer {
    * Called by GameScene when entering rhythm mode or when beat sync is needed.
    */
   switchToHume(): void {
-    this._telem('switch_to_hume');
     // Stop Spotify
     if (this.spotifyPlayer) {
       this.spotifyPlayer.pause();
@@ -1396,7 +1370,6 @@ export class MusicPlayer {
    * Called by GameScene when exiting rhythm mode.
    */
   switchFromHume(): void {
-    this._telem('switch_from_hume');
     // Stop hume audio
     this.humePlayer.pause();
 
@@ -1615,7 +1588,6 @@ export class MusicPlayer {
   }
 
   private prev(): void {
-    this._telem('skip_prev');
     // Title screen single track → restart from beginning
     if (this.titleTrackPlaying && !this.playlistStarted) {
       if (this.source === 'spotify' && this.spotifyPlayer) {
@@ -1638,7 +1610,6 @@ export class MusicPlayer {
   }
 
   private next(): void {
-    this._telem('skip_next');
     // Title screen single track → load playlist and start browsing
     if (this.titleTrackPlaying && !this.playlistStarted) {
       this.titleTrackPlaying = false;
