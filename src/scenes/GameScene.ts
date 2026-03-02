@@ -384,7 +384,7 @@ export class GameScene extends Phaser.Scene {
   private debugHelpBg!: Phaser.GameObjects.Rectangle;
   private debugHelpContainer!: Phaser.GameObjects.Container;
   private debugPanelOpen: boolean = false;
-  private debugMasterEnabled: boolean = false;
+  private debugMasterEnabled: boolean = location.hostname === '127.0.0.1' || location.hostname === 'localhost';
   private debugFrozen: boolean = false;
   private _crtDefaults: Record<string, number> | null = null; // stored on first BG effect toggle
   private debugPanelRows: { label: string; text: Phaser.GameObjects.Text }[] = [];

@@ -209,13 +209,6 @@ const WMP_DEFAULT_COLS: ColDef[] = [
   { key: 'artist', label: 'Artist', widthFrac: 0.30 },
   { key: 'time', label: 'Time', widthFrac: 0.15 },
 ];
-const WMP_HUME_COLS: ColDef[] = [
-  { key: 'rank', label: '#', widthFrac: 0.08 },
-  { key: 'title', label: 'Title', widthFrac: 0.40 },
-  { key: 'artist', label: 'Artist', widthFrac: 0.30 },
-  { key: 'listens', label: 'Listens', widthFrac: 0.22 },
-];
-
 // Win95 palette — CSS strings for HTML layout
 const W95_CSS_FACE = '#c0c0c0';
 const W95_CSS_HIGHLIGHT = '#ffffff';
@@ -247,7 +240,7 @@ export interface WMPCallbacks {
   getTrackTitle: () => string;
   getTrackArtist: () => string;
   getSpotifyUrl: () => string | null;
-  getSource: () => 'youtube' | 'spotify' | 'hume';
+  getSource: () => 'youtube' | 'spotify';
   isSpotifyLoggedIn: () => boolean;
   playTrack: (track: CatalogTrack) => void;
   prev: () => void;
@@ -474,7 +467,6 @@ export class WMPPopup {
 
   // === Column system ===
   private columns: ColDef[] = WMP_DEFAULT_COLS.map((c) => ({ ...c }));
-  private activeColSet: 'default' | 'hume' = 'default';
   // Keep legacy initializer comment for reference:
   // [
   //   { key: 'title', label: 'Title', widthFrac: 0.35 },
@@ -1457,9 +1449,7 @@ export class WMPPopup {
 
   private updateBottomBar(): void {
     const source = this.cb.getSource();
-    if (source === 'hume') {
-      this.bottomBarEl.textContent = `${this.libTracks.length} tracks | hume`;
-    } else if (source === 'youtube') {
+    if (source === 'youtube') {
       const playable = this.libTracks.filter(t => t.youtubeVideoId).length;
       this.bottomBarEl.textContent = `${playable} tracks | YouTube`;
     } else {

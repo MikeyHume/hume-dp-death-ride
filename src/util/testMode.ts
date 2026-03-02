@@ -32,7 +32,7 @@ export interface TestState {
   alive: boolean;
   /** BIOS overlay visible */
   biosVisible: boolean;
-  /** Music source ('youtube' | 'spotify' | 'hume' | 'none') */
+  /** Music source ('youtube' | 'spotify' | 'none') */
   musicSource: string;
   /** Frame count since scene create (increments every update()) */
   frameCount: number;
@@ -150,7 +150,7 @@ export interface TestState {
 // ── Config flags ─────────────────────────────────────────────
 export const TEST_MODE = {
   active: false,
-  /** Skip all music loading (YouTube iframe, Spotify SDK, hume audio) */
+  /** Skip all music loading (YouTube iframe, Spotify SDK) */
   skipMusic: true,
   /** Reduce countdown to 1 second */
   fastCountdown: true,

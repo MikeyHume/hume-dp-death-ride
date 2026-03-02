@@ -618,7 +618,7 @@
       var hh = String(now.getHours()).padStart(2, '0');
       var mi = String(now.getMinutes()).padStart(2, '0');
       var ss = String(now.getSeconds()).padStart(2, '0');
-      var verNum = '1.00.04';
+      var verNum = '1.00.06';
       window.__dpMotoVersion = verNum;
       var vLabel = document.getElementById('version-label');
       if (vLabel) vLabel.textContent = 'v' + verNum;
@@ -1132,20 +1132,11 @@
         window.addEventListener('scroll', onSwipeScroll, { passive: true });
         swipeScrollBound = true;
       }
-      // Bind audio unlock once — also prime title track audio in gesture context
+      // Bind audio unlock once
       if (!audioUnlockBound) {
         audioUnlockBound = true;
         document.addEventListener('touchstart', function swipeTouchUnlock() {
           doAudioUnlock();
-          // Pre-create title track audio and play it silent — iOS requires first .play()
-          // to happen in a user gesture. Store globally for MusicPlayer to reuse.
-          if (!window.__mobileTitleAudio) {
-            var a = new Audio('assets/audio/music/Rythem_Songs/DEATHPIXIE - RED MALIBU.mp3');
-            a.loop = true;
-            a.volume = 0;
-            a.play().catch(function(){});
-            window.__mobileTitleAudio = a;
-          }
           document.removeEventListener('touchstart', swipeTouchUnlock);
         }, { once: true });
       }
